@@ -1,6 +1,6 @@
 # Ecosystem Builders
 
-This section is for teams building apps, analytics, or integrations on top of Drift. The [`drift-common`](https://github.com/drift-labs/drift-common) monorepo and the [`drift-ui-template`](https://github.com/drift-labs/drift-ui-template) use the same building blocks as the official Drift UI, so you get UI parity without reinventing the wheel.
+This section is for teams building apps, analytics, or integrations on top of Drift. The [`drift-common`](https://github.com/velocity-exchange/drift-common) monorepo and the [`drift-ui-template`](https://github.com/velocity-exchange/drift-ui-template) use the same building blocks as the official Drift UI, so you get UI parity without reinventing the wheel.
 
 ## Packages
 
@@ -144,7 +144,7 @@ import { USDC_SPOT_MARKET_INDEX, SOL_SPOT_MARKET_INDEX, MAIN_POOL_ID } from "@dr
 
 ## drift-ui-template: quickstart
 
-[`drift-ui-template`](https://github.com/drift-labs/drift-ui-template) is a Next.js starter that wires together everything above into a working trading UI.
+[`drift-ui-template`](https://github.com/velocity-exchange/drift-ui-template) is a Next.js starter that wires together everything above into a working trading UI.
 
 **Stack:** Next.js 15, React 19, TypeScript, Tailwind CSS, Zustand, Solana wallet adapter
 
@@ -156,7 +156,7 @@ import { USDC_SPOT_MARKET_INDEX, SOL_SPOT_MARKET_INDEX, MAIN_POOL_ID } from "@dr
 - `UserAccountCache.getUserAccountKey(subAccountId, authority)` maps subaccounts to `EnhancedAccountData` in the lookup
 
 ```bash
-git clone https://github.com/drift-labs/drift-ui-template.git
+git clone https://github.com/velocity-exchange/drift-ui-template.git
 cd drift-ui-template/ui
 yarn install
 yarn dev
@@ -173,7 +173,7 @@ The template defaults to devnet. To switch to mainnet, update the environment in
 
 ## Staying up to date
 
-- [GitHub: protocol-v2](https://github.com/drift-labs/protocol-v2) -- watch releases for SDK breaking changes
-- [GitHub: drift-common](https://github.com/drift-labs/drift-common) -- shared UI packages
-- [GitHub: drift-ui-template](https://github.com/drift-labs/drift-ui-template) -- starter trading UI
+- [GitHub: protocol-v2](https://github.com/velocity-exchange/protocol-v2) -- watch releases for SDK breaking changes
+- [GitHub: drift-common](https://github.com/velocity-exchange/drift-common) -- shared UI packages
+- [GitHub: drift-ui-template](https://github.com/velocity-exchange/drift-ui-template) -- starter trading UI
 - [Data API playground](/developers/data-api)

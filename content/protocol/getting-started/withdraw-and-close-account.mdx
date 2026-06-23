@@ -25,7 +25,7 @@ Every account incurs a base account rent of ~0.035 SOL. During periods of high s
 
 ### Idle Account Deletion
 
-The Drift Security Council periodically triggers the cleanup of idle accounts in the Drift program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion [must be inactive for ~3 months and hold under ~$0.05 in notional value](https://github.com/drift-labs/protocol-v2/blob/d005aae63375f6d8884480f089034a9d6d072d13/programs/drift/src/instructions/keeper.rs#L2138). Account history will still available through the UI and the account may be re-created by the user at any time.
+The Drift Security Council periodically triggers the cleanup of idle accounts in the Drift program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion [must be inactive for ~3 months and hold under ~$0.05 in notional value](https://github.com/velocity-exchange/protocol-v2/blob/d005aae63375f6d8884480f089034a9d6d072d13/programs/drift/src/instructions/keeper.rs#L2138). Account history will still available through the UI and the account may be re-created by the user at any time.
 
 ### Recovering Funds
 

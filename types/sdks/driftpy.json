@@ -28261,7 +28261,7 @@
   {
     "module": "driftpy.vaults.helpers",
     "path": "vaults/helpers.py",
-    "docstring": "Helper functions for interacting with the Drift Vaults program.\n\nThis module provides utilities for querying vault information, depositors,\nand other vault-related data.\n\nPython functions provided here are for basic usage.\nFor a complete vaults SDK, please see https://github.com/drift-labs/drift-vaults",
+    "docstring": "Helper functions for interacting with the Drift Vaults program.\n\nThis module provides utilities for querying vault information, depositors,\nand other vault-related data.\n\nPython functions provided here are for basic usage.\nFor a complete vaults SDK, please see https://github.com/velocity-exchange/drift-vaults",
     "constants": [],
     "functions": [
       {

@@ -229,12 +229,12 @@ JIT runs first, DLOB provides backup liquidity if auction doesn't fully fill.
 
 ## JIT Proxy library
 
-The [`@drift-labs/jit-proxy`](https://github.com/drift-labs/jit-proxy) package provides higher-level abstractions for auction participation:
+The [`@drift-labs/jit-proxy`](https://github.com/velocity-exchange/jit-proxy) package provides higher-level abstractions for auction participation:
 
 - **`JitterSniper`**: waits for the optimal auction slot before submitting a single fill transaction. Best for precise pricing with lower compute costs.
 - **`JitterShotgun`**: submits fill transactions at multiple auction slots simultaneously. Higher fill rate but uses more compute and SOL for fees.
 
-The [`JitMaker`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) bot in keeper-bots-v2 demonstrates both strategies and includes market volatility checks, position sizing, and DLOB-aware pricing.
+The [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) bot in keeper-bots-v2 demonstrates both strategies and includes market volatility checks, position sizing, and DLOB-aware pricing.
 
 ```typescript
 import { JitterSniper, JitterShotgun, PriceType } from "@drift-labs/jit-proxy/lib";
@@ -267,4 +267,4 @@ const jitter = new JitterShotgun({
 - [Matching Engine](/protocol/about-v3/matching-engine) - Full liquidity priority flow
 - [JIT-only MM](./jit-only) - Building a JIT market maker bot
 - [SWIFT API](./swift-api) - See taker orders 100-500ms before they hit the auction
-- [@drift-labs/jit-proxy](https://github.com/drift-labs/jit-proxy) - JIT proxy SDK
+- [@drift-labs/jit-proxy](https://github.com/velocity-exchange/jit-proxy) - JIT proxy SDK

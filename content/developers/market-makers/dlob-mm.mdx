@@ -252,7 +252,7 @@ await driftClient.cancelOrders();
 
 ## Reference implementation
 
-The [`FloatingPerpMaker`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
+The [`FloatingPerpMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
 
 - **Slot based cooldown:** waits `MARKET_UPDATE_COOLDOWN_SLOTS` (30 slots) before re quoting a market, avoiding excessive transactions
 - **Mutex guarded periodic tasks:** uses `async mutex` to prevent overlapping quote updates

@@ -1,6 +1,6 @@
 # Bot Architecture Patterns
 
-Production market making bots need more than just order placement logic. This page covers the infrastructure patterns used across Drift's [keeper-bots-v2](https://github.com/drift-labs/keeper-bots-v2), applicable to market making, filling, and triggering bots.
+Production market making bots need more than just order placement logic. This page covers the infrastructure patterns used across Drift's [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2), applicable to market making, filling, and triggering bots.
 
 ## Subscription loop + resubscribe
 
@@ -314,7 +314,7 @@ const driftClient = new DriftClient({
 driftClient.switchActiveUser(subAccountId);
 ```
 
-The [`JitMaker`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) enforces a 1:1 subaccount-to-market ratio and throws if the mapping isn't configured correctly.
+The [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) enforces a 1:1 subaccount-to-market ratio and throws if the mapping isn't configured correctly.
 
 ## Gotchas
 
@@ -324,7 +324,7 @@ The [`JitMaker`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bo
 - **Blockhash expiry**: Solana blockhashes expire after ~60 seconds. If your transaction is stuck in a queue, it will silently fail. Use `getLatestBlockhash` with `commitment: "confirmed"` and set `lastValidBlockHeight` for reliable expiry detection.
 - **Rate limits**: even paid RPC providers have limits. Batch reads where possible (e.g., `getMultipleAccounts`) and avoid redundant subscriptions.
 
-See [keeper-bots-v2](https://github.com/drift-labs/keeper-bots-v2) for the reference implementation of these patterns. Key files:
-- [`floatingMaker.ts`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts): mutex guards, slot-based cooldowns, watchdog timer
-- [`jitMaker.ts`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/jitMaker.ts): subaccount isolation, DLOB integration, volatility checks
-- [`utils.ts`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/utils.ts): throttling, market type conversion, volatility detection helpers
+See [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2) for the reference implementation of these patterns. Key files:
+- [`floatingMaker.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts): mutex guards, slot-based cooldowns, watchdog timer
+- [`jitMaker.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts): subaccount isolation, DLOB integration, volatility checks
+- [`utils.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/utils.ts): throttling, market type conversion, volatility detection helpers

@@ -145,18 +145,18 @@ Signal intent to provide liquidity at certain prices without committing onchain 
 
 ## Reference Implementations
 
-Drift maintains open-source reference bots in [keeper-bots-v2](https://github.com/drift-labs/keeper-bots-v2):
+Drift maintains open-source reference bots in [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2):
 
 | Bot | Source | Strategy |
 |---|---|---|
-| **FloatingPerpMaker** | [`src/bots/floatingMaker.ts`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
-| **JitMaker** | [`src/bots/jitMaker.ts`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) | JIT auction fills using `JitterSniper`/`JitterShotgun` |
+| **FloatingPerpMaker** | [`src/bots/floatingMaker.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
+| **JitMaker** | [`src/bots/jitMaker.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) | JIT auction fills using `JitterSniper`/`JitterShotgun` |
 
-> **Tip:** The `FloatingPerpMaker` is the best starting point for understanding oracle offset orders in production. The `JitMaker` shows how to use the [`@drift-labs/jit-proxy`](https://github.com/drift-labs/jit-proxy) library for auction participation.
+> **Tip:** The `FloatingPerpMaker` is the best starting point for understanding oracle offset orders in production. The `JitMaker` shows how to use the [`@drift-labs/jit-proxy`](https://github.com/velocity-exchange/jit-proxy) library for auction participation.
 
 ## Related Resources
 
 - [Drift SDK](/developers/drift-sdk) - SDK reference for orders and positions
 - [Protocol Concepts](/developers/concepts) - Understanding accounts and onchain data
-- [Keeper Bots](https://github.com/drift-labs/keeper-bots-v2) - Open source keeper bot infrastructure
-- [@drift-labs/jit-proxy](https://github.com/drift-labs/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`
+- [Keeper Bots](https://github.com/velocity-exchange/keeper-bots-v2) - Open source keeper bot infrastructure
+- [@drift-labs/jit-proxy](https://github.com/velocity-exchange/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`

@@ -4,7 +4,7 @@
 
 Drift Protocol's dependence on external oracle accounts requires thoughtful consideration of the data point in the streams received.
 
-In the program [\[code\]](https://github.com/drift-labs/protocol-v2/blob/e04139e49e41dbbbaecbd5af9f038f6ce194f591/programs/clearing_house/src/math/oracle.rs#L15), this is encoded as a spectrum from Valid to Invalid, with a few different categories of questionability that depend on the action taken (ordered by severity):
+In the program [\[code\]](https://github.com/velocity-exchange/protocol-v2/blob/e04139e49e41dbbbaecbd5af9f038f6ce194f591/programs/clearing_house/src/math/oracle.rs#L15), this is encoded as a spectrum from Valid to Invalid, with a few different categories of questionability that depend on the action taken (ordered by severity):
 
 *   **Invalid**
 
@@ -79,7 +79,7 @@ A user's asset / liabilities when calculating total collateral for initial margi
 
 ### Exchange & Market Status
 
-ExchangeStatus and MarketStatus can be updated to prevent certain actions when specific issues are identified (described [here](https://github.com/drift-labs/protocol-v2/blob/8b46cfc628f317e4f07cd62f111dd73fabff8a96/programs/clearing_house/src/state/state.rs#L35)). These actions can include:
+ExchangeStatus and MarketStatus can be updated to prevent certain actions when specific issues are identified (described [here](https://github.com/velocity-exchange/protocol-v2/blob/8b46cfc628f317e4f07cd62f111dd73fabff8a96/programs/clearing_house/src/state/state.rs#L35)). These actions can include:
 
 *   funding rate updates;
 

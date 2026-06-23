@@ -280,7 +280,7 @@ const minSpread = Math.max(0.05, confidence * 2);
 
 ## Using JIT Proxy (JitterSniper / JitterShotgun)
 
-Instead of building fill logic from scratch, use the [`@drift-labs/jit-proxy`](https://github.com/drift-labs/jit-proxy) library which handles auction timing, transaction building, and retry logic:
+Instead of building fill logic from scratch, use the [`@drift-labs/jit-proxy`](https://github.com/velocity-exchange/jit-proxy) library which handles auction timing, transaction building, and retry logic:
 
 ```typescript
 import { JitterSniper, PriceType } from "@drift-labs/jit-proxy/lib";
@@ -297,7 +297,7 @@ await jitter.subscribe();
 // You just need to configure pricing and filters
 ```
 
-See the [`JitMaker`](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
+See the [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
 - Per-market subaccount isolation (1 subaccount per market)
 - Volatility-based fill rejection (`isMarketVolatile`)
 - DLOB-aware pricing (excludes own orders from best bid/ask calculation)
@@ -316,4 +316,4 @@ See the [`JitMaker`](https://github.com/drift-labs/keeper-bots-v2/blob/master/sr
 - [SWIFT API](./swift-api) - Receive orders 100-500ms faster via offchain WebSocket
 - [Bot Architecture](./bot-architecture) - Priority fees, health monitoring, graceful shutdown
 - [DLOB MM](./dlob-mm) - Resting order approach (can be combined with JIT)
-- [@drift-labs/jit-proxy](https://github.com/drift-labs/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`
+- [@drift-labs/jit-proxy](https://github.com/velocity-exchange/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`
