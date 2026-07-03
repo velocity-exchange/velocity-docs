@@ -1,25 +1,13 @@
 # Other Trading Fees
 
-These are additional fees charged across perpetual and spot markets.
+These are additional fees charged across perpetual and spot markets, on top of the taker/maker fees on [Trading Fees](/protocol/trading/trading-fees).
 
 ### Definitions
 
-- **`liquidator_fee`**: Additional premium for taking over asset/liability pairs at oracle.
-- **`insurance_fee`**: Fee reserved for revenue pool → insurance fund.
-- **`borrow_rate_fee`**: Fraction of borrow interest reserved for revenue pool → insurance fund.
+- **`liquidator_fee`**: Additional premium for taking over asset/liability pairs at oracle, paid to the liquidator.
+- **`if_liquidation_fee`**: Per-market liquidation cut routed to the Insurance Fund.
+- **`protocol_liquidation_fee`**: Per-market liquidation cut routed to the withdrawable `protocol_fee_pool`, introduced with the [fee redesign](/protocol/trading/trading-fees#fee-redesign). Split IF-first against the same insurance-fee budget so it can never push a liquidation into bankruptcy — see [Liquidations](/protocol/trading/liquidations#liquidation-fees).
+- **`if_fee_factor`** (spot markets, `InsuranceFund.ifFeeFactor`): fraction of deposit-interest gains reserved for the (100% staker-owned) `revenue_pool` → Insurance Fund.
+- **`protocol_fee_factor`** (spot markets, `SpotMarket.protocolFeeFactor`): fraction of deposit-interest gains reserved for the withdrawable `protocol_fee_pool`. Lenders receive the remainder after both factors.
 
----
-
-### Other Perp Fees
-
-<OtherPerpFeesTable />
-
----
-
-### Other Spot Fees
-
-<OtherSpotFeesTable />
-
----
-
-
+These per-market rates are set by an admin (`update_perp_market_liquidation_fee` / `update_spot_market_liquidation_fee`, `update_spot_market_if_factor`) and read directly from each market's on-chain account — check `PerpMarketAccount.liquidatorFee` / `ifLiquidationFee` / `protocolLiquidationFee` and `SpotMarketAccount.liquidatorFee` / `ifLiquidationFee` / `insuranceFund.ifFeeFactor` / `protocolFeeFactor` for current values.

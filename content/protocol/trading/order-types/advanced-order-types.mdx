@@ -1,7 +1,7 @@
 
 # Advanced Order types
 
-Drift supports several advanced order types:
+Velocity supports several advanced order types:
 
 #### Trigger Market
 A market order that activates when the trigger price condition is met. Used for Stop Loss (Stop Market) and Take Profit orders.
@@ -54,3 +54,5 @@ These flags can be combined with the order types above.
 | Reduce‑Only | Enforces that the order will never increase or reverse the current position (go from long to short, or short to long).
 | Post‑Only | Enforces that the order is a maker order that can provide liquidity to the pool for a reduced exchange fee (0%). Without this flag, orders that don't execute immediately are not post-only.
 | Immediate‑or‑Cancel (IOC) | An order that is placed and potentially partially filled. The remainder that is not filled immediately is then cancelled.
+| Has Builder | Set when the order carries a builder code (`builderIdx` / `builderFeeTenthBps`) — see [Trading Fees](/protocol/trading/trading-fees).
+| Is Isolated Position | Set on orders that risk-increase an [isolated perp position](/protocol/trading/margin) rather than the account's cross-margin position.

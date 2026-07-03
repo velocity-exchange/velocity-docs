@@ -1,0 +1,36 @@
+# Contributing to Velocity Protocol
+
+Interested in contributing to Velocity Protocol? There are multiple ways to make valuable contributions, from documentation to code and more. Below are some of the primary avenues you can explore.
+
+## Documentation
+Raise issues or submit Pull Requests at the [Velocity Documentation Repository](https://github.com/velocity-exchange/drift-protocol-v2-docs).
+
+## Bot Code
+
+Bots and the on-chain JIT program are all part of the [velocity-v1](https://github.com/velocity-exchange/velocity-v1) monorepo.
+
+### Keeper Bots
+- Source: [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2)
+- Example: `filler-lite` is a recent effort to make running a keeper bot more accessible for lower-performing RPCs — see `src/bots/fillerLite.ts` in that directory.
+
+### Trading Bots
+- JIT Proxy Program (TS client, not yet published to npm — build from source): [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy)
+- JIT Maker: source in `apps/keeper-bots-v2/src/bots/jitMaker.ts`
+
+## SDK
+Add new features or improve code quality and maintainability to the SDK.
+
+| SDK | Package | Source |
+|---|---|---|
+| TypeScript (`@velocity-exchange/sdk`) | [npm](https://www.npmjs.com/package/@velocity-exchange/sdk) | [velocity-v1/packages/sdk](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/sdk) |
+
+Velocity has no Python SDK. The in-repo Rust client (`rust/velocity-rs`) is source-only and unpublished — contributions there build against the workspace in `rust/`.
+
+## Composing Programs on Top of Velocity
+- Example: Velocity Vaults (`programs/vaults`, first-party in the same monorepo — see [Vault Managers](/developers/vault-managers))
+- Feature Requests: Tokenization of the insurance fund stake has been requested.
+
+## Main Program Contributions
+- Expanding the test suite (both TypeScript and Cargo tests) at the [`programs/velocity`](https://github.com/velocity-exchange/velocity-v1/tree/master/programs/velocity) directory of the main repository.
+
+Feel free to pick a project or issue that interests you and start contributing!

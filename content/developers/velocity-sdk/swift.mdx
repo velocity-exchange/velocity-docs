@@ -1,29 +1,33 @@
 # Swift (off-chain signed orders)
 
-Swift is an extension to Drift that lets users place orders without submitting a transaction to the Solana network. Instead of paying gas and waiting for confirmation, users sign an order message off-chain and submit it to the Swift API. Keepers and market makers then bundle the signed message with their own transaction to fill the order on-chain.
+Swift is an extension to Velocity that lets users place orders without submitting a transaction to the Solana network. Instead of paying gas and waiting for confirmation, users sign an order message off-chain and submit it to the Swift API. Keepers and market makers then bundle the signed message with their own transaction to fill the order on-chain.
 
 This enables faster order placement, lower latency, and a gas-free experience for takers, while market makers still settle on-chain.
+
+<Callout type="warning">
+The Swift API host below (`swift.velocity.exchange`) is a **provisional placeholder** — Velocity's production Swift endpoint had not been finalized/verified at the time this page was written. Confirm the real host before shipping against it.
+</Callout>
 
 **Order flow:**
 1. Define order parameters
 2. Sign the order message off-chain
-3. Submit to the Swift API (`https://swift.drift.trade/orders`)
+3. Submit to the Swift API (`https://swift.velocity.exchange/orders`)
 4. Keepers/market makers pick up the order and fill it on-chain
 
 ### Step 1: Define order parameters
 
-Set up a standard Drift order. For Swift, you typically use a market order with auction parameters that give market makers a window to fill:
+Set up a standard Velocity order. For Swift, you typically use a market order with auction parameters that give market makers a window to fill:
 
 <SDKDoc>
   <TypeScript name="Swift order setup" type="example">
 ```js
 import {
   getMarketOrderParams, MarketType, PositionDirection, isVariant
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 const marketIndex = 0; // SOL-PERP
 
-const oracleInfo = driftClient.getOracleDataForPerpMarket(marketIndex);
+const oracleInfo = velocityClient.getOracleDataForPerpMarket(marketIndex);
 const direction = PositionDirection.LONG;
 
 // Set auction price range around the current oracle price
@@ -34,7 +38,7 @@ const orderParams = getMarketOrderParams({
   marketIndex,
   marketType: MarketType.PERP,
   direction,
-  baseAssetAmount: driftClient.convertToPerpPrecision(0.1), // 0.1 SOL
+  baseAssetAmount: velocityClient.convertToPerpPrecision(0.1), // 0.1 SOL
   auctionStartPrice: isVariant(direction, "long") ? lowPrice : highPrice,
   auctionEndPrice: isVariant(direction, "long") ? highPrice : lowPrice,
   auctionDuration: 50, // slots for market makers to compete
@@ -45,18 +49,18 @@ const orderParams = getMarketOrderParams({
 
 ### Step 2: Sign the order message
 
-Sign the order parameters off-chain using your DriftClient's wallet. This produces a serialized message and signature that the Swift API will verify:
+Sign the order parameters off-chain using your VelocityClient's wallet. This produces a serialized message and signature that the Swift API will verify:
 
 <SDKDoc>
-  <TypeScript name="signSignedMsgOrderParamsMessage" type="method" owner="DriftClient">
+  <TypeScript name="signSignedMsgOrderParamsMessage" type="method" owner="VelocityClient">
 ```js
-import { generateSignedMsgUuid } from "@drift-labs/sdk";
+import { generateSignedMsgUuid } from "@velocity-exchange/sdk";
 
-const slot = await driftClient.connection.getSlot();
+const slot = await velocityClient.connection.getSlot();
 
 const orderMessage = {
   signedMsgOrderParams: orderParams,
-  subAccountId: driftClient.activeSubAccountId,
+  subAccountId: velocityClient.activeSubAccountId,
   slot: new BN(slot),
   uuid: generateSignedMsgUuid(), // unique ID for deduplication
   stopLossOrderParams: null,
@@ -64,10 +68,14 @@ const orderMessage = {
 };
 
 const { orderParams: message, signature } =
-  driftClient.signSignedMsgOrderParamsMessage(orderMessage);
+  velocityClient.signSignedMsgOrderParamsMessage(orderMessage);
 ```
   </TypeScript>
 </SDKDoc>
+
+<Callout type="info">
+[Builder Codes](/developers/velocity-sdk/builder-codes) attach the same way here: add `builderIdx` / `builderFeeTenthBps` to `orderMessage` alongside `signedMsgOrderParams`. Builder codes are not exclusive to Swift — the same fields also work on regular on-chain order placement.
+</Callout>
 
 ### Step 3: Submit to the Swift API
 
@@ -76,7 +84,7 @@ POST the signed message to the Swift endpoint. The API validates the signature a
 <SDKDoc>
   <TypeScript name="Swift API submit" type="example">
 ```js
-const swiftUrl = "https://swift.drift.trade/orders";
+const swiftUrl = "https://swift.velocity.exchange/orders";
 
 const response = await fetch(swiftUrl, {
   method: "POST",
@@ -86,7 +94,7 @@ const response = await fetch(swiftUrl, {
     market_type: "perp",
     message: message.toString("hex"),
     signature: signature.toString("hex"),
-    taker_authority: driftClient.wallet.publicKey.toBase58(),
+    taker_authority: velocityClient.wallet.publicKey.toBase58(),
     // signing_authority: delegatePublicKey.toBase58(), // only needed for delegate flows
   }),
 });
@@ -99,7 +107,7 @@ if (!response.ok) {
   </TypeScript>
 </SDKDoc>
 
-> **Delegate flows:** When signing as a delegate for another account, also pass `signing_authority` (the delegate's public key) and ensure `taker_authority` is the account owner's public key. Initialize the DriftClient with `authority` set to the owner's key.
+> **Delegate flows:** When signing as a delegate for another account, also pass `signing_authority` (the delegate's public key) and ensure `taker_authority` is the account owner's public key. Initialize the VelocityClient with `authority` set to the owner's key.
 
 ### Signed message accounts (delegate flow)
 
@@ -108,21 +116,21 @@ For delegate accounts, you can initialize a `SignedMsgUserOrders` account to all
 <SDKDoc>
   <TypeScript name="getSignedMsgUserAccountPublicKey" type="function">
 ```js
-import { getSignedMsgUserAccountPublicKey } from "@drift-labs/sdk";
+import { getSignedMsgUserAccountPublicKey } from "@velocity-exchange/sdk";
 
 // Derive the PDA for the signed message orders account
-const pda = getSignedMsgUserAccountPublicKey(driftClient.program.programId, authority);
+const pda = getSignedMsgUserAccountPublicKey(velocityClient.program.programId, authority);
 ```
   </TypeScript>
 </SDKDoc>
 
 <SDKDoc>
-  <TypeScript name="initializeSignedMsgUserOrders" type="method" owner="DriftClient">
+  <TypeScript name="initializeSignedMsgUserOrders" type="method" owner="VelocityClient">
 ```js
 // Initialize the signed message orders account for `authority`
 // with space for 8 concurrent orders
 const [txSig, signedMsgUserAccount] =
-  await driftClient.initializeSignedMsgUserOrders(authority, 8);
+  await velocityClient.initializeSignedMsgUserOrders(authority, 8);
 ```
   </TypeScript>
 </SDKDoc>
@@ -132,9 +140,9 @@ const [txSig, signedMsgUserAccount] =
 Decode a raw signed message (e.g., received from the Swift API or another source) back into structured order params:
 
 <SDKDoc>
-  <TypeScript name="decodeSignedMsgOrderParamsMessage" type="method" owner="DriftClient">
+  <TypeScript name="decodeSignedMsgOrderParamsMessage" type="method" owner="VelocityClient">
 ```js
-const signedMessage = driftClient.decodeSignedMsgOrderParamsMessage(
+const signedMessage = velocityClient.decodeSignedMsgOrderParamsMessage(
   Buffer.from(orderMessageHex, "hex"),
   isDelegateSigner  // true if the message was signed by a delegate
 );
@@ -149,10 +157,10 @@ For advanced use cases (such as building keeper or market-maker bots), you can c
 Build the taker-side instructions for placing a Swift order on-chain:
 
 <SDKDoc>
-  <TypeScript name="getPlaceSignedMsgTakerPerpOrderIxs" type="method" owner="DriftClient">
+  <TypeScript name="getPlaceSignedMsgTakerPerpOrderIxs" type="method" owner="VelocityClient">
 ```js
 // Used by keeper bots to submit a taker's signed Swift order on-chain
-const ixs = await driftClient.getPlaceSignedMsgTakerPerpOrderIxs(
+const ixs = await velocityClient.getPlaceSignedMsgTakerPerpOrderIxs(
   { orderParams: orderMessageHex, signature },
   marketIndex,
   takerInfo
@@ -161,17 +169,21 @@ const ixs = await driftClient.getPlaceSignedMsgTakerPerpOrderIxs(
   </TypeScript>
 </SDKDoc>
 
-Build instructions to place a maker order and simultaneously fill a pending Swift taker order (atomic maker fill):
+Build instructions to place a maker order and simultaneously fill a pending Swift taker order (atomic maker fill). If the taker's order carries a builder code or the taker is referred with an escrow, pass their decoded `RevenueShareEscrow` as the trailing `takerEscrow` argument — see [Fill-time enforcement](/developers/velocity-sdk/builder-codes#fill-time-enforcement):
 
 <SDKDoc>
-  <TypeScript name="getPlaceAndMakeSignedMsgPerpOrderIxs" type="method" owner="DriftClient">
+  <TypeScript name="getPlaceAndMakeSignedMsgPerpOrderIxs" type="method" owner="VelocityClient">
 ```js
 // Used by market makers to fill a taker's Swift order with their own maker quote
-const ixs = await driftClient.getPlaceAndMakeSignedMsgPerpOrderIxs(
+const ixs = await velocityClient.getPlaceAndMakeSignedMsgPerpOrderIxs(
   signedMsgOrderParams,
   signedMsgOrderUuid,
   takerInfo,
-  makerOrderParams
+  makerOrderParams,
+  subAccountId,
+  [], // precedingIxs
+  undefined, // overrideCustomIxIndex
+  takerEscrow // optional; required when the taker's order needs it
 );
 ```
   </TypeScript>
@@ -184,7 +196,7 @@ Generate a unique UUID for a Swift order message. Each order must have a distinc
 <SDKDoc>
   <TypeScript name="generateSignedMsgUuid" type="function">
 ```js
-import { generateSignedMsgUuid } from "@drift-labs/sdk";
+import { generateSignedMsgUuid } from "@velocity-exchange/sdk";
 
 const uuid = generateSignedMsgUuid();
 ```
@@ -196,7 +208,7 @@ Hash a signature for use in order deduplication or indexing:
 <SDKDoc>
   <TypeScript name="digestSignature" type="function">
 ```js
-import { digestSignature } from "@drift-labs/sdk";
+import { digestSignature } from "@velocity-exchange/sdk";
 
 const hash = digestSignature(Uint8Array.from(signature));
 ```
@@ -208,10 +220,10 @@ Derive the user stats account PDA for an authority:
 <SDKDoc>
   <TypeScript name="getUserStatsAccountPublicKey" type="function">
 ```js
-import { getUserStatsAccountPublicKey } from "@drift-labs/sdk";
+import { getUserStatsAccountPublicKey } from "@velocity-exchange/sdk";
 
 const userStats = getUserStatsAccountPublicKey(
-  driftClient.program.programId,
+  velocityClient.program.programId,
   authority
 );
 ```

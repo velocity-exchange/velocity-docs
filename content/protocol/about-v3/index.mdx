@@ -1,11 +1,14 @@
-# Understanding Drift
+# Understanding Velocity
 
-At the application level, Drift Protocol is a decentralized exchange that supports low slippage, low fees, and minimal price impact on all trades. Drift offers four primary products:
+At the application level, Velocity is a decentralized exchange that supports low slippage, low fees, and minimal price impact on all trades. Velocity offers three primary products:
 
-* Spot Trading - [What is Spot Margin Trading?](/protocol/trading/margin)
 * Perpetuals Trading - [What are Perpetual Futures?](/protocol/trading/perpetuals-trading/perpetuals-trading)
 * Borrow & Lend - [What is Borrow & Lend?](/protocol/borrow-lend)
 * Passive Liquidity Provision - [Backstop AMM Liquidity (BAL)](/protocol/glossary)
+
+<Callout type="important">
+Velocity has no spot order book — spot markets exist only for collateral/borrow-lend, and spot swaps route through direct `begin_swap`/`end_swap` or LP-pool swaps rather than a DLOB. See [Order Types](/protocol/trading/order-types).
+</Callout>
 
 ## The Problem
 
@@ -23,7 +26,7 @@ As a result, most on-chain orderbooks suffer from:
 
 ### Decentralisation
 
-Drift Protocol is a **decentralised** exchange, meaning:
+Velocity is a **decentralised** exchange, meaning:
 
 * all deposits, withdraws, and trades are executed on-chain and are completely transparent
 * trading requires a connection to a self-custodial Solana wallet
@@ -36,7 +39,7 @@ Decentralisation offers many benefits, including:
 * fairness
 * trustlessness
 
-However, decentralisation also means that Drift is susceptible to the same limitations and shortcomings that arise from running on a blockchain, including:
+However, decentralisation also means that Velocity is susceptible to the same limitations and shortcomings that arise from running on a blockchain, including:
 
 * underlying blockchain risk
 * transaction fees
@@ -45,14 +48,14 @@ However, decentralisation also means that Drift is susceptible to the same limit
 
 ## Our Solution
 
-Drift has designed & developed an exchange that is robust, computationally efficient, and incentivises market maker participation, as well as liquidity provision.
+Velocity is designed to be robust, computationally efficient, and to incentivise market maker participation, as well as liquidity provision.
 
-Trades on Drift are supported by three liquidity mechanisms. Each mechanism is described below.
+Trades on Velocity are supported by three liquidity mechanisms. Each mechanism is described below.
 
 <Steps>
 ### Just-in-Time (JIT) Auction Liquidity
 
-All market trades (spot and perpetual) that are placed on Drift are routed through a short-term auction (default is \~ 5 seconds). During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
+All perp market orders placed on Velocity are routed through a short-term auction (default is \~ 5 seconds). During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
 
 Auctions are run via a Dutch Auction (where the auction price starts at the better price and linearly moves toward a set worse end price) and market makers compete amongst themselves in speed to fulfil user orders.
 
@@ -60,22 +63,22 @@ _For a more technical breakdown, check out:_ [Matching Engine](/protocol/about-v
 
 ### Constant Liquidity (AMM)
 
-Drift's virtual AMM (AMM) is the backstop designated liquidity provider for trades on the exchange if:
+Velocity's virtual AMM (AMM) is the backstop designated liquidity provider for trades on the exchange if:
 
 1. market orders aren't filled by the JIT and
 2. resting orders hit a trigger price that can be filled by the AMM.
 
-The AMM provides a source of constant liquidity for all traders to **take** from. The AMM is considered constant as liquidity is available based on a constant product formula `x*y=k` balancing the reserves. Drift's AMM features an inbuilt bid-ask spread that adjusts based on inventory held by the AMM. Users can also LP into the AMM to further collateralize.
+The AMM provides a source of constant liquidity for all traders to **take** from. The AMM is considered constant as liquidity is available based on a constant product formula `x*y=k` balancing the reserves. Velocity's AMM features an inbuilt bid-ask spread that adjusts based on inventory held by the AMM. Users can also LP into the AMM to further collateralize.
 
-This also means that, even without external makers, Drift Protocol can support new markets without dependence on external market makers to bootstrap liquidity (albeit with additional risks on the immediate availability of unsettled PnL).
+This also means that, even without external makers, Velocity can support new markets without dependence on external market makers to bootstrap liquidity (albeit with additional risks on the immediate availability of unsettled PnL).
 
-Many prudent measures in the protocol's design are in place (capped exposure, effective market making, revenue pool utilization, insurance fund rules, etc) to mitigate and isolate the risks of a single market. The AMM needs a reliable oracle of the perpetual market's spot reference asset. For instance, Drift's SOL-PERP market would refer to a SOL/USD spot oracle for a spot reference. Drift currently uses [Pyth](https://pyth.network/) for its oracles and can arbitrarily support other sources per market.
+Many prudent measures in the protocol's design are in place (capped exposure, effective market making, revenue pool utilization, insurance fund rules, etc) to mitigate and isolate the risks of a single market. The AMM needs a reliable oracle of the perpetual market's spot reference asset. For instance, Velocity's SOL-PERP market would refer to a SOL/USD spot oracle for a spot reference. Velocity currently uses [Pyth](https://pyth.network/) (push and Pyth Lazer) for its oracles and can arbitrarily support other sources per market.
 
-_For a more technical breakdown, check out:_ [Drift AMM](/protocol/about-v3/drift-amm)
+_For a more technical breakdown, check out:_ [Velocity AMM](/protocol/about-v3/drift-amm)
 
 ### Limit Orderbook Liquidity (DLOB)
 
-Drift's decentralised orderbook (DLOB) acts as its third source of liquidity.
+Velocity's decentralised orderbook (DLOB) acts as its third source of liquidity, for perpetual markets only.
 
 Limit orders are orders that trigger and execute on a particular condition. For a full breakdown of what limit orders are, visit: [Order Types](/protocol/trading/order-types)
 
@@ -83,7 +86,7 @@ Limit orders are placed by users on-chain. A network of Keeper Bots ([Keeper Bot
 
 Each Keeper maintains its own view of the orderbook (hence the 'decentralised' aspect) and tracks new orders, AMM availability, and the oracle price. If the trigger condition of a limit order is met, the Keeper will submit the limit order and fill it against the AMM. Keepers will also match taker orders with resting limit orders if the conditions are the same.
 
-Keepers are also incentivised to fill the oldest and largest order first. For their work, they are paid a portion of the taker fee to their Drift User Account.
+Keepers are also incentivised to fill the oldest and largest order first. For their work, they are paid a portion of the taker fee to their Velocity User Account.
 
 The decentralised orderbook acts as a source of 'resting' liquidity as it rests on the orderbook until either a taker takes it, or the requisite market conditions are met and it's filled against the AMM.
 

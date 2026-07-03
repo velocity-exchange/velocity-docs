@@ -1,58 +1,20 @@
 # Rewards
 
-## Collateral rewards
-We incentivize **traders who open perp positions using their deposited collateral**. This ensures rewards are tied to both providing liquidity and taking active trading positions.
+Velocity does not run an on-chain points or fuel program — Drift's "Fuel" points/incentives
+system (per-user fuel accrual, fuel boosts, fuel seasons) was removed for Velocity and has no
+on-chain replacement.
 
-**LBTC**
+The protocol-level reward mechanism that does survive from Drift, in changed form, is the
+[referral program](/protocol/rewards/referral-links): referrers earn a share of their referred
+users' taker fees, paid out through an escrow account rather than the legacy epoch-capped path.
 
-LBTC is an SPL token fully backed by BTC from Lombard Finance.
-Trade using LBTC as collateral to earn yield on Bitcoin + up to $20,000 in monthly incentives
+<Cards>
+  <Cards.Card title="Referral Links" href="/protocol/rewards/referral-links" />
+</Cards>
 
-**SyrupUSDC**
-
-SyrupUSDC is Maple Finance's yield-bearing stablecoin. Trade using SyrupUSDC as collateral to enter into the $100,000 total rewards pool.
-For additional details on the campaign, please see the [Maple blogpost](https://maple.finance/insights/syrupusdc-drift-protocol-perps-collateral-yield-bearing-margin)
-
-### How Collateral Rewards Work
-
-<Callout type="warning">
-**Note:** We use syrupUSDC to illustrate the incentive structure. The same rules, mechanics, and reward calculations apply to any future promotions unless stated otherwise.
+<Callout type="info">
+Velocity or its ecosystem partners may run time-limited incentive campaigns (for example,
+deposit or collateral incentives funded by a partner protocol) from time to time. Any such
+campaigns will be announced separately and reflected in the app — none are documented here
+because none are currently active or verified as ongoing Velocity programs.
 </Callout>
-
-**Deposit syrupUSDC as collateral** for an active perpetual position to start earning rewards.
-
-Incentives accrue continuously and are distributed among participants who meet **both** criteria:
-<Steps>
-#### Have syrupUSDC deposited as collateral.
-You must have syrupUSDC deposited in your account as collateral.
-
-#### Maintain an active perpetual position.
-You must maintain an active perpetual position to be eligible for rewards.
-</Steps>
-
-Your share of rewards is based on:
-
-```
-min(deposited syrupUSDC, open perp notional)
-```
-
-This means rewards are aligned with both your syrupUSDC balance and your trading activity.
-
-### Maximizing Collateral Rewards
-
-To earn the most from incentives:
-
-- Keep your **open interest (OI)** in perpetuals **higher** than your deposited syrupUSDC balance.
-- Maintain active positions during the reward cycle to maximize accrual.
-- Monitor your collateral and notional exposure to avoid being capped by the `min()` rule above.
-Current assets eligible for rewards: **None**
-
-## Deposit rewards
-Earn yield just by depositing supported stablecoins on Drift.
-
-Current assets eligible for rewards: **USDS**
-
-## Borrow rewards
-Get rewarded for borrowing assets, effectively borrowing at a cheaper rate.
-
-Current assets eligible for rewards: **None**

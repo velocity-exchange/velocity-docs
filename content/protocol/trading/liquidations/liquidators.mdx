@@ -2,18 +2,22 @@
 
 Liquidations act as position transfers between accounts. Liquidator accounts thus need to be collateralised in order to satisfy the transfer's initial margin requirements.
 
-There are four instructions pertaining to liquidations:
+The core instructions pertaining to liquidations are:
 
 | Instruction                    | Details                                                          |
 | ------------------------------ | ---------------------------------------------------------------- |
-| liquidate_perp                 | Liquidator takes over user perpetual positions at a discount.    |
-| liquidate_borrow               | Liquidator takes over borrow at a discount to the deposit value. |
-| liquidate_borrow_for_perp_pnl  | Liquidator takes over borrow for discount P&L.                  |
+| liquidate_perp                 | Liquidator takes over user perpetual positions at a discount. Also handles [isolated positions](/protocol/trading/margin), liquidating them 100% in one shot instead of the throttled cross-margin ramp. |
+| liquidate_perp_with_fill       | Same as `liquidate_perp`, but fills the taken-over position against a maker in the same instruction. |
+| liquidate_spot                 | Liquidator takes over borrow at a discount to the deposit value. |
+| liquidate_spot_with_swap_begin / _end | Liquidator takes over a borrow via an atomic swap (e.g. against Jupiter) rather than direct token transfer. |
+| liquidate_borrow_for_perp_pnl  | Liquidator takes over borrow for discounted P&L.                  |
 | liquidate_perp_pnl_for_deposit | Liquidator takes over negative P&L for discounted deposit.      |
 
-Bankruptcy (see [Insurance Fund](/protocol/insurance-fund) ) is possible if you still have outstanding liabilities and no further assets after liquidation.  
+Every liquidation fee is split three ways (`liquidator_fee` / `if_liquidation_fee` / `protocol_liquidation_fee`) — see [Liquidations](/protocol/trading/liquidations#liquidation-fees) for the split logic.
 
-Liquidators are open-sourced and can be triggered by anybody running a liquidator bot. Liquidators, also known as Keepers, will have their collateral reward credited to their Drift account.
+Bankruptcy (see [Insurance Fund](/protocol/insurance-fund) ) is possible if you still have outstanding liabilities and no further assets after liquidation. Bankruptcy resolution is gated by `State.solvencyStatus`, independent of the general withdraw-pause flag — see [Bankruptcy and Solvency Status](/protocol/trading/liquidations#bankruptcy-and-solvency-status).
+
+Liquidators are open-sourced and can be triggered by anybody running a liquidator bot. Liquidators, also known as Keepers, will have their collateral reward credited to their Velocity account.
 
 Liquidations will be triggered and positions will be liquidated based on oracle price, not the mark price of the exchange.   
 

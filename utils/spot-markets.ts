@@ -1,15 +1,15 @@
-import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
-import { Connection, PublicKey } from "@solana/web3.js";
-import driftIDL from "../types/idl/drift.json";
+import { AnchorProvider, Program } from "@coral-xyz/anchor";
+import { Connection } from "@solana/web3.js";
 import {
   DelistedMarketSetting,
-  DRIFT_PROGRAM_ID,
-  WebSocketDriftClientAccountSubscriber,
-} from "@drift-labs/sdk";
+  VelocityCore,
+  VelocityProgram,
+  WebSocketVelocityClientAccountSubscriber,
+} from "@velocity-exchange/sdk";
 
 export const getSpotMarketAccountSusbcriber = async () => {
-  return new WebSocketDriftClientAccountSubscriber(
-    getDriftProgram(),
+  return new WebSocketVelocityClientAccountSubscriber(
+    getVelocityProgram(),
     [],
     [],
     [],
@@ -20,7 +20,7 @@ export const getSpotMarketAccountSusbcriber = async () => {
   );
 };
 
-const getDriftProgram = () => {
+const getVelocityProgram = (): VelocityProgram => {
   const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
   const provider = new AnchorProvider(
     connection,
@@ -30,9 +30,11 @@ const getDriftProgram = () => {
       commitment: "confirmed",
     }
   );
+  // Use the SDK's bundled IDL (address is embedded in the IDL itself) rather
+  // than a locally vendored copy, so this always tracks the installed
+  // @velocity-exchange/sdk version.
   return new Program(
-    driftIDL as Idl,
-    new PublicKey(DRIFT_PROGRAM_ID),
+    VelocityCore.defaultIdl(),
     provider
-  );
+  ) as unknown as VelocityProgram;
 };

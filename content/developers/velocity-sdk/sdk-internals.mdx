@@ -1,14 +1,16 @@
 # SDK Internals
 
-The Drift SDK handles onchain interactions, account subscriptions, and transaction construction. Understanding its internals helps you optimize performance, debug issues, and use advanced features.
+The Velocity SDK handles onchain interactions, account subscriptions, and transaction construction. Understanding its internals helps you optimize performance, debug issues, and use advanced features.
 
-While the code examples below use the TypeScript SDK (`@drift-labs/sdk`), the architectural concepts ,  subscription patterns, account caching, transaction construction layers, and remaining accounts ,  apply equally to the Python (`driftpy`) and Rust SDKs.
+<Callout type="info">
+The code examples below use the TypeScript SDK (`@velocity-exchange/sdk`), the only SDK Velocity ships. There is no Python SDK. A Rust client (`velocity-rs`) exists in the [monorepo](https://github.com/velocity-exchange/velocity-v1) but is source-only and unpublished — see [SDK Setup](/developers/velocity-sdk/setup) for details.
+</Callout>
 
 ## Core architecture
 
 The SDK has three main components:
 
-**DriftClient** - Main interface for protocol interactions
+**VelocityClient** - Main interface for protocol interactions
 - Constructs transactions
 - Manages account subscriptions
 - Provides helper methods for orders, deposits, etc.
@@ -35,11 +37,11 @@ The SDK supports multiple subscription strategies, each with different performan
 <SDKDoc>
   <TypeScript name="Polling subscription" type="example">
 ```js
-import { BulkAccountLoader } from "@drift-labs/sdk";
+import { VelocityClient, BulkAccountLoader } from "@velocity-exchange/sdk";
 
 const accountLoader = new BulkAccountLoader(connection, "confirmed", 1000);
 
-const driftClient = new DriftClient({
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   accountSubscription: {
@@ -70,7 +72,9 @@ const driftClient = new DriftClient({
 <SDKDoc>
   <TypeScript name="WebSocket subscription" type="example">
 ```js
-const driftClient = new DriftClient({
+import { VelocityClient } from "@velocity-exchange/sdk";
+
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   accountSubscription: {
@@ -100,7 +104,9 @@ const driftClient = new DriftClient({
 <SDKDoc>
   <TypeScript name="gRPC subscription" type="example">
 ```js
-const driftClient = new DriftClient({
+import { VelocityClient } from "@velocity-exchange/sdk";
+
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   accountSubscription: {
@@ -134,14 +140,14 @@ For loading many accounts efficiently, the SDK provides `BulkAccountLoader`:
 <SDKDoc>
   <TypeScript name="BulkAccountLoader" type="example">
 ```js
-import { BulkAccountLoader } from "@drift-labs/sdk";
+import { VelocityClient, BulkAccountLoader } from "@velocity-exchange/sdk";
 
 // Constructor: (connection, commitment, pollingFrequencyMs)
 const bulkAccountLoader = new BulkAccountLoader(connection, "confirmed", 1000);
 
 // Typically you don't call addAccount directly. Instead, pass the loader
-// to DriftClient and it registers the accounts it needs automatically.
-const driftClient = new DriftClient({
+// to VelocityClient and it registers the accounts it needs automatically.
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   accountSubscription: { type: "polling", accountLoader: bulkAccountLoader },
@@ -160,20 +166,21 @@ The SDK builds transactions in several layers:
   <TypeScript name="Transaction construction layers" type="example">
 ```js
 // 1. Get instruction
-const ix = await driftClient.getPlacePerpOrderIx(orderParams);
+const ix = await velocityClient.getPlacePerpOrderIx(orderParams);
 
 // 2. Build transaction
-const tx = await driftClient.txSender.getVersionedTransaction(
+// getVersionedTransaction(ixs, lookupTableAccounts, additionalSigners?, opts?, blockhash?)
+// — the fee payer/signer is `velocityClient`'s own wallet, not a positional arg.
+const tx = await velocityClient.txSender.getVersionedTransaction(
   [ix],
   [], // lookup tables
-  wallet.publicKey
 );
 
 // 3. Send transaction
-const { txSig } = await driftClient.txSender.sendVersionedTransaction(
+const { txSig } = await velocityClient.txSender.sendVersionedTransaction(
   tx,
   [],
-  driftClient.opts
+  velocityClient.opts
 );
 ```
   </TypeScript>
@@ -183,18 +190,18 @@ Higher-level methods like `placePerpOrder()` do all three steps automatically.
 
 ## Remaining accounts pattern
 
-Many Drift instructions need dynamic account lists (oracles, markets, positions). The SDK's `getRemainingAccounts()` method builds this list:
+Many Velocity instructions need dynamic account lists (oracles, markets, positions). The SDK's `getRemainingAccounts()` method builds this list:
 
 <SDKDoc>
   <TypeScript name="Remaining accounts" type="example">
 ```js
-const remainingAccounts = driftClient.getRemainingAccounts({
+const remainingAccounts = velocityClient.getRemainingAccounts({
   userAccounts: [user.getUserAccount()],
   writableSpotMarketIndexes: [0],  // USDC market
 });
 
 // These accounts get passed to the instruction
-const ix = await driftClient.program.methods
+const ix = await velocityClient.program.methods
   .placePerpOrder(params)
   .accounts({
     user: userAccountPubkey,
@@ -210,14 +217,14 @@ This handles oracle accounts, market accounts, and cross-position accounts autom
 
 ## Event subscriptions
 
-The SDK can subscribe to onchain program events:
+The SDK can subscribe to onchain program events. See [Events](/developers/velocity-sdk/events) for the full event catalog (including the fee-sweep/revenue-share/LP-borrow-lend records) and query helpers:
 
 <SDKDoc>
   <TypeScript name="Event subscriptions" type="example">
 ```js
-import { EventSubscriber, isVariant } from "@drift-labs/sdk";
+import { EventSubscriber, isVariant } from "@velocity-exchange/sdk";
 
-const eventSubscriber = new EventSubscriber(connection, driftClient.program, {
+const eventSubscriber = new EventSubscriber(connection, velocityClient.program, {
   commitment: "confirmed",
   logProviderConfig: { type: "websocket" },
 });
@@ -247,16 +254,16 @@ Common event types:
 ```js
 // Market account caching:
 // First call after subscribe: data from subscription cache (no extra RPC)
-const market = driftClient.getPerpMarketAccount(0);
+const market = velocityClient.getPerpMarketAccount(0);
 // Subsequent calls: same cached data, updates via subscription
-const market2 = driftClient.getPerpMarketAccount(0);
+const market2 = velocityClient.getPerpMarketAccount(0);
 
 // Oracle price caching:
-const oracle = driftClient.getOracleDataForPerpMarket(0);
+const oracle = velocityClient.getOracleDataForPerpMarket(0);
 // Price is cached from account subscription
 
 // User account caching:
-const user = driftClient.getUser();
+const user = velocityClient.getUser();
 const position = user.getPerpPosition(0);
 // No RPC call, data from subscription
 ```
@@ -272,17 +279,18 @@ To track many user accounts efficiently:
 <SDKDoc>
   <TypeScript name="UserMap" type="example">
 ```js
-import { UserMap } from "@drift-labs/sdk";
+import { UserMap } from "@velocity-exchange/sdk";
 
 const userMap = new UserMap({
-  driftClient,
+  velocityClient,
   subscriptionConfig: {
     type: "websocket",
   },
 });
+await userMap.subscribe();
 
-// Subscribe to a specific user
-await userMap.addUserAccount(userAccountPubkey);
+// Add a specific user account to the map
+await userMap.addPubkey(userAccountPubkey);
 
 // Get user data
 const user = userMap.get(userAccountPubkey.toString());
@@ -298,32 +306,36 @@ UserMap handles subscription lifecycle for all users automatically.
 <SDKDoc>
   <TypeScript name="Common patterns" type="example">
 ```js
+import { VelocityClient } from "@velocity-exchange/sdk";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 
 // Initialize and subscribe
-const driftClient = new DriftClient({
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   env: "mainnet-beta",
 });
-await driftClient.subscribe();
+await velocityClient.subscribe();
 
-const user = driftClient.getUser();
+const user = velocityClient.getUser();
 await user.subscribe();
 
 // Transaction with priority fee
-const ix = await driftClient.getPlacePerpOrderIx(orderParams);
-const tx = await driftClient.txSender.getVersionedTransaction([
+const ix = await velocityClient.getPlacePerpOrderIx(orderParams);
+const tx = await velocityClient.txSender.getVersionedTransaction([
   ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
   ix,
-], [], wallet.publicKey);
-const { txSig } = await driftClient.txSender.sendVersionedTransaction(
-  tx, [], driftClient.opts
+], []); // lookup tables
+const { txSig } = await velocityClient.txSender.sendVersionedTransaction(
+  tx, [], velocityClient.opts
 );
 
 // Switch subaccounts
-await driftClient.switchActiveUser(1);  // Switch to subaccount 1
-const user1 = driftClient.getUser();  // Now returns subaccount 1
+await velocityClient.switchActiveUser(1);  // Switch to subaccount 1
+const user1 = velocityClient.getUser();  // Now returns subaccount 1
+
+// Batch operations: place multiple orders in one transaction
+await velocityClient.placeOrders([order1, order2, order3]);
 ```
   </TypeScript>
 </SDKDoc>
@@ -337,7 +349,7 @@ Common error scenarios:
 ```js
 // Insufficient collateral
 try {
-  await driftClient.placePerpOrder(params);
+  await velocityClient.placePerpOrder(params);
 } catch (e) {
   if (e.message.includes("InsufficientCollateral")) {
     console.log("Need to deposit more collateral");
@@ -345,7 +357,7 @@ try {
 }
 
 // Account subscription errors
-driftClient.eventEmitter.on("error", (e) => {
+velocityClient.eventEmitter.on("error", (e) => {
   console.error("Subscription error:", e);
   // Reconnect logic here
 });
@@ -363,19 +375,15 @@ driftClient.eventEmitter.on("error", (e) => {
 <SDKDoc>
   <TypeScript name="Performance tips" type="example">
 ```js
-// Batch operations: place multiple orders in one transaction
-await driftClient.placeOrders([order1, order2, order3]);
-
 // Precompute values: convert once, reuse
-const size = driftClient.convertToPerpPrecision(1);
-const price = driftClient.convertToPricePrecision(100);
+const size = velocityClient.convertToPerpPrecision(1);
+const price = velocityClient.convertToPricePrecision(100);
 
 // Use lookup tables (ALTs) to reduce transaction size
 const lookupTables = [/* your AddressLookupTableAccount objects */];
-const tx = await driftClient.txSender.getVersionedTransaction(
+const tx = await velocityClient.txSender.getVersionedTransaction(
   instructions,
-  lookupTables,
-  wallet.publicKey
+  lookupTables
 );
 ```
   </TypeScript>
@@ -383,6 +391,6 @@ const tx = await driftClient.txSender.getVersionedTransaction(
 
 ## Related
 
-- [SDK Setup](/developers/drift-sdk/setup) - Getting started with the SDK
+- [SDK Setup](/developers/velocity-sdk/setup) - Getting started with the SDK
 - [Bot Architecture](/developers/market-makers/bot-architecture) - Production bot patterns
 - [Program Structure](../concepts/program-structure) - onchain accounts the SDK interacts with

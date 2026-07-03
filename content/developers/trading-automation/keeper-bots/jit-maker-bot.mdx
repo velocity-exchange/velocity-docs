@@ -1,28 +1,31 @@
 # JIT Maker Bot
 
-This tutorial shows how to run a JIT Maker bot in Typescript from the [keeper-bots-v2 repo](https://github.com/velocity-exchange/keeper-bots-v2). A similar example written in Python is available in [keepyrs](https://github.com/velocity-exchange/keepyrs).
+This tutorial shows how to run a JIT Maker bot in TypeScript from [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the `velocity-v1` monorepo. Velocity has no Python SDK, so there is no Python equivalent.
 
-Market orders go through the [Just-In-Time (JIT) Auctions](/protocol/about-v3/matching-engine) where Makers fight to fill orders before the order is allowed to fill against the [Drift AMM](/protocol/about-v3/drift-amm).
+Market orders go through [Just-In-Time (JIT) Auctions](/protocol/about-v3/matching-engine) where Makers fight to fill orders before the order is allowed to fill against the Velocity AMM.
 
 ## Running the bot
 
 **☠️ This bot requires collateral to run. This tutorial is a developer's guide and holds no responsibility over bot outcomes.**
 
-### 1. Clone the repository
+### 1. Clone the monorepo
 
-The JIT Maker example lives in the keeper-bots-v2 repo, clone it to your local machine:
+The JIT Maker example lives in `apps/keeper-bots-v2` inside the `velocity-v1` monorepo:
 
 ```
-git clone https://github.com/velocity-exchange/keeper-bots-v2.git
+git clone https://github.com/velocity-exchange/velocity-v1.git
+cd velocity-v1
+bun install   # run once, at the repo root — this is a Bun workspace
+cd apps/keeper-bots-v2
 ```
 
-### 2. Prepare a keypair and drift account.
+### 2. Prepare a keypair and Velocity account.
 
 Refer to the [bot wallet setup](/protocol/getting-started/wallet-setup/bot-wallet) tutorial for how to set up a bot wallet.
 
 ### 3. Prepare the config file.
 
-The [`jit-maker-config.yaml`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/jit-maker-config.yaml) file is good starting point. You will need to fill in the following values:
+The [`jit-maker-config.yaml`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/jit-maker-config.yaml) file is a good starting point. You will need to fill in the following values:
 
 * `global.endpoint`: set this to your RPC endpoint (see [RPC Providers](/developers/trading-automation/rpc-providers))
 * `global.keeperPrivateKey`: set this to your bot private key (alternatively you can leave it blank and set the `KEEPER_PRIVATE_KEY` environment variable)
@@ -50,16 +53,16 @@ botConfigs:
 Now you are ready to run the bot, start it with:
 
 ```
-yarn run dev --config-file=jit-maker-config.yaml
+bun run dev --config-file=jit-maker-config.yaml
 ```
 
 ## Technical Explanation
 
 ### Strategy overview
 
-This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/jit-proxy/blob/master/ts/sdk/src/jitter/jitterShotgun.ts#L13) strategy and the [`jit-proxy`](https://github.com/velocity-exchange/jit-proxy) program to try to fill jit maker fills.
+This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) — build it from source, as `@velocity-exchange/jit-proxy` is not yet published to npm) to try to fill jit maker fills.
 
-The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exeeed min/max positions.
+The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is the same program deployed under Drift (`J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP`) — the client is now ported to Anchor 1.0 and built against `@velocity-exchange/sdk`/`VelocityClient` instead of `@drift-labs/sdk`/`DriftClient`.
 
 ### JIT-able orders
 
@@ -85,13 +88,13 @@ No ws data from perpMarket in 30000ms, resubscribing
 No ws data from spotMarket in 30000ms, resubscribing
 ```
 
-This is a notification from the Drift SDK that it is restarting its websocket connection with the RPC due to no messages being received within the set time. This is generatlly not an error and pretty common for less active markets that don't have much activity.
+This is a notification from the Velocity SDK that it is restarting its websocket connection with the RPC due to no messages being received within the set time. This is generatlly not an error and pretty common for less active markets that don't have much activity.
 
 ### Running JIT periodic tasks...
 
 ```
-[2024-02-27T00:04:31.387Z] Running JIT periodic tasks...
-[2024-02-27T00:04:31.389Z] info: (mkt index: JTO-PERP) base to market make (targetLvg=0.95): 1481.8891930588115 = 3476.551044 / 2.228725 * 0.95
+[2026-02-27T00:04:31.387Z] Running JIT periodic tasks...
+[2026-02-27T00:04:31.389Z] info: (mkt index: JTO-PERP) base to market make (targetLvg=0.95): 1481.8891930588115 = 3476.551044 / 2.228725 * 0.95
 ```
 
 This is a normal status message that the bot is running its periodic tasks. If you see this message, it means the bot is running as expected.

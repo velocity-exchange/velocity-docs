@@ -35,17 +35,17 @@ The `AuctionSubscriber` gives you a stream of active JIT auctions. Use `commitme
 <SDKDoc>
   <TypeScript name="AuctionSubscriber" type="class">
 ```js
-import { AuctionSubscriber } from "@drift-labs/sdk";
+import { AuctionSubscriber } from "@velocity-exchange/sdk";
 ```
   </TypeScript>
 </SDKDoc>
 
 
 ```typescript
-import { AuctionSubscriber } from "@drift-labs/sdk";
+import { AuctionSubscriber } from "@velocity-exchange/sdk";
 
 const auctionSubscriber = new AuctionSubscriber({
-  driftClient,
+  velocityClient,
   opts: { commitment: "processed" },
 });
 await auctionSubscriber.subscribe();
@@ -58,7 +58,7 @@ For even lower latency, subscribe to [SWIFT](./swift-api) to receive signed take
 <SDKDoc>
   <TypeScript name="OrderSubscriber" type="class">
 ```js
-import { OrderSubscriber } from "@drift-labs/sdk";
+import { OrderSubscriber } from "@velocity-exchange/sdk";
 ```
   </TypeScript>
 </SDKDoc>
@@ -70,13 +70,16 @@ Use `getAuctionPrice` to compute the current interpolated auction price at any s
 <SDKDoc>
   <TypeScript name="getAuctionPrice" type="function">
 ```typescript
-import { getAuctionPrice, convertToNumber, PRICE_PRECISION } from "@drift-labs/sdk";
+import { getAuctionPrice, convertToNumber, PRICE_PRECISION } from "@velocity-exchange/sdk";
 
 const currentSlot = await connection.getSlot();
-const oracle = driftClient.getOracleDataForPerpMarket(marketIndex);
+const oracle = velocityClient.getOracleDataForPerpMarket(marketIndex);
+const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
 
-// Get the current auction price at this slot
-const auctionPriceBN = getAuctionPrice(takerOrder, currentSlot, oracle.price);
+// Get the current auction price at this slot. Always pass the market's tick size
+// (orderTickSize) -- it defaults to no rounding, which disagrees with the program's
+// own price standardization on any market with tick_size > 1.
+const auctionPriceBN = getAuctionPrice(takerOrder, currentSlot, oracle.price, perpMarket.orderTickSize);
 const auctionPrice = convertToNumber(auctionPriceBN, PRICE_PRECISION);
 
 console.log(`Auction price at slot ${currentSlot}: $${auctionPrice.toFixed(4)}`);
@@ -84,20 +87,20 @@ console.log(`Auction price at slot ${currentSlot}: $${auctionPrice.toFixed(4)}`)
   </TypeScript>
 </SDKDoc>
 
-See [JIT Auctions - Auction pricing](./jit-auctions#auction-pricing-formula) for the full interpolation formula and timeline explanation.
+See [JIT Auctions - Auction pricing](./jit-auctions#auction-pricing-formula) for the full interpolation formula, and [Orderbook & Matching - Tick size](./orderbook-and-matching#tick-size) for why the tick size argument matters.
 
 ## Fill as maker (atomic place-and-make)
 
 This pattern places your maker order and fills against the taker in one transaction. You earn maker rebates and the taker gets filled, all atomic.
 
 <SDKDoc>
-  <TypeScript name="placeAndMakePerpOrder" type="method" owner="DriftClient">
+  <TypeScript name="placeAndMakePerpOrder" type="method" owner="VelocityClient">
 ```js
 import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 // Build your maker order (opposite direction of taker)
 const makerOrderParams = {
@@ -105,7 +108,7 @@ const makerOrderParams = {
   marketIndex: takerOrder.marketIndex,
   direction: PositionDirection.SHORT, // if taker is LONG
   baseAssetAmount: takerOrder.baseAssetAmount,
-  price: driftClient.convertToPricePrecision(myFillPrice),
+  price: velocityClient.convertToPricePrecision(myFillPrice),
   postOnly: PostOnlyParams.MUST_POST_ONLY,
 };
 
@@ -117,7 +120,7 @@ const takerInfo = {
   order: takerOrder,                  // the specific Order to fill against
 };
 
-await driftClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
+await velocityClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
 ```
   </TypeScript>
 </SDKDoc>
@@ -132,6 +135,7 @@ import {
   getAuctionPrice,
   getUserStatsAccountPublicKey,
   isSignedMsgOrder,
+  isOracleValid,
   isVariant,
   convertToNumber,
   PRICE_PRECISION,
@@ -139,13 +143,13 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 const MAX_POSITION = 100; // max 100 SOL position
 const MIN_SPREAD = 0.02;  // minimum $0.02 edge required
 
 const auctionSubscriber = new AuctionSubscriber({
-  driftClient,
+  velocityClient,
   opts: { commitment: "processed" },
 });
 await auctionSubscriber.subscribe();
@@ -160,13 +164,21 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
     if (isSignedMsgOrder(order)) continue;
 
     const marketIndex = order.marketIndex;
-    const oracle = driftClient.getMMOracleDataForPerpMarket(marketIndex);
+    const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
+    const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 
-    // Check oracle validity
-    if (!oracle.isValid) continue;
+    // Check oracle validity. Note: MMOraclePriceData has no `isValid` field -- use the
+    // `isOracleValid` AMM-fill-oriented validity gate against the market's guard rails.
+    const oracleIsValid = isOracleValid(
+      perpMarket,
+      oracle,
+      velocityClient.getStateAccount().oracleGuardRails,
+      slot
+    );
+    if (!oracleIsValid) continue;
 
     // Check position limits
-    const user = driftClient.getUser();
+    const user = velocityClient.getUser();
     const position = user.getPerpPosition(marketIndex);
     const currentSize = position
       ? Math.abs(convertToNumber(position.baseAssetAmount, BASE_PRECISION))
@@ -174,8 +186,9 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
     const fillSize = convertToNumber(order.baseAssetAmount, BASE_PRECISION);
     if (currentSize + fillSize > MAX_POSITION) continue;
 
-    // Get current auction price (use slot from the event, not an RPC call)
-    const auctionPriceBN = getAuctionPrice(order, slot, oracle.price);
+    // Get current auction price (use slot from the event, not an RPC call).
+    // Pass the market's tick size so this matches the program's own rounding.
+    const auctionPriceBN = getAuctionPrice(order, slot, oracle.price, perpMarket.orderTickSize);
     const auctionPrice = convertToNumber(auctionPriceBN, PRICE_PRECISION);
     const oraclePrice = convertToNumber(oracle.price, PRICE_PRECISION);
 
@@ -195,18 +208,18 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
 
     // Fill!
     try {
-      await driftClient.placeAndMakePerpOrder(
+      await velocityClient.placeAndMakePerpOrder(
         {
           orderType: OrderType.LIMIT,
           marketIndex,
           direction: takerIsLong ? PositionDirection.SHORT : PositionDirection.LONG,
           baseAssetAmount: order.baseAssetAmount.sub(order.baseAssetAmountFilled),
-          price: driftClient.convertToPricePrecision(myFillPrice),
+          price: velocityClient.convertToPricePrecision(myFillPrice),
           postOnly: PostOnlyParams.MUST_POST_ONLY,
         },
         {
           taker: pubkey,
-          takerStats: getUserStatsAccountPublicKey(driftClient.program.programId, userAccount.authority),
+          takerStats: getUserStatsAccountPublicKey(velocityClient.program.programId, userAccount.authority),
           takerUserAccount: userAccount,
           order,
         }
@@ -226,7 +239,7 @@ Apply risk and filtering checks before filling: oracle validity, position limits
 <SDKDoc>
   <TypeScript name="isSignedMsgOrder" type="function">
 ```typescript
-import { isSignedMsgOrder } from "@drift-labs/sdk";
+import { isSignedMsgOrder } from "@velocity-exchange/sdk";
 
 // In your AuctionSubscriber callback, skip orders that came from SWIFT
 // so your onchain handler and SWIFT handler don't both try to fill the same order.
@@ -247,22 +260,30 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey,
   </TypeScript>
 </SDKDoc>
 
-`getMMOracleDataForPerpMarket` is the recommended oracle getter for market makers. Unlike `getOracleDataForPerpMarket`, it returns MM-specific oracle data that includes a validity flag and confidence interval. Always check `oracle.isValid` before using the price. An invalid oracle means the data is stale or the price feed is unhealthy, and you should skip the fill rather than quote at a bad price.
+`getMMOracleDataForPerpMarket` is the recommended oracle getter for market makers: it returns the dedicated MM oracle price when it's active, fresh, and close enough to the exchange oracle, and transparently falls back to the exchange oracle otherwise. It has **no `isValid` field** — that's not part of `MMOraclePriceData`. It does carry `isMMOracleActive` (whether the market has an MM oracle configured at all — not a full validity signal) and `confidence`. For an actual go/no-go validity check, use `isOracleValid(market, oracleData, oracleGuardRails, slot)` from `math/oracles`, which is the same AMM-fill-oriented gate the program itself uses for confidence, staleness, and volatility.
 
 Key fields:
 - `oracle.price`: current oracle price as a `BN` in `PRICE_PRECISION` (1e6) units
-- `oracle.isValid`: whether the oracle data is fresh and trustworthy
-- `oracle.confidence`: price confidence interval from the oracle provider
+- `oracle.isMMOracleActive`: whether this market has a live MM oracle feed (not a validity signal on its own)
+- `oracle.confidence`: price confidence interval, `BN` in `PRICE_PRECISION` (1e6) units
 
 <SDKDoc>
-  <TypeScript name="getMMOracleDataForPerpMarket" type="method" owner="DriftClient">
+  <TypeScript name="getMMOracleDataForPerpMarket" type="method" owner="VelocityClient">
 ```typescript
-import { convertToNumber, PRICE_PRECISION } from "@drift-labs/sdk";
+import { convertToNumber, isOracleValid, PRICE_PRECISION } from "@velocity-exchange/sdk";
 
-const oracle = driftClient.getMMOracleDataForPerpMarket(marketIndex);
+const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
+const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+const slotSubscriberSlot = slotSubscriber.getSlot(); // don't poll connection.getSlot() per fill
 
-// Always guard against stale or unhealthy oracle data
-if (!oracle.isValid) {
+// Always guard against stale or unhealthy oracle data before quoting off it
+const oracleIsValid = isOracleValid(
+  perpMarket,
+  oracle,
+  velocityClient.getStateAccount().oracleGuardRails,
+  slotSubscriberSlot
+);
+if (!oracleIsValid) {
   console.warn("Oracle invalid for market", marketIndex, "-- skipping");
   return;
 }
@@ -280,15 +301,20 @@ const minSpread = Math.max(0.05, confidence * 2);
 
 ## Using JIT Proxy (JitterSniper / JitterShotgun)
 
-Instead of building fill logic from scratch, use the [`@drift-labs/jit-proxy`](https://github.com/velocity-exchange/jit-proxy) library which handles auction timing, transaction building, and retry logic:
+Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-proxy`](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) library which handles auction timing, transaction building, and retry logic. **Not yet published to npm** — build it from `packages/jit-proxy` in the monorepo until it is.
 
 ```typescript
-import { JitterSniper, PriceType } from "@drift-labs/jit-proxy/lib";
+import { JitterSniper, PriceType } from "@velocity-exchange/jit-proxy";
 
+// The constructor field is still `driftClient` (typed as `VelocityClient`) --
+// @velocity-exchange/jit-proxy hasn't renamed it yet. `jitProxyClient` (a
+// `JitProxyClient` wrapping the JIT proxy program) is also required; omitted here
+// for brevity.
 const jitter = new JitterSniper({
   auctionSubscriber,
-  driftClient,
+  driftClient: velocityClient,
   slotSubscriber,
+  jitProxyClient,
 });
 
 await jitter.subscribe();
@@ -297,7 +323,7 @@ await jitter.subscribe();
 // You just need to configure pricing and filters
 ```
 
-See the [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
+See the [`JitMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
 - Per-market subaccount isolation (1 subaccount per market)
 - Volatility-based fill rejection (`isMarketVolatile`)
 - DLOB-aware pricing (excludes own orders from best bid/ask calculation)
@@ -316,4 +342,4 @@ See the [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/ma
 - [SWIFT API](./swift-api) - Receive orders 100-500ms faster via offchain WebSocket
 - [Bot Architecture](./bot-architecture) - Priority fees, health monitoring, graceful shutdown
 - [DLOB MM](./dlob-mm) - Resting order approach (can be combined with JIT)
-- [@drift-labs/jit-proxy](https://github.com/velocity-exchange/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`
+- [@velocity-exchange/jit-proxy](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`

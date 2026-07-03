@@ -1,7 +1,7 @@
 # Just-in-Time (JIT) FAQ
 
 
-### What are liquidity sources Drift use?
+### What are liquidity sources Velocity uses?
 
 - JIT makers: Encapsulates filler/maker order into one, but requires high-frequency trading infrastructure.
 - Resting orderbook maker: You can define as absolute price or from oracle offset. Orders can be placed and canceled dynamically, or set once and left in the orderbook. The work of order management is then deferred to the user placing the order.
@@ -9,14 +9,16 @@
 
 ### JIT Links 
 
+<Callout type="important">
+`@velocity-exchange/jit-proxy` is not yet published to npm. The client is vendored in-repo (`packages/jit-proxy` in the [velocity-v1](https://github.com/velocity-exchange) monorepo), ported to Anchor 1.0 and built against `@velocity-exchange/sdk` — build it from source until the package is published. Velocity has no Python SDK, so there is no Python JIT client.
+</Callout>
+
 - [JIT-only market making](/developers/market-makers/jit-only)
 - [JIT Auctions](/developers/market-makers/jit-auctions)
 - [Tutorial on how to run JIT trading bot](/developers/trading-automation/keeper-bots/jit-maker-bot)
 - [Dune Dashboard](https://dune.com/bigz/drift-jit)
-- [Typescript](https://github.com/velocity-exchange/jit-proxy/blob/master/ts/sdk/Readme.md)
-- [Python](https://github.com/velocity-exchange/keepyrs/)
 
-JIT Proxy Address: J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP
+JIT Proxy Address: J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP (Drift's mainnet jit-proxy program — Velocity's deployed address is unconfirmed; see open questions)
 
 ## Benefits
 
@@ -124,11 +126,11 @@ When filling a taker order with JIT liquidity, JIT makers do not use the DLOB. T
 
 It's common practice to simulate transactions before submitting them, but this can carry a higher risk of being too slow to compete in real-time situations.
 
-### Why do some transactions appear on Drift but not on-chain?
+### Why do some transactions appear on Velocity but not on-chain?
 
-This might be a temporary display issue related to Solana forks. Transactions shown on Drift might be unconfirmed or failed due to these forks, even though they appear successful initially. Refreshing the page usually resolves the issue.
+This might be a temporary display issue related to Solana forks. Transactions shown on Velocity might be unconfirmed or failed due to these forks, even though they appear successful initially. Refreshing the page usually resolves the issue.
 
-### Does Drift have stats on market orders? Is there any option to track the history of any specific JIT auction?
+### Does Velocity have stats on market orders? Is there any option to track the history of any specific JIT auction?
 
 Yes, you can access data on hourly, daily usage, and placeAndMake by market here: [Dune Dashboard](https://dune.com/bigz/drift-jit).
 

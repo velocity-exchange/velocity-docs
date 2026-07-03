@@ -22,14 +22,14 @@ Trigger Bots are similar to [Tutorial: Order Matching Bot](/developers/trading-a
 
 ## Getting Started
 
-The reference implementation of a Trigger Bot is available [here](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/trigger.ts).
+The reference implementation of a Trigger Bot is available [here](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/trigger.ts) in the `velocity-v1` monorepo.
 
-Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Drift user account.
+Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Velocity user account.
 
 Start the Trigger Bot:
 
 ```shell copy
-yarn run dev:trigger
+bun run dev:trigger
 ```
 
 ## Technical Explanation
@@ -42,24 +42,24 @@ The trigger bot polls the DLOB for orders whose trigger conditions are now met (
 The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the current oracle price has crossed the trigger threshold — these are ready to be marked on-chain.
 
 ```typescript copy
-const market = this.driftClient.getMarketAccounts()[0]; // get a MarketAccount
-
-const oraclePriceData = this.driftClient.getOracleDataForMarket(marketIndex);
+const oraclePriceData = this.velocityClient.getOracleDataForPerpMarket(marketIndex);
 
 const nodesToTrigger = this.dlob.findNodesToTrigger(
     marketIndex,
     this.slotSubscriber.getSlot(),
-    oraclePriceData.price
+    oraclePriceData.price,
+    MarketType.PERP,
+    this.velocityClient.getStateAccount()
 );
 ```
 
-### Call `trigger_order` on `DriftClient`
+### Call `getTriggerOrderIx` on `VelocityClient`
 
 Submit the trigger transaction for each eligible node. Once triggered on-chain, the order becomes a regular order available for matching bots to fill. Expect competition from other trigger bots — handle errors gracefully and continue to the next node.
 
 ```typescript copy
 const user = this.userMap.get(nodeToTrigger.node.userAccount.toString());
-const txSig = await this.driftClient.triggerOrder(
+const triggerIx = await this.velocityClient.getTriggerOrderIx(
     nodeToTrigger.node.userAccount,
     user.getUserAccount(),
     nodeToTrigger.node.order

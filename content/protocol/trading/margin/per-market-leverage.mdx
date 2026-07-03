@@ -10,7 +10,7 @@ This allows higher leverage on stable assets and stricter limits on more volatil
 
 Each perpetual position stores its own `max_margin_ratio`, which defines the maximum leverage allowed for that market.
 
-When checking a position, Drift compares:
+When checking a position, Velocity compares:
 
 ```
 effective_margin_ratio = min(position.max_margin_ratio, account.max_margin_ratio)
@@ -46,7 +46,7 @@ Example: A trader runs 10x leverage on BTC-PERP and 5x leverage on PUMP-PERP. If
 
 Per-market leverage logic is implemented in:
 
-* `perp_positions.rs` stores `max_margin_ratio`
-* `updateUserPerpPositionCustomMarginRatio` updates per position settings
+* `state/user.rs` stores `max_margin_ratio` on the `PerpPosition` struct
+* `VelocityClient.updateUserPerpPositionCustomMarginRatio` (`@velocity-exchange/sdk`, `velocityClient.ts`) updates per-position settings
 
-Implementation can be found [here](https://github.com/velocity-exchange/protocol-v2/blob/3bb3d407146408a9e08816bcc72a903560013eb7/sdk/src/driftClient.ts#L1541)
+This is independent of [isolated positions](/protocol/trading/margin) — per-market leverage caps a position's margin ratio, while isolated positions segregate a position's collateral and liquidation from the rest of the subaccount; the two can be combined.

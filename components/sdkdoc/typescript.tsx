@@ -4,7 +4,8 @@ import { generateDefinition, TypeField, Tags } from "nextra/tsdoc";
 import type { SDKTab } from "../SDKDocTabs";
 import type { SDKBlockProps } from "./types";
 
-const SDK_BASE_URL = "https://drift-labs.github.io/protocol-v2/sdk";
+// TODO(open-question): provisional until final TypeDoc host is confirmed.
+const SDK_BASE_URL = "https://velocity-exchange.github.io/velocity-v1/sdk";
 const JSDOC_LINK_RE = /{@link ([^}]*)}/g;
 
 type TsDocDefinition = ReturnType<typeof generateDefinition>;
@@ -229,7 +230,7 @@ function getTsDocLink(ts: {
 
 export function buildTypeScriptTab(props: SDKBlockProps): SDKTab {
   const tsType = props.type ?? "function";
-  const tsModule = "@drift-labs/sdk";
+  const tsModule = "@velocity-exchange/sdk";
   let code: string | undefined;
   let exportName = props.name;
   const displayType = tsType.charAt(0).toUpperCase() + tsType.slice(1);

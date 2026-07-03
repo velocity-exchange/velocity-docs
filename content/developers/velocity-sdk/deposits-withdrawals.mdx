@@ -1,0 +1,104 @@
+# Deposits & Withdrawals
+
+## How it works
+
+Velocity uses a **cross-margin** system where all your deposits serve as collateral for all your positions across perp and spot markets. When you deposit tokens (like the quote asset, SOL, or other supported assets), they're added to your user account's spot balances. These deposits can be used to back perp positions, and you can borrow against them to increase leverage.
+
+Each deposit in a spot market earns **interest** from borrowers, while borrows accrue interest charges. Spot balances are tracked with precision (typically 1e6 for the quote asset, 1e9 for SOL) and can be positive (deposits) or negative (borrows). Your total collateral value is calculated by summing all deposits (weighted by asset weights) and subtracting borrows and unrealized perp losses.
+
+Withdrawals require sufficient free collateral, you can't withdraw funds that are backing open positions or would put your account below minimum margin requirements. The SDK handles token account derivation and precision conversion automatically.
+
+Spot markets on Velocity are collateral/borrow-lend only — they no longer support order-book trading (see [Orders](/developers/velocity-sdk/orders)). Deposits, withdrawals, and internal transfers are unaffected by that change.
+
+## SDK Usage
+
+Deposits/withdrawals move tokens between your wallet token accounts and your Velocity subaccount's spot position.
+
+### Converting amounts and deriving the token account
+
+Convert a human-readable token amount into the onchain precision units required for spot instructions.
+
+<SDKDoc>
+  <TypeScript name="convertToSpotPrecision" type="method" owner="VelocityClient">
+```js
+// marketIndex 0 is the protocol's quote asset (dUSDT on devnet, USDC on mainnet-beta)
+const marketIndex = 0;
+const amount = velocityClient.convertToSpotPrecision(marketIndex, 100); // 100 units (example)
+```
+  </TypeScript>
+</SDKDoc>
+
+Get your wallet's associated token account for a given spot market mint.
+
+<SDKDoc>
+  <TypeScript name="getAssociatedTokenAccount" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const ata = await velocityClient.getAssociatedTokenAccount(marketIndex);
+console.log(ata.toBase58());
+```
+  </TypeScript>
+</SDKDoc>
+
+### Deposit
+
+Deposit tokens from your wallet ATA into your Velocity subaccount's spot balance.
+
+<SDKDoc>
+  <TypeScript name="deposit" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
+const associatedTokenAccount = await velocityClient.getAssociatedTokenAccount(marketIndex);
+
+await velocityClient.deposit(amount, marketIndex, associatedTokenAccount);
+```
+  </TypeScript>
+</SDKDoc>
+
+### Withdraw
+
+Withdraw tokens from your Velocity spot balance back to your wallet ATA (subject to free collateral checks).
+
+<SDKDoc>
+  <TypeScript name="withdraw" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
+const associatedTokenAccount = await velocityClient.getAssociatedTokenAccount(marketIndex);
+
+await velocityClient.withdraw(amount, marketIndex, associatedTokenAccount);
+```
+  </TypeScript>
+</SDKDoc>
+
+### Spot rates (borrow / lend)
+
+Calculate the current lending APY-style rate paid to depositors for a spot market.
+
+<SDKDoc>
+  <TypeScript name="calculateDepositRate" type="function">
+```js
+import { SPOT_MARKET_RATE_PRECISION, calculateDepositRate, convertToNumber } from "@velocity-exchange/sdk";
+
+const spotMarket = velocityClient.getSpotMarketAccount(0);
+const rate = calculateDepositRate(spotMarket);
+console.log(convertToNumber(rate, SPOT_MARKET_RATE_PRECISION));
+```
+  </TypeScript>
+</SDKDoc>
+
+Calculate the current borrow rate charged to borrowers for a spot market.
+
+<SDKDoc>
+  <TypeScript name="calculateBorrowRate" type="function">
+```js
+import { SPOT_MARKET_RATE_PRECISION, calculateBorrowRate, convertToNumber } from "@velocity-exchange/sdk";
+
+const spotMarket = velocityClient.getSpotMarketAccount(0);
+const rate = calculateBorrowRate(spotMarket);
+console.log(convertToNumber(rate, SPOT_MARKET_RATE_PRECISION));
+```
+  </TypeScript>
+</SDKDoc>
+

@@ -1,12 +1,12 @@
-# Drift AMM
+# Velocity AMM
 
-The Automated Market Maker (AMM) is Drift's source of guaranteed constant liquidity for the exchange.
+The Automated Market Maker (AMM) is Velocity's source of guaranteed constant liquidity for the exchange.
 
 ## Introduction
 
-Drift uses a backstop AMM as a source of guaranteed constant liquidity, providing constant liquidity to be taken against asynchronously.
+Velocity uses a backstop AMM as a source of guaranteed constant liquidity, providing constant liquidity to be taken against asynchronously.
 
-Drift's v1 featured a Dynamic AMM which was an iteration on top of Perpetual Protocol's innovation - the [virtual AMM (vAMM)](https://blog.perp.fi/a-deep-dive-into-our-virtual-amm-vamm-40345c522eeb), except with configurable parameters, namely:
+Velocity forked its AMM design from Drift Protocol v2, which itself iterated on top of Perpetual Protocol's innovation - the [virtual AMM (vAMM)](https://blog.perp.fi/a-deep-dive-into-our-virtual-amm-vamm-40345c522eeb), with configurable parameters, namely:
 
 - **Peg:** a price multiplier
 
@@ -22,11 +22,11 @@ Drift's v1 featured a Dynamic AMM which was an iteration on top of Perpetual Pro
 
   - (Capped) funding payments
 
-You can read more about Drift's v1 AMM design [here](https://www.notion.so/driftprotocol/Drift-AMM-deep-dive-ff154003aedb4efa83d6e7f4440cd4ab#861bdbceda8a45a38600a0d9d762ee25).
+You can read more about the original Drift v1 AMM design [here](https://www.notion.so/driftprotocol/Drift-AMM-deep-dive-ff154003aedb4efa83d6e7f4440cd4ab#861bdbceda8a45a38600a0d9d762ee25).
 
-## Drift v3 AMM
+## Velocity's AMM
 
-Drift’s v3 AMM is still a AMM using a constant product curve but now includes external [Backstop AMM Liquidity (BAL)](/protocol/glossary) a concentration factor, and dynamic spread/peg that programmatically update prior to filling trades.
+Velocity's AMM is still an AMM using a constant product curve but now includes external [Backstop AMM Liquidity (BAL)](/protocol/glossary) a concentration factor, and dynamic spread/peg that programmatically update prior to filling trades.
 
 The mechanics behind the dynamic spread and peg are:
 
@@ -39,11 +39,11 @@ The mechanics behind the dynamic spread and peg are:
 
 In a typical constant product AMM, the AMM quotes the same price for buys/sells and charges a flat fee.
 
-To implicitly utilise a dynamic fee, Drift v3's AMM quotes different prices for buys and sells. The offset from the mid-price is dynamic based on the current inventory.
+To implicitly utilise a dynamic fee, Velocity's AMM quotes different prices for buys and sells. The offset from the mid-price is dynamic based on the current inventory.
 
 To do so, there will be 3 points tracked on the constant product curve: the bid price and ask price, and a point between the reservation price.
 
-![Drift AMM Bid-Ask Spreads](/assets/drift-amm.png)
+![Velocity AMM Bid-Ask Spreads](/assets/drift-amm.png)
 
 Base long spread and short spread are currently set as:
 
@@ -61,7 +61,7 @@ The `quote_reserve` is defined as the total AMM reserves of the quote asset. The
 
 ### Oracle Live Pricing
 
-The AMM's reservation price gets updated regularly through Drift's live oracle-based pricing.
+The AMM's reservation price gets updated regularly through Velocity's live oracle-based pricing.
 
 This pricing mechanism updates an asset's mark price towards its oracle price, achieving:
 

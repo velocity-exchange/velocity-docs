@@ -1,6 +1,6 @@
 # Indicative Quotes
 
-Indicative quotes let market makers **signal liquidity offchain** without committing onchain orders. You publish bid/ask prices and sizes to Drift's WebSocket endpoint, where they're used for:
+Indicative quotes let market makers **signal liquidity offchain** without committing onchain orders. You publish bid/ask prices and sizes to Velocity's WebSocket endpoint, where they're used for:
 
 - **UI display:** takers see available liquidity before placing orders
 - **Aggregator routing:** Jupiter and other aggregators factor indicative liquidity into routing decisions
@@ -16,12 +16,14 @@ Indicative quotes let market makers **signal liquidity offchain** without commit
 
 ## Setup
 
-Initialize the `IndicativeQuotesSender` with your DriftClient and connect to the WebSocket endpoint:
+> **Endpoint is provisional.** `wss://dlob.velocity.exchange/quotes/ws` below follows Velocity's `<sub>.velocity.exchange` hosted-endpoint convention but hasn't been confirmed as the final production URL — check with the team before hardcoding it.
+
+Initialize the `IndicativeQuotesSender` with your VelocityClient and connect to the WebSocket endpoint:
 
 <SDKDoc>
   <TypeScript name="IndicativeQuotesSender" type="class">
 ```js
-import { IndicativeQuotesSender } from "@drift-labs/sdk";
+import { IndicativeQuotesSender } from "@velocity-exchange/sdk";
 ```
   </TypeScript>
 </SDKDoc>
@@ -34,12 +36,12 @@ import {
   BN,
   convertToNumber,
   loadKeypair,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 // Constructor takes the WebSocket endpoint and your keypair (for auth)
 const keypair = loadKeypair("<KEYPAIR_PATH>");
 const quoter = new IndicativeQuotesSender(
-  "wss://dlob.drift.trade/quotes/ws",
+  "wss://dlob.velocity.exchange/quotes/ws",
   keypair
 );
 ```
@@ -84,19 +86,19 @@ import {
   BN,
   convertToNumber,
   loadKeypair,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 const marketIndex = 0; // SOL-PERP
 const spread = 0.25;   // $0.25 on each side
 const quoteSize = 10;  // 10 SOL per side
 
 const keypair = loadKeypair("<KEYPAIR_PATH>");
-const quoter = new IndicativeQuotesSender("wss://dlob.drift.trade/quotes/ws", keypair);
+const quoter = new IndicativeQuotesSender("wss://dlob.velocity.exchange/quotes/ws", keypair);
 await quoter.connect();
 
 // Update quotes periodically
 setInterval(() => {
-  const oracle = driftClient.getOracleDataForPerpMarket(marketIndex);
+  const oracle = velocityClient.getOracleDataForPerpMarket(marketIndex);
   const oraclePrice = convertToNumber(oracle.price, PRICE_PRECISION);
 
   const bidPrice = oraclePrice - spread;

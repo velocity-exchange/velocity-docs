@@ -1,82 +1,93 @@
 # Revenue Pool
 
-A portion of the fees collected within the protocol (denominated in a particular token: USDC, SOL, etc) go into that spot market's revenue pool.  
+<Callout type="important">
+This page describes Velocity's current, redesigned fee/revenue flow (the [fee redesign](/protocol/trading/trading-fees#fee-redesign)). It replaces the older Drift model where all protocol revenue routed through the Insurance Fund and protocol-owned IF shares — see [Trading Fees](/protocol/trading/trading-fees) for the full per-fill split.
+</Callout>
+
+Each spot market's **revenue pool** (`SpotMarket.revenuePool`, a `Deposit`-type pool balance) has exactly one purpose: staging the **insurance fund's** cut of protocol fees before it settles to the Insurance Fund vault. It is *not* where the protocol's own share of fees lands — that goes straight to a separate, directly-withdrawable `protocol_fee_pool` instead (see [Protocol fee custody and withdrawal](#protocol-fee-custody-and-withdrawal)).
 
 The revenue pool increases from various portions of the protocol:
 
-- borrow fees
+- borrow interest (`InsuranceFund.ifFeeFactor`)
 
-- spot market exchange fees
+- perpetual and spot liquidations (the insurance-fund cut, `if_liquidation_fee`)
 
-- perpetual market exchange fees
+- perpetual market trading fees (the insurance-fund cut of the per-fill split, `FeeStructure.ifFeeNumerator`)
 
-- liquidations
+and ultimately funds:
 
-and ultimately goes to fund:  
+- the Insurance Fund vault (100% staker-owned — see below)
 
-- insurance vault
-
-- perpetual market amm (conditionally)
+- perpetual market AMMs (conditionally, via revenue withdraws)
 
 ## Insurance Fund
 
-Every hour (on the hour), a portion of the revenue pool can be settled to the insurance fund using the permissionless `settle_revenue_to_insurance_fund` instruction:
+Any account can call the permissionless `settle_revenue_to_insurance_fund` instruction to settle a portion of the revenue pool to the Insurance Fund vault:
 
-If the insurance fund has users staked, each individual hourly settlement is capped to what would amount to 1000% APR
+If the Insurance Fund has users staked, each individual settlement is capped to `min(1/10 of the revenue pool, MAX_APR cap)` (halved at high utilization) —
 
-*   thus an astronomically large inflow into the revenue pool (relatively to user insurance staked amounts) would result in revenue that slowly reaches the insurance over a longer period of time rather than immediately  
-    *   this encourages more insurance fund stakers (who require a medium horizon of insurance offering) to join during the high annualised cap inflow  
+*   thus an astronomically large inflow into the revenue pool (relative to user insurance staked amounts) results in revenue that trickles into the fund over a longer period rather than immediately
 
+    *   this encourages more insurance fund stakers (who require a medium horizon of insurance offering) to join during the high annualised cap inflow
 
 <Callout type="important">
-Insurance Fund Stakers must adhere to the cooldown period for withdrawals (see [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking)).
+**The Insurance Fund is 100% staker-owned.** There are no protocol-owned IF shares, no settlement-time protocol/staker split, and no `admin_withdraw_from_insurance_fund_vault` — every dollar that settles into the fund accrues to stakers as share-price appreciation. Insurance Fund Stakers must adhere to the cooldown period for withdrawals (see [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking)).
 </Callout>
+
+## Protocol Fee Custody and Withdrawal
+
+The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all. Each market (perp and spot) has its own withdrawable `protocol_fee_pool`, funded by:
+
+- **Trading fees:** the residual of the per-fill fee split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator` — the protocol gets whatever's left).
+- **Liquidations:** `protocol_liquidation_fee`, split IF-first against the existing insurance-fee budget (see [Liquidations](/protocol/trading/liquidations#liquidation-fees)).
+- **Lending:** `SpotMarket.protocolFeeFactor` on deposit-interest gains.
+
+It exits only via `withdraw_protocol_fees_perp` / `withdraw_protocol_fees_spot`, gated by the `FeeWithdraw` hot key and recipient-locked to `State.protocolFeeRecipientPerp` / `protocolFeeRecipientSpot` (each settable only by `cold_admin`). A withdrawal is always capped to the pool's own balance and can never dip into user deposits.
 
 ## Spot Markets
 
-Spot Markets allow for swaps between tokens and interest payments between depositors and borrowers. These token swaps and flow of interest are parameterised to allow fee collection for the revenue pool and thus ultimately insurance.
+Spot Markets allow for swaps between tokens and interest payments between depositors and borrowers (there is no spot order book — see [Order Types](/protocol/trading/order-types)). These flows are parameterised to split fee collection between the revenue pool (insurance) and the protocol's own withdrawable pool.
 
 Within the program, its parameterised by the following **in bold**:
 
-| Field                   | Description                                                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `total_if_factor`   | percentage of the borrow interest reserved for revenue pool                                                             |
-| `user_if_factor`    | this proportion of `total_if_factor` is reserved for staked users (the other piece is reserved for the protocol itself) |
-| `liquidation_if_factor` | the proportion of liability transfer in `liquidate_borrow` that is sent to the revenue pool                             |
+| Field                       | Description                                                                                                             |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `InsuranceFund.if_fee_factor` | fraction of borrow interest reserved for the revenue pool (100% staker-owned)                                           |
+| `SpotMarket.protocol_fee_factor` | fraction of borrow interest reserved for the protocol's withdrawable `protocol_fee_pool`                            |
+| `if_liquidation_fee`        | the insurance-fund cut of a spot liquidation, credited to the revenue pool directly                                     |
+| `protocol_liquidation_fee`  | the protocol cut of a spot liquidation, credited to `protocol_fee_pool` directly                                        |
 
-Thus the following must be true: `user_if_factor <= total_if_factor`.  For example, if the `total_if_factor` is 100%, depositors would receive no interest from borrows.
+Lenders receive the remainder after both `if_fee_factor` and `protocol_fee_factor` are taken — set both via `update_spot_market_if_factor`.
 
 The following instructions interact w/ the insurance fund:
 
-*   `resolve_borrow_bankruptcy`
+*   `resolve_spot_bankruptcy` (gated by `State.solvencyStatus` — see [Liquidations](/protocol/trading/liquidations#bankruptcy-and-solvency-status))
 
 ## Perpetual Markets
 
-Perpetual Markets are bootstrapped by the [Drift AMM](/protocol/about-v3/drift-amm) which depending on market-making performance conditions can add and remove funds from the revenue pool.
+Perpetual Markets are bootstrapped by the [Velocity AMM](/protocol/about-v3/drift-amm), which — depending on market-making performance — can draw funds from the revenue pool to cover asymmetric funding shortfalls and PnL settlement, subject to the caps below.
 
 Within the program, its parameterized by the following **in bold**:
 
 | Field                                             | Description                                                                                                           |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `max_revenue_withdraw_per_period`                 | the amm's max revenue pool draw per period(note this doesn't include bankruptcy resolution)                  |
-| `revenue_withdraw_since_last_settle`          | revenue pool draws on behalf of user pnl since the last settle(note this doesn't include bankruptcy resolution)   |
-| `last_revenue_withdraw_ts`                        | the last timestamp of a revenue withdraw (track in order to reset the period)                                    |
+| `max_revenue_withdraw_per_period`                 | the market's max revenue pool draw per period (doesn't include bankruptcy resolution)                  |
+| `revenue_withdraw_since_last_settle`          | revenue pool draws on behalf of user pnl since the last settle (doesn't include bankruptcy resolution)   |
+| `last_revenue_withdraw_ts`                        | the last timestamp of a revenue withdraw (tracked in order to reset the period)                                    |
 
-A perpetual market's amm may draw up to `max_revenue_withdraw_per_period` from the revenue pool every period.
+A perpetual market may draw up to `max_revenue_withdraw_per_period` from the revenue pool every period.
 
-
-
-Additionally, for direct draws from the insurance fund, it parameterized by the following **in bold**:
+Additionally, for direct draws from the insurance fund, it's parameterized by the following **in bold**:
 
 | Field                           | Description                                                                                                                                                             |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `quote_settled_insurance`       | settled funds from the insurance fund since inception                                                                                                               |
 | `quote_max_insurance`           | max funds it can settle from insurance fund since inception                                                                                                             |
-| `unrealized_max_imbalance` | max amount of pnl the net users can be owed within a market before:1\. draws from insurance are allowed2\. initial asset weights for this pnl gets discounted |
+| `unrealized_pnl_max_imbalance` | max amount of pnl the net users can be owed within a market before: 1. draws from insurance are allowed 2. initial asset weights for this pnl get discounted |
 
-Unlike spot markets, perp markets are capped by the max draw from insurance via `quote_max_insurance`
+Unlike spot markets, perp markets are capped by the max draw from insurance via `quote_max_insurance`.
 
-`quote_settled_insurance` tracks the insurance fund draw amount since inception. Once this threshold is reached or the insurance fund is depleted, the market will then resort to the AMM [Fee Pool](/protocol/trading/trading-fees/fee-pool). For any remaining losses not covered, the market will perform socialized losses in bankruptcy events.
+`quote_settled_insurance` tracks the insurance fund draw amount since inception. Once this threshold is reached or the insurance fund is depleted, the market resorts to its own [AMM Fee Pool](/protocol/trading/trading-fees/fee-pool) as a clawback of last resort. For any remaining losses not covered, the market performs socialized losses in bankruptcy events — see [How Perp Bankruptcy Resolution Works](/protocol/trading/liquidations/liquidation-engine#how-perp-bankruptcy-resolution-works).
 
 The following instructions interact w/ the insurance fund:
 
@@ -84,7 +95,6 @@ The following instructions interact w/ the insurance fund:
 
 *   `resolve_perp_bankruptcy`
 
-notes:  
+notes:
 
-`resolve_perp_pnl_deficit` can only be resolved by insurance fund deposits (within the market's constraints), not by social loss with other users
-
+`resolve_perp_pnl_deficit` can only be resolved by insurance fund deposits (within the market's constraints), not by social loss with other users. Both instructions are gated by `State.solvencyStatus` — see [Liquidations](/protocol/trading/liquidations#bankruptcy-and-solvency-status).

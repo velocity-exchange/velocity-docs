@@ -1,6 +1,6 @@
 # Matching Engine
 
-Drift is a decentralized auction-based trading protocol. Every taker order has the following auction parameters:
+Velocity is a decentralized auction-based trading protocol. Every taker order has the following auction parameters:
 
 * **Auction duration:** the number of slots the auction lasts
 * **Auction start price:** the price the auction begins at
@@ -10,7 +10,7 @@ Drift is a decentralized auction-based trading protocol. Every taker order has t
 
 The auction duration, start price, and end price define a linear function that specifies an order’s price over a set of slots. At the end of the auction, the limit price specifies an order’s price. Price parameters can be defined as fixed prices as well as relative oracle offsets to account for the oracle price changing during the duration of the auction. The max timestamp specifies when an order expires.
 
-Drift supports market and limit orders. Market orders must have an auction and max timestamp. An auction and max timestamp are optional for a limit order. During a limit order’s auction, it can only take liquidity. At the end of the auction, it is considered “resting” and can also provide liquidity for orders (i.e., it transitions from being a taker to being a taker or maker). If a user only wishes to provide liquidity, they can set their limit order to post-only, in which case it can only be a maker.
+Velocity supports market and limit orders (perpetuals only — see [Order Types](/protocol/trading/order-types)). Market orders must have an auction and max timestamp. An auction and max timestamp are optional for a limit order. During a limit order’s auction, it can only take liquidity. At the end of the auction, it is considered “resting” and can also provide liquidity for orders (i.e., it transitions from being a taker to being a taker or maker). If a user only wishes to provide liquidity, they can set their limit order to post-only, in which case it can only be a maker.
 
 A taker order can be filled against three sources of liquidity:
 
@@ -24,6 +24,6 @@ There are three ways a user can have their taker order filled:
 * **The user creates a transaction filling their order with resting liquidity**
 * **A maker creates a transaction filling the user’s order with the maker’s JIT liquidity**
 
-To place an order, users sign a transaction containing their order params. The transaction is sent to the Solana network and, once it is included in a block, it is propagated to keepers and market makers via RPCs. The keepers and market makers then race to fill user orders with liquidity that satisfies their auction prices. Backstop liquidity is compared against resting and JIT liquidity before each fill. If the backstop liquidity offers a superior price, Drift will fill users against the backstop liquidity prior to filling against the resting or JIT liquidity specified by the keeper or market maker.
+To place an order, users sign a transaction containing their order params. The transaction is sent to the Solana network and, once it is included in a block, it is propagated to keepers and market makers via RPCs. The keepers and market makers then race to fill user orders with liquidity that satisfies their auction prices. Backstop liquidity is compared against resting and JIT liquidity before each fill. If the backstop liquidity offers a superior price, Velocity will fill users against the backstop liquidity prior to filling against the resting or JIT liquidity specified by the keeper or market maker.
 
-![Drift's Matching Engine](/assets/matching-engine.png)
+![Velocity's Matching Engine](/assets/matching-engine.png)

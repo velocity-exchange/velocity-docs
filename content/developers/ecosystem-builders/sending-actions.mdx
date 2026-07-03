@@ -1,170 +1,209 @@
 # Sending Actions
 
-This page covers every way to send transactions in your app -- from the high-level `AuthorityDrift` methods (what `drift-ui-template` uses) to raw SDK instruction builders for full control.
+This page covers every way to send transactions in your app — from high-level `VelocityClient` methods, to the stateless `VelocityCore` instruction builders for full control without a subscribed client.
 
-## AuthorityDrift methods
+## VelocityClient methods
 
-`AuthorityDrift` exposes high-level methods for the operations app builders use most. Each method handles transaction construction, compute budget, and sending.
+Once subscribed (see [setup](/developers/ecosystem-builders#setup)), `VelocityClient` exposes high-level methods for the operations app builders use most. Each method handles transaction construction, compute budget, and sending.
 
 ### Place a perp order
 
 ```ts
-import { BigNum, PositionDirection } from "@drift-labs/sdk";
+import { PositionDirection, OrderType, getMarketOrderParams, getLimitOrderParams } from "@velocity-exchange/sdk";
 
-await drift.openPerpOrder({
-  subAccountId: 0,
-  marketIndex: 0,
-  direction: PositionDirection.LONG,
-  assetType: "base",
-  size: BigNum.fromPrint("1", 9),   // 1 SOL in base precision
-  orderConfig: {
-    orderType: "market",
-  },
-});
+await velocityClient.placePerpOrder(
+  getMarketOrderParams({
+    marketIndex: 0,
+    direction: PositionDirection.LONG,
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1), // 1 SOL
+  })
+);
 
 // Or a limit order:
-await drift.openPerpOrder({
-  subAccountId: 0,
-  marketIndex: 0,
-  direction: PositionDirection.LONG,
-  assetType: "base",
-  size: BigNum.fromPrint("1", 9),
-  orderConfig: {
-    orderType: "limit",
-    limitPrice: BigNum.fromPrint("120", 6),
-  },
-});
+await velocityClient.placePerpOrder(
+  getLimitOrderParams({
+    marketIndex: 0,
+    direction: PositionDirection.LONG,
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+    price: velocityClient.convertToPricePrecision(120),
+  })
+);
 ```
 
 ### Cancel orders
 
 ```ts
-await drift.cancelOrders({
-  subAccountId: 0,
-  orderIds: [1, 2, 3],
-});
+// null args = cancel all orders (any market, any direction)
+await velocityClient.cancelOrders(null, null, null);
 ```
 
 ### Settle PnL
 
 ```ts
-await drift.settleAccountPnl({
-  subAccountId: 0,
-});
+const user = velocityClient.getUser();
+await velocityClient.settlePNL(user.userAccountPublicKey, user.getUserAccount(), 0);
 ```
 
 ### Deposit and withdraw
 
 ```ts
-await drift.deposit({
-  subAccountId: 0,
-  spotMarketIndex: 0,     // USDC
-  amount: depositAmount,  // BigNum in market precision
-});
+await velocityClient.deposit(
+  depositAmount,  // BN, spot market's mint precision (e.g. 1e6 for USDC/dUSDT)
+  0,              // spotMarketIndex
+  userTokenAccount
+);
 
-await drift.withdraw({
-  subAccountId: 0,
-  spotMarketIndex: 0,
-  amount: withdrawAmount, // BigNum in market precision
-});
+await velocityClient.withdraw(
+  withdrawAmount,
+  0,
+  userTokenAccount
+);
 ```
 
-### Swap
+## `VelocityCore`: stateless instruction builders
 
-```ts
-const quote = await drift.getSwapQuote({
-  fromMarketIndex: 1,   // SOL
-  toMarketIndex: 0,     // USDC
-  amount: swapAmount,   // BigNum in source market precision
-  subAccountId: 0,
-});
-
-await drift.swap({
-  subAccountId: 0,
-  fromMarketIndex: 1,
-  toMarketIndex: 0,
-  amount: swapAmount,
-  quote,
-});
-```
-
-## SDK instruction builders
-
-For advanced use cases, you can drop down to the raw Drift SDK and build transactions with multiple instructions. This gives you atomicity, custom compute budgets, and full control over transaction composition.
+For advanced use cases — indexers, keeper bots without a full subscribed client, or any context where you only need to construct instructions — `VelocityCore` provides pure instruction builders that take explicit account pubkeys instead of reading from a subscription cache.
 
 | Approach | Use when |
 |---|---|
-| `AuthorityDrift` methods (above) | Simple flows -- one action per transaction, default compute budget |
-| Instruction builders (below) | Multiple instructions in one transaction, custom compute budget, or atomic cancel-and-replace |
-
-Most ecosystem apps start with `AuthorityDrift` methods and move to instruction builders when they need atomic multi-step transactions or fine-grained priority fee control.
+| `VelocityClient` methods (above) | You already have a subscribed client — simplest path for most apps |
+| `VelocityCore.build*Instruction` (below) | You don't want a full subscription, need multiple instructions in one transaction, or are building a lightweight/serverless integration |
 
 <Steps>
-### Initialize a DriftClient
+### Get an Anchor `Program<Velocity>`
 
-If you're not using `AuthorityDrift`, initialize a `DriftClient` directly: [SDK setup](/developers/drift-sdk/setup)
+`VelocityCore` builders take an Anchor `program: VelocityProgram` argument rather than reading it from a client instance:
 
-### Place and cancel orders
+```ts
+import { VelocityCore } from "@velocity-exchange/sdk";
+import { Program, AnchorProvider } from "@coral-xyz/anchor";
 
-Use the SDK's order helpers for common flows: [Orders](/developers/drift-sdk/orders)
+const provider = new AnchorProvider(connection, wallet, {});
+const program = new Program(VelocityCore.defaultIdl(), provider);
+```
 
-### Manage collateral and accounts
+### Derive the accounts you need
 
-Deposits, withdrawals, and account lifecycle: [Deposits & withdrawals](/developers/drift-sdk/deposits-withdrawals), [Users](/developers/drift-sdk/users)
+```ts
+const state = await VelocityCore.pdas.getVelocityStateAccountPublicKey(program.programId);
+const userPda = VelocityCore.pdas.getUserAccountPublicKeySync(program.programId, authority, 0);
+const userStatsPda = VelocityCore.pdas.getUserStatsAccountPublicKey(program.programId, authority);
+const userAccount = await VelocityCore.fetchUserAccount(connection, userPda);
 
-### Monitor risk and health
+// getRemainingAccounts(ctx, params): ctx supplies resolver hooks + caller-owned caches,
+// params describes which markets/positions this call needs represented.
+const remainingAccounts = VelocityCore.remainingAccounts.getRemainingAccounts(
+  {
+    getPerpMarketAccount: (marketIndex) => perpMarketAccountsByIndex[marketIndex],
+    getSpotMarketAccount: (marketIndex) => spotMarketAccountsByIndex[marketIndex],
+    getUserAccountAndSlot: () => undefined, // no subscription cache in the stateless path
+    activeSubAccountId: 0,
+    authority,
+    perpMarketLastSlotCache: new Map(),
+    spotMarketLastSlotCache: new Map(),
+    mustIncludePerpMarketIndexes: new Set(),
+    mustIncludeSpotMarketIndexes: new Set(),
+  },
+  {
+    userAccounts: userAccount ? [userAccount] : [],
+    writablePerpMarketIndexes: [0],
+  }
+);
+```
 
-UI parity requires the same risk/health calculations: [PnL & risk](/developers/drift-sdk/pnl-risk)
+<Callout type="info">
+`getRemainingAccounts` takes two arguments — a `RemainingAccountsContext` of resolver hooks/caches you own, and a `RemainingAccountParams` describing the markets/positions for this call — not a single combined object. It derives the same oracle/market account set `VelocityClient`'s internal builder does, without needing a live subscription.
+</Callout>
 
-### Build custom transactions
-
-Build transactions with multiple instructions for atomicity -- either all instructions succeed or none do.
+### Build a deposit instruction
 
 <SDKDoc>
-  <TypeScript name="getPlacePerpOrderIx" type="method" owner="DriftClient">
+  <TypeScript name="buildDepositInstruction" type="method" owner="VelocityCore">
 ```js
-import { ComputeBudgetProgram } from "@solana/web3.js";
-import { getMarketOrderParams, PositionDirection } from "@drift-labs/sdk";
+import { VelocityCore } from "@velocity-exchange/sdk";
 
-const orderParams = getMarketOrderParams({
+const depositIx = await VelocityCore.buildDepositInstruction({
+  program,
   marketIndex: 0,
-  direction: PositionDirection.LONG,
-  baseAssetAmount: driftClient.convertToPerpPrecision(1),
+  amount: depositAmountBN,
+  reduceOnly: false,
+  state,
+  spotMarket,
+  spotMarketVault,
+  user: userPda,
+  userStats: userStatsPda,
+  userTokenAccount,
+  authority: wallet.publicKey,
+  tokenProgram: TOKEN_PROGRAM_ID,
+  remainingAccounts,
 });
-
-const placeOrderIx = await driftClient.getPlacePerpOrderIx(orderParams);
-
-const tx = await driftClient.txSender.getVersionedTransaction(
-  [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
-    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
-    placeOrderIx,
-  ],
-  [],
-  driftClient.wallet.publicKey
-);
-
-const signature = await driftClient.txSender.sendVersionedTransaction(
-  tx,
-  [],
-  driftClient.opts
-);
-console.log("Transaction:", signature);
 ```
   </TypeScript>
 </SDKDoc>
 
-#### Atomic cancel-and-place (order replacement)
-
-A common pattern for trading UIs is atomically canceling existing orders and placing new ones in a single transaction. This prevents the window where you have no orders resting while updating prices.
+### Build a place-perp-order instruction
 
 <SDKDoc>
-  <TypeScript name="cancelAndPlaceOrders" type="method" owner="DriftClient">
+  <TypeScript name="buildPlacePerpOrderInstruction" type="method" owner="VelocityCore">
+```js
+import { VelocityCore } from "@velocity-exchange/sdk";
+import { getMarketOrderParams, PositionDirection } from "@velocity-exchange/sdk";
+
+const orderParams = getMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: new BN(1_000_000_000), // 1 SOL, BASE_PRECISION (1e9)
+});
+
+const placeOrderIx = await VelocityCore.buildPlacePerpOrderInstruction({
+  program,
+  orderParams,
+  state,
+  user: userPda,
+  userStats: userStatsPda,
+  authority: wallet.publicKey,
+  remainingAccounts,
+});
+```
+  </TypeScript>
+</SDKDoc>
+
+### Compose and send the transaction
+
+`VelocityCore` builders return raw `TransactionInstruction`s — bring your own transaction sender (Anchor's `sendAndConfirm`, `@solana/web3.js` directly, or a `VelocityClient.txSender` you construct separately):
+
+```js
+import { ComputeBudgetProgram, VersionedTransaction, TransactionMessage } from "@solana/web3.js";
+
+const { blockhash } = await connection.getLatestBlockhash();
+const message = new TransactionMessage({
+  payerKey: wallet.publicKey,
+  recentBlockhash: blockhash,
+  instructions: [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }),
+    placeOrderIx,
+  ],
+}).compileToV0Message();
+
+const tx = new VersionedTransaction(message);
+tx.sign([wallet.payer]);
+const signature = await connection.sendTransaction(tx);
+console.log("Transaction:", signature);
+```
+</Steps>
+
+## Atomic cancel-and-place (order replacement) via VelocityClient
+
+A common pattern for trading UIs is atomically canceling existing orders and placing new ones in a single transaction, avoiding the window where you have no resting orders while updating prices. With a subscribed client, build the individual instructions and compose them yourself:
+
+<SDKDoc>
+  <TypeScript name="getCancelOrdersIx" type="method" owner="VelocityClient">
 ```js
 import { ComputeBudgetProgram } from "@solana/web3.js";
-import { getLimitOrderParams, PositionDirection } from "@drift-labs/sdk";
+import { getLimitOrderParams, PositionDirection } from "@velocity-exchange/sdk";
 
-const cancelIx = await driftClient.getCancelOrdersIx(
+const cancelIx = await velocityClient.getCancelOrdersIx(
   null,   // marketType (null = all)
   null,   // marketIndex (null = all)
   null    // direction (null = both)
@@ -173,23 +212,23 @@ const cancelIx = await driftClient.getCancelOrdersIx(
 const bidParams = getLimitOrderParams({
   marketIndex: 0,
   direction: PositionDirection.LONG,
-  baseAssetAmount: driftClient.convertToPerpPrecision(1),
-  price: driftClient.convertToPricePrecision(120),
+  baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+  price: velocityClient.convertToPricePrecision(120),
   postOnly: true,
 });
 
 const askParams = getLimitOrderParams({
   marketIndex: 0,
   direction: PositionDirection.SHORT,
-  baseAssetAmount: driftClient.convertToPerpPrecision(1),
-  price: driftClient.convertToPricePrecision(125),
+  baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+  price: velocityClient.convertToPricePrecision(125),
   postOnly: true,
 });
 
-const bidIx = await driftClient.getPlacePerpOrderIx(bidParams);
-const askIx = await driftClient.getPlacePerpOrderIx(askParams);
+const bidIx = await velocityClient.getPlacePerpOrderIx(bidParams);
+const askIx = await velocityClient.getPlacePerpOrderIx(askParams);
 
-const tx = await driftClient.txSender.getVersionedTransaction(
+const tx = await velocityClient.txSender.getVersionedTransaction(
   [
     ComputeBudgetProgram.setComputeUnitLimit({ units: 600000 }),
     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
@@ -198,25 +237,25 @@ const tx = await driftClient.txSender.getVersionedTransaction(
     askIx,
   ],
   [],
-  driftClient.wallet.publicKey
+  velocityClient.wallet.publicKey
 );
 
-const signature = await driftClient.txSender.sendVersionedTransaction(
+const signature = await velocityClient.txSender.sendVersionedTransaction(
   tx,
   [],
-  driftClient.opts
+  velocityClient.opts
 );
 console.log("Cancel + place transaction:", signature);
 ```
   </TypeScript>
 </SDKDoc>
-</Steps>
 
 ## Transaction performance
 
 If you're batching or sending frequent transactions, consider:
 
-- **Priority fees** -- Set `ComputeUnitPrice` to land transactions faster during congestion
-- **Compute budget** -- Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
-- **Address Lookup Tables (ALTs)** -- Reduce transaction size when referencing many accounts. See SDK documentation for details.
-- **Retry logic** -- Transactions can be dropped; implement retries with backoff for production systems
+- **Priority fees** — Set `ComputeUnitPrice` to land transactions faster during congestion
+- **Compute budget** — Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
+- **Address Lookup Tables (ALTs)** — Reduce transaction size when referencing many accounts
+- **Retry logic** — Transactions can be dropped; implement retries with backoff for production systems
+- **Bulk order margin enforcement**: `placeOrders`/`placeScaleOrders` now run the initial-margin check once per risk scope touched by the batch (cross-margin, plus each isolated market with a risk-increasing order) rather than a single end-of-batch check — a batch that previously succeeded may now revert with `InsufficientCollateral`

@@ -1,9 +1,9 @@
 :root {
   /* Light theme tokens */
-  --nextra-bg: 248 245 255;
-  --nextra-primary-hue: 286;
-  --nextra-primary-saturation: 50%;
-  --nextra-primary-lightness: 44%;
+  --nextra-bg: 241 243 252;
+  --nextra-primary-hue: 145;
+  --nextra-primary-saturation: 85%;
+  --nextra-primary-lightness: 38%;
 
   --x-color-gray-50: #f8f6fb;
   --x-color-gray-100: #f1edf8;
@@ -20,10 +20,10 @@
 
 .dark {
   /* Dark theme tokens */
-  --nextra-bg: 10 6 20;
-  --nextra-primary-hue: 286;
-  --nextra-primary-saturation: 50%;
-  --nextra-primary-lightness: 55%;
+  --nextra-bg: 5 6 12;
+  --nextra-primary-hue: 145;
+  --nextra-primary-saturation: 75%;
+  --nextra-primary-lightness: 62%;
 
   --x-color-gray-50: #837b90;
   --x-color-gray-100: #7b6f95;
@@ -40,6 +40,14 @@ html,
 body,
 footer {
   background-color: rgb(var(--nextra-bg));
+}
+
+.velocity-logo {
+  color: #05060C;
+}
+
+.dark .velocity-logo {
+  color: #ffffff;
 }
 
 

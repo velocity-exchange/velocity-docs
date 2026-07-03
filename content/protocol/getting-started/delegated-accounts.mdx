@@ -2,11 +2,11 @@
 
 ## What is a Delegated Account?  
 
-This feature allows users to grant another Solana account limited access to their account on Drift. Users using Drift's account delegation feature may wish to delegate trading execution to a professional trading team. Each subaccount on Drift has its own delegate parameter.
+This feature allows users to grant another Solana account limited access to their account on Velocity. Users using Velocity's account delegation feature may wish to delegate trading execution to a professional trading team. Each subaccount on Velocity has its own delegate parameter.
 
 ### What can a Delegated Account do?  
 
-Delegated authorities on Drift can **ONLY**:  
+Delegated authorities on Velocity can **ONLY**:  
 
 -   deposit funds;
 
@@ -28,9 +28,13 @@ A delegated party can **NOT**:
 
 Delegated authorities are restricted to depositing funds, swapping assets, and placing or canceling orders, therefore limiting their capabilities. All other actions must be carried out by the account owner.
 
+<Callout type="info">
+**Transfers between subaccounts** are an exception: a delegate can call `transferDepositByDelegate` to move spot deposits between the owner's subaccounts, but only after the owner explicitly opts in with `updateUserAllowDelegateTransfer(true)` (sets the `AllowDelegateTransfer` bit in `UserStats.delegatePermissions`). Without that opt-in, a delegate still cannot move funds out of a subaccount at all.
+</Callout>
+
 ### How do I delegate access to my account?  
 
-To delegate access to another Solana account using Drift's UI, go to the the [Accounts Page](https://app.drift.trade/portfolio/accounts) in your portfolio. In this section, you'll find the option to set up a delegate account, as shown in the image below.
+To delegate access to another Solana account using Velocity's UI, go to the the [Accounts Page](https://app.velocity.exchange/portfolio/accounts) in your portfolio. In this section, you'll find the option to set up a delegate account, as shown in the image below.
 
 <img src="/assets/delegated-accounts-1.png" alt="" width="800" height="auto"></img>
 
@@ -40,9 +44,9 @@ Afterwards, you will need to enter the Solana address or account to which you wa
 
 ### Hardware Wallets
 
-If you are using a hardware wallet such as Ledger to connect to Drift via a wallet provider (Phantom, Solflare, Backpack), you may encounter errors when signing certain orders.
+If you are using a hardware wallet such as Ledger to connect to Velocity via a wallet provider (Phantom, Solflare, Backpack), you may encounter errors when signing certain orders.
 
-To ensure a seamless trading experience, we recommend creating a **delegate account**. This allows you to continue trading on Drift, while maintaining the security benefits of using your hardware wallet.
+To ensure a seamless trading experience, we recommend creating a **delegate account**. This allows you to continue trading on Velocity, while maintaining the security benefits of using your hardware wallet.
 
 Please follow the guide above to set up a delegate account from your hardware wallet.
 

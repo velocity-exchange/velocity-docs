@@ -1,0 +1,106 @@
+# Swaps (Jupiter / Titan)
+
+You can route spot swaps through Jupiter or Titan directly from your Velocity account. The SDK fetches a quote from the chosen provider, builds the swap transaction, and wraps it with `begin_swap`/`end_swap` so the input and output tokens flow through your Velocity spot balances in a single, atomically-checked transaction.
+
+<Callout type="info">
+This is a **collateral swap** between two spot balances inside your Velocity account — unrelated to spot order placement. Velocity [removed spot DLOB trading](/developers/velocity-sdk/dlob) entirely (`place_spot_order` and friends no longer exist), but swapping the tokens backing your spot balances via an aggregator is a separate, still-supported code path.
+</Callout>
+
+## Choosing a swap client
+
+`UnifiedSwapClient` is the primary interface for swaps — it wraps either Jupiter or Titan behind one API, so you can switch providers without changing call sites:
+
+<SDKDoc>
+  <TypeScript name="UnifiedSwapClient" type="class">
+```js
+import { Connection } from "@solana/web3.js";
+import { UnifiedSwapClient } from "@velocity-exchange/sdk";
+
+const connection = new Connection("<RPC_URL>", "confirmed");
+
+// clientType: 'jupiter' | 'titan'
+const swapClient = new UnifiedSwapClient({
+  clientType: "jupiter",
+  connection,
+  authToken: "<JUPITER_API_KEY_OR_TITAN_AUTH_TOKEN>", // Jupiter: API key (portal.jup.ag). Titan: auth token (not needed behind a proxy)
+});
+```
+  </TypeScript>
+</SDKDoc>
+
+The standalone `JupiterClient` remains available and is accepted directly by `VelocityClient.swap()` for backward compatibility, but new integrations should prefer `UnifiedSwapClient`:
+
+<SDKDoc>
+  <TypeScript name="JupiterClient" type="class">
+```js
+import { Connection } from "@solana/web3.js";
+import { JupiterClient } from "@velocity-exchange/sdk";
+
+const connection = new Connection("<RPC_URL>", "confirmed");
+const jupiterClient = new JupiterClient({ connection });
+```
+  </TypeScript>
+</SDKDoc>
+
+## Getting a quote
+
+Preview the expected output and route before committing. `UnifiedSwapClient.getQuote()` normalizes the request across both providers (Titan additionally requires `userPublicKey`):
+
+<SDKDoc>
+  <TypeScript name="getQuote" type="method" owner="UnifiedSwapClient">
+```js
+const quote = await swapClient.getQuote({
+  inputMint: usdcMint,    // PublicKey
+  outputMint: solMint,    // PublicKey
+  amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDC, BN
+  slippageBps: 50,
+  userPublicKey: velocityClient.wallet.publicKey, // required for Titan, ignored by Jupiter
+});
+console.log(quote);
+```
+  </TypeScript>
+</SDKDoc>
+
+## Executing the swap
+
+`VelocityClient.swap()` accepts a `swapClient` (a `UnifiedSwapClient`, or a raw `JupiterClient` for the deprecated legacy path), fetches/uses the route, and sends the transaction so tokens move in and out of your Velocity spot balances:
+
+<SDKDoc>
+  <TypeScript name="swap" type="method" owner="VelocityClient">
+```js
+// Assumes `velocityClient` is subscribed.
+const txSig = await velocityClient.swap({
+  swapClient,
+  inMarketIndex: 0,  // e.g. USDC (spot market index)
+  outMarketIndex: 1, // e.g. SOL (spot market index)
+  amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDC
+  slippageBps: 50,         // 0.5% max slippage
+  onlyDirectRoutes: false, // allow multi-hop routes for better pricing
+});
+
+console.log(txSig);
+```
+  </TypeScript>
+</SDKDoc>
+
+**Parameters:**
+
+| Parameter | Description | Optional | Default |
+|---|---|---|---|
+| `swapClient` | `UnifiedSwapClient` (preferred) wrapping Jupiter or Titan | No* | |
+| `jupiterClient` | `@deprecated` legacy `JupiterClient` instance; use `swapClient` instead | No* | |
+| `inMarketIndex` | Velocity spot market index for the input token | No | |
+| `outMarketIndex` | Velocity spot market index for the output token | No | |
+| `amount` | Amount to swap as a BN, spot market precision | No | |
+| `slippageBps` | Maximum allowed slippage in basis points | Yes | 50 |
+| `swapMode` | `'ExactIn'` or `'ExactOut'` | Yes | `'ExactIn'` |
+| `onlyDirectRoutes` | If true, restricts to direct token pairs only (no multi-hop) | Yes | false |
+| `reduceOnly` | `SwapReduceOnly` — constrain the in/out token balance to reduce-only at swap end | Yes | |
+| `quote` | Pre-fetched quote (from `getQuote()`) to skip an extra round-trip | Yes | |
+| `txParams` | Compute-unit/priority-fee overrides | Yes | |
+
+\* Exactly one of `swapClient` or `jupiterClient` must be provided.
+
+<Callout type="info">
+`TitanClient` itself is an internal implementation detail and is not exported from the SDK root — construct Titan-backed swaps through `new UnifiedSwapClient({ clientType: "titan", ... })` rather than importing `TitanClient` directly.
+</Callout>

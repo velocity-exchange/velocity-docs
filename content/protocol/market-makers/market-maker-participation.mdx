@@ -26,11 +26,15 @@ For more information on JIT, check out [JIT Maker FAQ](/protocol/about-v3/jit-fa
 
 ## Decentralised Orderbook  
 
-Makers can also provide liquidity to Drift's decentralised orderbook by quoting via the UI or programmatically through the [SDK Documentation](/developers/sdk-documentation)  
+Makers can also provide liquidity to Velocity's decentralised orderbook by quoting via the UI or programmatically through the [Velocity SDK](/developers/velocity-sdk/setup)
+
+<Callout type="info">
+This applies to **perpetual** markets. Spot markets exist for collateral and borrow-lend on Velocity, but spot DLOB trading (including spot maker orders) is disabled — see [Spot Trading](/protocol/trading/spot-trading).
+</Callout>
 
 ### Providing liquidity via the UI
 
-Placing 'Post-Only' limit orders via Drift's UI qualifies the order as a maker order.  
+Placing 'Post-Only' limit orders via Velocity's UI qualifies the order as a maker order.  
 
 This order won't be executed against the AMM or go through the JIT. It will sit in the decentralised orderbook until a taker for that price comes along.  
 
@@ -38,10 +42,10 @@ This order won't be executed against the AMM or go through the JIT. It will sit 
 
 ### Programmatic market making with a floating maker bot
 
-Drift has an open-sourced bot that programmatically quotes bids and asks around the oracle price. These quotes are automatically updated as the oracle price moves.  
+Velocity has an open-sourced bot that programmatically quotes bids and asks around the oracle price. These quotes are automatically updated as the oracle price moves.  
 
 In practice, the floating maker bot will quote above and below the oracle to provide liquidity around the oracle price. Makers that run the bot will be able to collect the spread as the price moves.  
 
-Drift currently runs this bot, along with some additional risk parameters, on the platform for-profit. We've open-sourced the build here for any user to run something similar.  
+Velocity currently runs this bot, along with some additional risk parameters, on the platform for-profit. We've open-sourced the build here for any user to run something similar.  
 
-Floating Maker Bot - Github Link: [https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts)
+Floating Maker Bot - Github Link: [https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts)

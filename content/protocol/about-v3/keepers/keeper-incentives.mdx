@@ -1,14 +1,18 @@
 # Keeper Incentives
 
-Keepers **keep** the Drift network healthy.
+Keepers **keep** the Velocity network healthy.
+
+<Callout type="info">
+Velocity has no fuel (points/incentives) program — Drift's fuel-based keeper/user rewards were removed entirely. The only keeper incentives on Velocity are the on-chain fee/reward mechanics described below.
+</Callout>
 
 ## Keeper Rewards
 
-For matching orders, Keepers receive a portion of the taker fee.
+For matching orders, Keepers receive a portion of the taker fee as a **filler reward** — see [Filler Reward](/protocol/trading/trading-fees/other-trading-fees#definitions).
 
-For cancelling orders (that can be cancelled see [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq)), Keepers will receive the `cancel_order_fee` on the state.
+For cancelling orders (that can be cancelled, see [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq)), Keepers will receive the `cancel_order_fee` on the state.
 
-Liquidation rewards for keepers are different for every market and range from 0.75% to 3% of the amount liquidated. See [Fee schedule](https://analytics.drift.trade/?tab=Fee-Schedule).
+Liquidation rewards for keepers are set per-market (`liquidator_fee`) and read directly from each market's on-chain account — check `PerpMarketAccount.liquidatorFee` / `SpotMarketAccount.liquidatorFee` for current values.
 
 Currently, the USDC reward function for keepers (_f_keeper_) is designed as:
 
@@ -22,7 +26,7 @@ where:
 $t_{\text{order}}$ is seconds since the order was placed
 $f_{\text{user}}$ is the taker fee paid by the user who placed the order
 
-This reward is subject to evolve to incentivise CLOB-like execution ordering. See [source code](https://github.com/drift-labs/protocol-v1/blob/c748c64fcfa6d7fd5aba72f7021218dd6aaa02f0/programs/clearing_house/src/math/fees.rs#L257) for the on-chain calculation.
+This is the lesser of a size-based reward (10% of the fee) and a time-based reward that grows with the fourth root of slots elapsed since the order was placed — see `calculate_filler_reward` (`math/fees.rs`) for the on-chain calculation.
 
 <Callout type="important">
 A Keeper reward multiplier (for taker price improvement) is applied to the keeper's minimum time-based reward component in the function above. Any percent improvement versus the baseline `oracle +/- 10bps`, increases this multiplier.

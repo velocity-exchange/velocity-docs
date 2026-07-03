@@ -5,36 +5,36 @@ Get a simple market maker running in under 10 minutes. This guide shows how to p
 ## Prerequisites
 
 - Node.js + TypeScript project
-- Drift SDK installed: `npm i @drift-labs/sdk`
-- Funded Solana account with USDC collateral
+- Velocity SDK installed: `npm i @velocity-exchange/sdk`
+- Funded Solana account with collateral (dUSDT on devnet; USDC on mainnet)
 - Basic familiarity with async/await
 
 > **⚠️ RPC choice matters:** The default `https://api.mainnet-beta.solana.com` is rate-limited and unsuitable for production bots. Use a dedicated RPC provider (Helius, Triton, etc.) or you'll hit 429 errors within minutes. For WebSocket subscriptions, you need a provider that supports `accountSubscribe`.
 
-## Step 1: Initialize DriftClient
+## Step 1: Initialize VelocityClient
 
 Set up your connection and subscribe to market data.
 
 <SDKDoc>
-  <TypeScript name="DriftClient" type="class">
+  <TypeScript name="VelocityClient" type="class">
 ```js
 import { Connection } from "@solana/web3.js";
-import { Wallet, DriftClient, loadKeypair } from "@drift-labs/sdk";
+import { Wallet, VelocityClient, loadKeypair } from "@velocity-exchange/sdk";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 const wallet = new Wallet(loadKeypair("~/.config/solana/id.json"));
 
-const driftClient = new DriftClient({
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   env: "mainnet-beta",
 });
 
 
-await driftClient.subscribe();
+await velocityClient.subscribe();
 
 // Initialize your user account (if first time)
-// const [txSig] = await driftClient.initializeUserAccount(0);
+// const [txSig] = await velocityClient.initializeUserAccount(0);
 ```
   </TypeScript>
 </SDKDoc>
@@ -44,12 +44,12 @@ await driftClient.subscribe();
 Read the current oracle price to calculate your bid/ask spread.
 
 <SDKDoc>
-  <TypeScript name="getOracleDataForPerpMarket" type="method" owner="DriftClient">
+  <TypeScript name="getOracleDataForPerpMarket" type="method" owner="VelocityClient">
 ```js
-import { PRICE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { PRICE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 const marketIndex = 0; // SOL-PERP
-const oracle = driftClient.getOracleDataForPerpMarket(marketIndex);
+const oracle = velocityClient.getOracleDataForPerpMarket(marketIndex);
 const oraclePrice = convertToNumber(oracle.price, PRICE_PRECISION);
 
 console.log(`Oracle price: $${oraclePrice}`);
@@ -62,7 +62,7 @@ console.log(`Oracle price: $${oraclePrice}`);
 Place a bid (buy) below oracle and an ask (sell) above oracle. Using `PostOnlyParams.MUST_POST_ONLY` ensures your orders never cross and you always earn maker rebates.
 
 <SDKDoc>
-  <TypeScript name="placeOrders" type="method" owner="DriftClient">
+  <TypeScript name="placeOrders" type="method" owner="VelocityClient">
 ```js
 import {
   PRICE_PRECISION,
@@ -71,27 +71,27 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 const marketIndex = 0; // SOL-PERP
 const spread = 0.5; // $0.50 spread on each side
 const size = 0.1; // 0.1 SOL per order
 
 // Fetch oracle price for spread calculation
-const oracle = driftClient.getOracleDataForPerpMarket(marketIndex);
+const oracle = velocityClient.getOracleDataForPerpMarket(marketIndex);
 const oraclePrice = convertToNumber(oracle.price, PRICE_PRECISION);
 
 const bidPrice = oraclePrice - spread;
 const askPrice = oraclePrice + spread;
 
-await driftClient.placeOrders([
+await velocityClient.placeOrders([
   {
     orderType: OrderType.LIMIT,
     marketType: MarketType.PERP,
     marketIndex,
     direction: PositionDirection.LONG,
-    baseAssetAmount: driftClient.convertToPerpPrecision(size),
-    price: driftClient.convertToPricePrecision(bidPrice),
+    baseAssetAmount: velocityClient.convertToPerpPrecision(size),
+    price: velocityClient.convertToPricePrecision(bidPrice),
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
   {
@@ -99,8 +99,8 @@ await driftClient.placeOrders([
     marketType: MarketType.PERP,
     marketIndex,
     direction: PositionDirection.SHORT,
-    baseAssetAmount: driftClient.convertToPerpPrecision(size),
-    price: driftClient.convertToPricePrecision(askPrice),
+    baseAssetAmount: velocityClient.convertToPerpPrecision(size),
+    price: velocityClient.convertToPricePrecision(askPrice),
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
 ]);
@@ -115,7 +115,7 @@ console.log(`Placed bid @ $${bidPrice}, ask @ $${askPrice}`);
 Check for fills and cancel/replace orders when the oracle moves. This complete example runs a loop that refreshes quotes every 10 seconds.
 
 <SDKDoc>
-  <TypeScript name="cancelOrders" type="method" owner="DriftClient">
+  <TypeScript name="cancelOrders" type="method" owner="VelocityClient">
 ```js
 import {
   PRICE_PRECISION,
@@ -125,7 +125,7 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 const marketIndex = 0;
 const spread = 0.5;
@@ -134,7 +134,7 @@ const size = 0.1;
 setInterval(async () => {
   try {
     // Check current position
-    const user = driftClient.getUser();
+    const user = velocityClient.getUser();
     const position = user.getPerpPosition(marketIndex);
     if (position) {
       const posSize = convertToNumber(position.baseAssetAmount, BASE_PRECISION);
@@ -142,24 +142,24 @@ setInterval(async () => {
     }
 
     // Cancel all existing orders for this market
-    await driftClient.cancelOrders(MarketType.PERP, marketIndex);
+    await velocityClient.cancelOrders(MarketType.PERP, marketIndex);
 
     // Re-fetch oracle price
-    const oracle = driftClient.getOracleDataForPerpMarket(marketIndex);
+    const oracle = velocityClient.getOracleDataForPerpMarket(marketIndex);
     const oraclePrice = convertToNumber(oracle.price, PRICE_PRECISION);
 
     const bidPrice = oraclePrice - spread;
     const askPrice = oraclePrice + spread;
 
     // Place fresh two-sided quotes
-    await driftClient.placeOrders([
+    await velocityClient.placeOrders([
       {
         orderType: OrderType.LIMIT,
         marketType: MarketType.PERP,
         marketIndex,
         direction: PositionDirection.LONG,
-        baseAssetAmount: driftClient.convertToPerpPrecision(size),
-        price: driftClient.convertToPricePrecision(bidPrice),
+        baseAssetAmount: velocityClient.convertToPerpPrecision(size),
+        price: velocityClient.convertToPricePrecision(bidPrice),
         postOnly: PostOnlyParams.MUST_POST_ONLY,
       },
       {
@@ -167,8 +167,8 @@ setInterval(async () => {
         marketType: MarketType.PERP,
         marketIndex,
         direction: PositionDirection.SHORT,
-        baseAssetAmount: driftClient.convertToPerpPrecision(size),
-        price: driftClient.convertToPricePrecision(askPrice),
+        baseAssetAmount: velocityClient.convertToPerpPrecision(size),
+        price: velocityClient.convertToPricePrecision(askPrice),
         postOnly: PostOnlyParams.MUST_POST_ONLY,
       },
     ]);
@@ -199,10 +199,10 @@ This basic example gets you started, but production market makers need:
 
 - **Forgetting `PostOnlyParams`:** without it, your "maker" orders can cross the spread and execute as taker, paying fees instead of earning rebates
 - **Using `PRICE_PRECISION` wrong:** oracle prices are in `PRICE_PRECISION` (1e6), base amounts in `BASE_PRECISION` (1e9). Mixing them up causes orders at wildly wrong prices
-- **Not initializing user account:** first-time users must call `driftClient.initializeUserAccount()` before placing orders. The SDK will throw `User account not found` otherwise
-- **32-order limit:** each Drift subaccount supports a maximum of 32 open orders. Cancel stale orders or use multiple subaccounts for multi-market strategies
+- **Not initializing user account:** first-time users must call `velocityClient.initializeUserAccount()` before placing orders. The SDK will throw `User account not found` otherwise
+- **32-order limit:** each Velocity subaccount supports a maximum of 32 open orders. Cancel stale orders or use multiple subaccounts for multi-market strategies
 
 For production patterns and best practices, see:
 - [DLOB MM](/developers/market-makers/dlob-mm) - comprehensive quoting strategies including oracle offset orders
 - [Bot Architecture](/developers/market-makers/bot-architecture) - subscription loops, throttling, priority fees
-- [keeper-bots-v2 `FloatingPerpMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts) - production reference for oracle offset quoting
+- [keeper-bots-v2 `FloatingPerpMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) - production reference for oracle offset quoting

@@ -1,16 +1,16 @@
 # Bot Architecture Patterns
 
-Production market making bots need more than just order placement logic. This page covers the infrastructure patterns used across Drift's [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2), applicable to market making, filling, and triggering bots.
+Production market making bots need more than just order placement logic. This page covers the infrastructure patterns used across Velocity's [keeper-bots-v2](https://github.com/velocity-exchange/protocol-v2/tree/master/apps/keeper-bots-v2), applicable to market making, filling, and triggering bots.
 
 ## Subscription loop + resubscribe
 
 WebSocket connections drop. RPC nodes restart. Your bot must handle reconnections automatically. The `OrderSubscriber` supports automatic resubscription and periodic resync to catch any missed updates.
 
 ```js
-import { OrderSubscriber } from "@drift-labs/sdk";
+import { OrderSubscriber } from "@velocity-exchange/sdk";
 
 const orderSubscriber = new OrderSubscriber({
-  driftClient,
+  velocityClient,
   subscriptionConfig: {
     type: "websocket",
     resubTimeoutMs: 30_000,    // resubscribe if no update in 30s
@@ -72,7 +72,7 @@ Solana transactions compete for block space via priority fees. During congestion
 
 ```js
 import { ComputeBudgetProgram } from "@solana/web3.js";
-import { PriorityFeeSubscriber } from "@drift-labs/sdk";
+import { PriorityFeeSubscriber } from "@velocity-exchange/sdk";
 
 // Subscribe to priority fee data
 const priorityFeeSubscriber = new PriorityFeeSubscriber({
@@ -85,7 +85,7 @@ await priorityFeeSubscriber.subscribe();
 const priorityFee = priorityFeeSubscriber.getCustomStrategyResult();
 const computeBudgetIx = ComputeBudgetProgram.setComputeUnitPrice({
   microLamports: Math.floor(
-    priorityFee * driftClient.txSender.getSuggestedPriorityFeeMultiplier()
+    priorityFee * velocityClient.txSender.getSuggestedPriorityFeeMultiplier()
   ),
 });
 
@@ -99,14 +99,14 @@ const computeLimitIx = ComputeBudgetProgram.setComputeUnitLimit({
 
 ## Address Lookup Tables (ALTs) and blockhash
 
-Drift transactions reference many accounts. Use Address Lookup Tables to compress transaction size and stay under Solana's 1232-byte limit:
+Velocity transactions reference many accounts. Use Address Lookup Tables to compress transaction size and stay under Solana's 1232-byte limit:
 
 ```js
 // Fetch ALTs once at startup (or periodically refresh)
-const lookupTableAccounts = await driftClient.fetchAllLookupTableAccounts();
+const lookupTableAccounts = await velocityClient.fetchAllLookupTableAccounts();
 
 // Get fresh blockhash for each transaction
-const { blockhash } = await driftClient.connection.getLatestBlockhash({
+const { blockhash } = await velocityClient.connection.getLatestBlockhash({
   commitment: "confirmed",
 });
 ```
@@ -116,10 +116,10 @@ const { blockhash } = await driftClient.connection.getLatestBlockhash({
 Your bot should continuously monitor its own account health and cancel orders before liquidation:
 
 ```js
-import { QUOTE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { QUOTE_PRECISION, convertToNumber, BN } from "@velocity-exchange/sdk";
 
 async function checkHealth() {
-  const user = driftClient.getUser();
+  const user = velocityClient.getUser();
 
   // Check free collateral
   const freeCollateral = convertToNumber(
@@ -138,7 +138,7 @@ async function checkHealth() {
   // Emergency cancel if health is deteriorating
   if (freeCollateral < MIN_FREE_COLLATERAL || leverage > MAX_LEVERAGE) {
     console.warn("⚠️ Health threshold breached, cancelling all orders");
-    await driftClient.cancelOrders(); // cancel ALL orders across all markets
+    await velocityClient.cancelOrders(); // cancel ALL orders across all markets
     return false;
   }
 
@@ -165,12 +165,12 @@ async function gracefulShutdown(signal: string) {
   try {
     // Cancel all orders across all markets
     console.log("Cancelling all orders...");
-    await driftClient.cancelOrders();
+    await velocityClient.cancelOrders();
     console.log("All orders cancelled");
 
     // Unsubscribe from feeds
     await orderSubscriber.unsubscribe();
-    await driftClient.unsubscribe();
+    await velocityClient.unsubscribe();
 
     console.log("Shutdown complete");
   } catch (err) {
@@ -247,25 +247,47 @@ async function sendWithRetry(
 
 For JIT and SWIFT flows, apply these filters before filling to avoid adverse selection and stay within risk limits.
 
-**Oracle validation**: Reject if oracle is stale or confidence is too wide:
+**Oracle validation**: Reject if oracle is stale, invalid, or confidence is too wide. `MMOraclePriceData` has no `isValid` field -- use `isOracleValid` (the same AMM-fill-oriented gate the program uses) against the market and the state's oracle guard rails:
 
 ```js
-const oracle = driftClient.getMMOracleDataForPerpMarket(marketIndex);
-if (!oracle.isValid) return;
-if (oracle.confidence > maxConfidence) return;
+import { isOracleValid } from "@velocity-exchange/sdk";
+
+const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
+const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+const oracleIsValid = isOracleValid(
+  perpMarket,
+  oracle,
+  velocityClient.getStateAccount().oracleGuardRails,
+  slotSubscriber.getSlot()
+);
+if (!oracleIsValid) return;
+if (oracle.confidence.gt(maxConfidence)) return; // confidence is a BN, PRICE_PRECISION
 ```
 
-**Position limits**: Don't fill if it would exceed your max position or leverage:
+**Position limits**: Don't fill if it would exceed your max position or leverage. `perpPositions` is a fixed-size array of position *slots*, not indexed by market index — look it up with `getPerpPosition(marketIndex)` (or `getPerpPositionOrEmpty` if you want a zeroed placeholder instead of `undefined`), and use `BN` arithmetic throughout:
 
 ```js
-const currentPosition = userAccount.perpPositions[marketIndex];
-const newPosition = currentPosition.baseAssetAmount + fillSize;
-if (Math.abs(newPosition) > maxPositionSize) return;
+import { convertToNumber, BASE_PRECISION } from "@velocity-exchange/sdk";
+
+const user = velocityClient.getUser();
+const currentPosition = user.getPerpPositionOrEmpty(marketIndex);
+const newPositionSize = convertToNumber(
+  currentPosition.baseAssetAmount.add(fillSize), // fillSize: BN, same direction sign convention
+  BASE_PRECISION
+);
+if (Math.abs(newPositionSize) > maxPositionSize) return;
 ```
 
-**Toxic flow**: Skip orders that increase risk (e.g. direction that worsens your inventory) and skip when oracle/index divergence is high:
+**Toxic flow**: Skip orders that increase risk (e.g. direction that worsens your inventory) and skip when oracle/index divergence is high. Note the SDK's own `isOrderRiskIncreasing`/`isOrderRiskIncreasingInSameDirection` helpers were removed as dead exports — write this check against your own position/direction, e.g.:
 
 ```js
+function isRiskIncreasing(order, currentPosition) {
+  const isLong = isVariant(order.direction, "long");
+  const positionIsLong = currentPosition.baseAssetAmount.gte(ZERO);
+  // Increasing risk if the fill would grow a position in the same direction it already faces
+  return currentPosition.baseAssetAmount.isZero() || isLong === positionIsLong;
+}
+
 if (isRiskIncreasing(order, currentPosition)) return;
 if (Math.abs(oraclePrice - indexPrice) > maxDivergence) return;
 ```
@@ -277,7 +299,7 @@ When subscribed to both SWIFT and onchain feeds, use `isSignedMsgOrder(order)` t
 A production bot typically follows this structure:
 
 <Steps>
-### Initialize DriftClient + subscribe
+### Initialize VelocityClient + subscribe
 Start your client and subscribe to required accounts/feeds.
 
 ### Start OrderSubscriber (websocket + resync)
@@ -302,7 +324,7 @@ For multi-market strategies, use separate subaccounts per market to avoid order 
 
 ```typescript
 // Initialize with multiple subaccounts
-const driftClient = new DriftClient({
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   env: "mainnet-beta",
@@ -310,21 +332,25 @@ const driftClient = new DriftClient({
   subAccountIds: [0, 1, 2], // one per market
 });
 
-// Switch subaccount context for market-specific operations
-driftClient.switchActiveUser(subAccountId);
+// Switch subaccount context for market-specific operations. `switchActiveUser` does NOT
+// load/subscribe the target User itself -- call `addUser(subAccountId)` first if it isn't
+// already loaded. It's still async: it re-derives/re-subscribes `userStats` when the
+// authority also changes.
+await velocityClient.addUser(subAccountId);
+await velocityClient.switchActiveUser(subAccountId);
 ```
 
-The [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) enforces a 1:1 subaccount-to-market ratio and throws if the mapping isn't configured correctly.
+The [`JitMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) enforces a 1:1 subaccount-to-market ratio and throws if the mapping isn't configured correctly.
 
 ## Gotchas
 
 - **WebSocket silent failures**: Solana WebSocket connections can stop delivering updates without disconnecting. The `resyncIntervalMs` on `OrderSubscriber` catches this, but also monitor your last-update timestamp and force-reconnect if stale for >60s.
 - **Priority fee spikes**: during congestion, priority fees can spike 100x. Set a hard cap (`maxPriorityFee`) to avoid draining your SOL balance on fees. The `PriorityFeeSubscriber` gives you the data, but you must enforce the cap.
-- **Transaction size limits**: Drift transactions reference many accounts. Without Address Lookup Tables (ALTs), you'll hit the 1232-byte transaction limit. Always fetch and use ALTs (see the ALT section above).
+- **Transaction size limits**: Velocity transactions reference many accounts. Without Address Lookup Tables (ALTs), you'll hit the 1232-byte transaction limit. Always fetch and use ALTs (see the ALT section above).
 - **Blockhash expiry**: Solana blockhashes expire after ~60 seconds. If your transaction is stuck in a queue, it will silently fail. Use `getLatestBlockhash` with `commitment: "confirmed"` and set `lastValidBlockHeight` for reliable expiry detection.
 - **Rate limits**: even paid RPC providers have limits. Batch reads where possible (e.g., `getMultipleAccounts`) and avoid redundant subscriptions.
 
-See [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2) for the reference implementation of these patterns. Key files:
-- [`floatingMaker.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts): mutex guards, slot-based cooldowns, watchdog timer
-- [`jitMaker.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts): subaccount isolation, DLOB integration, volatility checks
-- [`utils.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/utils.ts): throttling, market type conversion, volatility detection helpers
+See [keeper-bots-v2](https://github.com/velocity-exchange/protocol-v2/tree/master/apps/keeper-bots-v2) for the reference implementation of these patterns. Key files:
+- [`floatingMaker.ts`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts): mutex guards, slot-based cooldowns, watchdog timer
+- [`jitMaker.ts`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts): subaccount isolation, DLOB integration, volatility checks
+- [`utils.ts`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/utils.ts): throttling, market type conversion, volatility detection helpers

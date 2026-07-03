@@ -4,11 +4,11 @@ import {
   calculateAssetWeight,
   calculateLiabilityWeight,
   decodeName,
-  DriftClientAccountSubscriber,
+  VelocityClientAccountSubscriber,
   SpotMarketAccount,
   StrictOraclePrice,
   ZERO,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { singletonHook } from "react-singleton-hook";
 import { getSpotMarketAccountSusbcriber } from "../utils/spot-markets";
@@ -59,7 +59,7 @@ export const useSubscribedCrossCollateralDepositsData =
   (): CrossCollateralDepositData => {
     const [weightData, setWeightData] = useState<AssetWeightTableDataArray>([]);
     const [ltvData, setLTVData] = useState<LTVTableDataArray>([]);
-    const subscriptionRef = useRef<DriftClientAccountSubscriber | null>(null);
+    const subscriptionRef = useRef<VelocityClientAccountSubscriber | null>(null);
 
     // initial fetch
     useEffect(() => {
@@ -136,7 +136,7 @@ export const useSubscribedCrossCollateralDepositsData =
 
 const getWeightDataFromAccount = (
   account: SpotMarketAccount,
-  subscription: DriftClientAccountSubscriber
+  subscription: VelocityClientAccountSubscriber
 ): AssetWeightsData => {
   const marketName = decodeName(account.name);
   

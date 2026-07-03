@@ -8,15 +8,15 @@ import { Logo } from "../components/Logo";
 
 export const metadata: Metadata = {
   title: {
-    default: "Drift Protocol",
-    template: "%s – Drift Protocol",
+    default: "Velocity Protocol",
+    template: "%s – Velocity Protocol",
   },
   description:
-    "Drift brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.",
+    "Velocity brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.",
   openGraph: {
-    title: "Drift Protocol",
+    title: "Velocity Protocol",
     description:
-      "Drift brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.",
+      "Velocity brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.",
     images: ["/assets/meta-introduction.png"],
   },
   twitter: {
@@ -65,7 +65,7 @@ export default async function RootLayout({
             <Navbar
               logo={logo}
               logoLink={false}
-              projectLink="https://github.com/drift-labs"
+              projectLink="https://github.com/velocity-exchange"
               chatLink="https://discord.com/invite/95kByNnDy5"
             >
             </Navbar>
@@ -74,16 +74,16 @@ export default async function RootLayout({
             defaultMenuCollapseLevel: 1,
             toggleButton: true,
           }}
-          docsRepositoryBase="https://github.com/drift-labs/drift-protocol-v2-docs/tree/master"
+          docsRepositoryBase="https://github.com/velocity-exchange/drift-protocol-v2-docs/tree/master"
           footer={
             <Footer>
               <a
                 target="_blank"
                 rel="noopener noreferrer"
-                title="Drift Protocol Landing Page"
-                href="https://www.drift.trade/"
+                title="Velocity Protocol Landing Page"
+                href="https://www.velocity.exchange/"
               >
-                <p>© {new Date().getFullYear()} Drift Protocol</p>
+                <p>© {new Date().getFullYear()} Velocity Protocol</p>
               </a>
             </Footer>
           }

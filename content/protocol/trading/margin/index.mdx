@@ -9,6 +9,10 @@ These values include:
 
 Data below is updated every hour from `PerpMarketAccount`.
 
+<Callout type="warning">
+Velocity does not have High Leverage Mode. It was part of the original Drift protocol this fork started from, but the instructions, `User.marginMode`, and the per-market high-leverage margin ratios were removed — there is no per-account leverage toggle beyond the per-market/per-position limits below.
+</Callout>
+
 ---
 
 ### Perpetual Markets
@@ -18,9 +22,15 @@ Data below is updated every hour from `PerpMarketAccount`.
 
 ---
 
-### High Leverage Mode Markets
+## Isolated Positions
 
-If a user has High Leverage Mode turned on, Taker trading fees for all perp markets will be **2× the bottom fee tier**.
+Alongside cross-margin (the default — every position and deposit in a subaccount shares one collateral pool), Velocity supports **isolated perp positions**: a perp position that is capitalized and liquidated independently of the rest of the subaccount.
 
-<br/>
-<HighLeverageTable />
+- **Funding an isolated position.** Collateral is deposited directly into a specific perp position (`depositIntoIsolatedPerpPosition`), which creates the position if it doesn't already exist and tracks its balance in a segregated `isolatedPositionScaledBalance` — separate from the subaccount's cross-margin spot balances. Collateral moves between an isolated position and the rest of the subaccount via `transferIsolatedPerpPositionDeposit`, or out entirely via `withdrawFromIsolatedPerpPosition`.
+- **Independent margin health.** An isolated position's initial/maintenance margin is calculated on its own (`IsolatedMarginCalculation`), using only that position's deposited collateral and PnL — it cannot draw on, or be drawn on by, the subaccount's cross-margin collateral or other isolated positions. A loss on one isolated position never touches unrelated positions.
+- **Orders.** Orders that risk-increase an isolated position carry the `IsIsolatedPosition` bit flag (see [Order Types](/protocol/trading/order-types)).
+- **Liquidation.** Isolated positions are liquidated independently of the rest of the account and, unlike cross-margin liquidations (which unwind gradually over a throttled window), close in a single shot at 100% — see [Liquidations](/protocol/trading/liquidations) for the full mechanics.
+
+## Unrealized PnL Cap on Initial Margin
+
+For **initial margin** calculations only (not maintenance), a single position's weighted unrealized PnL is capped at **$100** (`MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`) before it can count toward collateral for opening new risk. This is a safety guard against a mispriced or thinly-traded market inflating a user's paper profit into borrowing power for other positions — it does not affect maintenance margin, and so does not by itself trigger or prevent a liquidation.

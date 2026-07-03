@@ -1,14 +1,14 @@
 # Orderbook & Matching
 
-Understanding how Drift's orderbook and matching engine work is essential for market makers. This page covers the DLOB architecture, liquidity priority, and how to access orderbook data.
+Understanding how Velocity's orderbook and matching engine work is essential for market makers. This page covers the DLOB architecture, liquidity priority, and how to access orderbook data.
 
 ## What is the DLOB?
 
-The **DLOB** (Decentralized Limit Order Book) is Drift's offchain orderbook that aggregates all resting limit orders across user accounts. It provides a unified orderbook view for matching and price discovery while keeping order storage onchain.
+The **DLOB** (Decentralized Limit Order Book) is Velocity's offchain orderbook that aggregates all resting limit orders across user accounts. It provides a unified orderbook view for matching and price discovery while keeping order storage onchain.
 
 **Why offchain?**
 
-Storing a sorted orderbook onchain would be prohibitively expensive. Instead, Drift stores orders in user accounts (up to 32 per user), and the DLOB server:
+Storing a sorted orderbook onchain would be prohibitively expensive. Instead, Velocity stores orders in user accounts (up to 32 per user), and the DLOB server:
 
 <Steps>
 ### Scan all user accounts
@@ -45,12 +45,12 @@ After the JIT auction, any unfilled portion matches against resting limit orders
 
 ### AMM (Automated Market Maker)
 
-If DLOB doesn't fully fill the order, the remainder executes against Drift's AMM. The AMM uses a constant product curve adjusted by the oracle price, so it always provides liquidity but at worse prices (higher fees + price impact). Think of the AMM as the liquidity of last resort: it guarantees fills, but at a cost.
+If DLOB doesn't fully fill the order, the remainder executes against Velocity's AMM. The AMM uses a constant product curve adjusted by the oracle price, so it always provides liquidity but at worse prices (higher fees + price impact). Think of the AMM as the liquidity of last resort: it guarantees fills, but at a cost.
 
-### External fulfillment (spot markets only)
-
-For spot markets, the matching engine can also route through external DEXs (Phoenix, OpenBook) and Jupiter aggregator when they offer better prices than onchain sources.
+The AMM can also step in earlier, as a **JIT maker inside a DLOB match** (competing alongside resting DLOB orders for the same fill) rather than only as the final fallback. This only happens when a set of hard gates are all clear: `AmmFill` isn't paused for the market, the AMM doesn't have too much drawdown, and the oracle (including the MM oracle, when active) is valid and not too volatile. If any of these gates trips, the AMM sits out of that DLOB match entirely — the fill matches against DLOB-resting orders only, with no AMM JIT competition. This is a hard, all-or-nothing gate distinct from the auction-timing rules that govern whether the AMM fills a *fresh* taker order immediately (see [JIT Auctions](./jit-auctions#amm-as-a-jit-maker)).
 </Steps>
+
+Spot markets have no order-book matching at all: `place_spot_order` / `place_and_make_spot_order` / `fill_spot_order` don't exist on-chain, and there's no external-DEX (Serum/Phoenix/OpenBook) fulfillment path either — both were removed. Spot markets exist only for collateral and borrow-lend; the liquidity-priority waterfall above applies to perp markets only.
 
 **The waterfall in practice:**
 
@@ -87,6 +87,7 @@ In the L2 API response, the `sources` field on each price level tells you where 
 - Filters by market type
 - Handles order flags (post-only, reduce-only)
 - Shows only valid, fillable orders
+- Excludes orders in markets that aren't `Active` (or, for reduce-only-only order types, `ReduceOnly`) — see [market status](#market-status) below
 
 **Real-time updates:**
 - Subscribes to UserAccount changes via RPC
@@ -122,7 +123,7 @@ Clients receive the reduced depth after fill.
 **Onchain (source of truth)**
 
 - Orders stored in UserAccount
-- Fills processed by Drift program
+- Fills processed by Velocity program
 - Settlement and PnL calculation
 - Collateral and margin checks
 
@@ -135,16 +136,36 @@ Clients receive the reduced depth after fill.
 
 If DLOB goes down, orders are still onchain and valid, they just won't be visible in the aggregated orderbook until DLOB recovers.
 
+## Market status
+
+Every perp and spot market has a `MarketStatus` that gates whether it's fillable at all: `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4). Only `Active` markets accept new risk-increasing orders; `ReduceOnly` markets accept only orders that shrink an existing position; `Settlement`/`Delisted` markets are winding down and shouldn't appear as tradable in a market maker's UI or bot config at all.
+
+> **If you maintain a custom (non-IDL) decoder for `PerpMarket`/`SpotMarket`,** note that these discriminant values are Velocity-specific — the deprecated `FundingPaused`/`AmmPaused`/`FillPaused`/`WithdrawPaused` variants that used to sit between `Active` and `ReduceOnly` were removed, so `ReduceOnly`/`Settlement`/`Delisted` now sit at 2/3/4 instead of 6/7/8. Decoding via the SDK's `MarketStatus` class (`MarketStatus.ACTIVE`, etc.) or the IDL avoids this entirely — only a decoder that hardcodes the old numeric values would misread the status.
+
+## Tick size
+
+Every perp/spot market has an `orderTickSize` (`PerpMarketAccount.orderTickSize` / `SpotMarketAccount.orderTickSize`, `PRICE_PRECISION` units). The on-chain program standardizes every auction price and oracle-offset limit price to this tick size before comparing it against anything else — long orders floor to the nearest tick, short orders ceil.
+
+If you compute prices client-side (rather than letting the program clamp them), pass the market's tick size through so your numbers match what the program will actually use:
+
+- `getAuctionPrice(order, slot, oraclePrice, tickSize)` (see [JIT Auctions](./jit-auctions#auction-pricing-formula))
+- `getLimitPrice(order, oraclePriceData, slot, tickSize, fallbackPrice)`
+- `DLOBNode.getPrice(oraclePriceData, slot, tickSize)`
+
+All four `tickSize` parameters are optional and default to `ONE` (no effective rounding) for backward compatibility — but on any market with `orderTickSize > 1`, omitting it means your client-computed price can disagree with the program's by up to one tick, which is enough to misjudge whether a maker price is inside or outside the current auction range. Pass `perpMarket.orderTickSize` (or `spotMarket.orderTickSize`) explicitly.
+
 ## Accessing the DLOB
 
 ### REST API (L2/L3)
 
 The hosted DLOB server provides L2 (aggregated price levels) and L3 (individual orders) endpoints. This is the simplest way to get an orderbook snapshot.
 
+> **Endpoint is provisional.** `dlob.velocity.exchange` below follows Velocity's `<sub>.velocity.exchange` hosted-endpoint convention but hasn't been confirmed as the final production hostname — check with the team before hardcoding it.
+
 **L2 orderbook** (aggregated by price level):
 
 ```
-GET https://dlob.drift.trade/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true
+GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true
 ```
 
 Parameters:
@@ -185,7 +206,7 @@ Parameters:
 **L3 orderbook** (individual orders):
 
 ```
-GET https://dlob.drift.trade/l3?marketName=SOL-PERP
+GET https://dlob.velocity.exchange/l3?marketName=SOL-PERP
 ```
 
 Returns individual orders with maker addresses, useful for identifying specific resting orders.
@@ -205,7 +226,7 @@ interface L2Response {
 }
 
 const response = await fetch(
-  "https://dlob.drift.trade/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true"
+  "https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true"
 );
 const orderbook: L2Response = await response.json();
 
@@ -223,7 +244,7 @@ for (const bid of orderbook.bids) {
 For live orderbook feeds with subsecond updates:
 
 ```typescript
-const ws = new WebSocket("wss://dlob.drift.trade/ws");
+const ws = new WebSocket("wss://dlob.velocity.exchange/ws");
 ws.send(JSON.stringify({
   type: "subscribe",
   channel: "orderbook",
@@ -248,14 +269,15 @@ Build and maintain orderbook locally for maximum control. This subscribes direct
 import {
   DLOBSubscriber,
   OrderSubscriber,
-  SlotSubscriber
-} from "@drift-labs/sdk";
+  SlotSubscriber,
+  MarketType
+} from "@velocity-exchange/sdk";
 
 const slotSubscriber = new SlotSubscriber(connection);
 await slotSubscriber.subscribe();
 
 const orderSubscriber = new OrderSubscriber({
-  driftClient,
+  velocityClient,
   subscriptionConfig: { type: "websocket" },
   fastDecode: true,
   decodeData: true,
@@ -263,16 +285,24 @@ const orderSubscriber = new OrderSubscriber({
 await orderSubscriber.subscribe();
 
 const dlobSubscriber = new DLOBSubscriber({
-  driftClient,
+  velocityClient,
   dlobSource: orderSubscriber,
   slotSource: slotSubscriber,
   updateFrequency: 1000,
 });
 await dlobSubscriber.subscribe();
 
-// Get best bid/ask
-const bestBid = dlobSubscriber.getBestBid(marketIndex);
-const bestAsk = dlobSubscriber.getBestAsk(marketIndex);
+// getBestBid/getBestAsk live on the DLOB snapshot itself, not the subscriber.
+// Pass the market's tick size so client-side rounding matches the on-chain standardization.
+const dlob = dlobSubscriber.getDLOB();
+const slot = slotSubscriber.getSlot();
+const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
+const oracleData = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+
+const bestBid = dlob.getBestBid(marketIndex, slot, MarketType.PERP, oracleData, perpMarket.orderTickSize);
+const bestAsk = dlob.getBestAsk(marketIndex, slot, MarketType.PERP, oracleData, perpMarket.orderTickSize);
+// Both are `BN | undefined` -- undefined means there's no resting-limit bid/ask right now
+// (this ignores AMM fallback liquidity; it's DLOB-only, by design).
 ```
   </TypeScript>
 </SDKDoc>

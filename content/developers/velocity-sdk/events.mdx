@@ -13,20 +13,34 @@ Protocol events are emitted in transaction logs. The SDK provides an `EventSubsc
 | `OrderActionRecord` | A user action on an order: place, cancel, or fill |
 | `FundingRateRecord` | The funding rate changing for a market |
 | `NewUserRecord` | A new user account being created |
+| `DeleteUserRecord` | A user account being deleted |
 | `SettlePnlRecord` | A user settling their perp PnL |
-| `LPRecord` | A user adding or removing passive perp liquidity |
 | `InsuranceFundRecord` | The insurance fund balance changing |
 | `SpotInterestRecord` | Spot interest accruing |
 | `InsuranceFundStakeRecord` | A user staking or unstaking from the insurance fund |
-| `CurveRecord` | The AMM curve parameters updating |
-| `SwapRecord` | A Jupiter swap being executed through Drift |
+| `AmmCurveChanged` | The AMM curve parameters updating |
+| `SwapRecord` | A Jupiter or Titan swap executed through a Velocity account |
+| `SpotMarketVaultDepositRecord` | An external deposit landing directly in a spot market vault |
+| `SignedMsgOrderRecord` | A signed (Swift) order being placed |
+| `LPMintRedeemRecord` | A user minting or redeeming VLP (Velocity LP) tokens |
+| `LPSettleRecord` | A VLP pool settling PnL against its constituents |
+| `LPSwapRecord` | A swap between constituents inside a VLP pool |
+| `LPBorrowLendDepositRecord` | A VLP pool borrow/lend deposit or withdrawal against a constituent |
+| `PerpMarketFeeSweepRecord` | A streaming sweep of a perp market's fee ledger into the insurance, protocol, and AMM fee pools |
+| `ProtocolFeeWithdrawRecord` | An admin withdrawal from a perp or spot market's protocol fee pool |
+| `RevenueShareSettleRecord` | A builder/referrer revenue-share settlement for a market |
+| `TransferFeeAndPnlPoolRecord` | An admin transfer between a perp market's fee pool and PnL pool |
+
+<Callout type="info">
+`CurveRecord` was renamed to `AmmCurveChanged` (the fields also changed). `LPRecord` (vAMM/BAMM LP shares) no longer exists — passive liquidity now flows through the VLP module, whose activity is split across `LPMintRedeemRecord`, `LPSettleRecord`, `LPSwapRecord`, and `LPBorrowLendDepositRecord`. `PerpMarketFeeSweepRecord`, `ProtocolFeeWithdrawRecord`, `RevenueShareSettleRecord`, and `TransferFeeAndPnlPoolRecord` have long been emitted on-chain but were only recently registered in the SDK's event map — older SDK versions silently dropped them from `EventSubscriber`.
+</Callout>
 
 ## Subscribing to Events
 
 Create an `EventSubscriber` and pass the event types you want to receive. The `newEvent` emitter fires for every incoming event that matches your filter.
 
 ```js
-import { EventSubscriber } from "@drift-labs/sdk";
+import { EventSubscriber } from "@velocity-exchange/sdk";
 
 const options = {
   eventTypes: [
@@ -38,11 +52,14 @@ const options = {
     "FundingRateRecord",
     "NewUserRecord",
     "SettlePnlRecord",
-    "LPRecord",
     "InsuranceFundRecord",
     "SpotInterestRecord",
     "InsuranceFundStakeRecord",
-    "CurveRecord",
+    "AmmCurveChanged",
+    "PerpMarketFeeSweepRecord",
+    "ProtocolFeeWithdrawRecord",
+    "RevenueShareSettleRecord",
+    "TransferFeeAndPnlPoolRecord",
   ],
   maxTx: 4096,
   maxEventsPerType: 4096,
@@ -52,7 +69,7 @@ const options = {
   logProviderConfig: { type: "websocket" },
 };
 
-const eventSubscriber = new EventSubscriber(connection, driftClient.program, options);
+const eventSubscriber = new EventSubscriber(connection, velocityClient.program, options);
 await eventSubscriber.subscribe();
 
 // `newEvent` is the only real-time emitter: it fires for every incoming event
@@ -61,12 +78,14 @@ eventSubscriber.eventEmitter.on("newEvent", (event) => {
 });
 ```
 
+Leaving `eventTypes` unset falls back to `DefaultEventSubscriptionOptions`, which includes every event type above plus `SwapRecord`, `SpotMarketVaultDepositRecord`, `SignedMsgOrderRecord`, `DeleteUserRecord`, and the four `LP*` VLP events.
+
 ### Filtering Events
 
 You can filter events by market index, event type, or action using the `isVariant` helper function. This is useful for focusing on specific markets or event types in your bot.
 
 ```js
-import { isVariant } from "@drift-labs/sdk";
+import { isVariant } from "@velocity-exchange/sdk";
 
 // Example: Filter for perp fills on a specific market
 const marketIndex = 0;
@@ -107,6 +126,13 @@ eventSubscriber.eventEmitter.on("newEvent", (event) => {
     console.log("Liquidation:", event);
   }
 });
+
+// Filter for protocol fee-sweep activity on a perp market
+eventSubscriber.eventEmitter.on("newEvent", (event) => {
+  if (event.eventType === "PerpMarketFeeSweepRecord") {
+    console.log("Fee sweep:", event);
+  }
+});
 ```
 
 ## Querying Stored Events
@@ -116,9 +142,13 @@ The `EventSubscriber` keeps a rolling buffer of recent events in memory. You can
 Retrieve all stored events of a given type:
 
 ```js
-// Returns all events of this type currently in memory
+// Returns all events of this type currently in memory (snapshotted into an array)
 const eventType = "OrderActionRecord";
-const events = eventSubscriber.getEventsReceived(eventType);
+const events = eventSubscriber.getEventsArray(eventType);
+
+// Prefer getEventList() when iterating without copying — it returns the
+// live, size-bounded EventList the subscriber inserts into directly.
+const eventList = eventSubscriber.getEventList(eventType);
 ```
 
 Retrieve all events from a specific transaction:

@@ -1,6 +1,6 @@
 # Risks
 
-All DeFi protocols, including Drift, come with risks, which are important to understand before depositing significant amounts of crypto. Some of the main risks involved in using Drift are outlined here.
+All DeFi protocols, including Velocity, come with risks, which are important to understand before depositing significant amounts of crypto. Some of the main risks involved in using Velocity are outlined here.
 
 Further risk parameters are also set out in  and [Risk Parameters](/protocol/risk-and-safety/risk-parameters).
 
@@ -10,11 +10,11 @@ There is a risk that the smart contract or UI has a bug or exploit for unexpecte
 
 **Blockchain Risk**
 
-The Solana blockchain remains under development, which creates technological, uncertainty and security risks that Drift has no control over. The cost of transacting on the Solana blockchain is variable and may increase or decrease at any time causing an impact on any activities taking place on the Solana blockchain, which may result in losses, price fluctuations or increased costs.
+The Solana blockchain remains under development, which creates technological, uncertainty and security risks that Velocity has no control over. The cost of transacting on the Solana blockchain is variable and may increase or decrease at any time causing an impact on any activities taking place on the Solana blockchain, which may result in losses, price fluctuations or increased costs.
 
 **Oracle Risk**
 
-Drift relies on Pyth for their price feeds to power liquidations. There is a risk that these oracles report incorrect prices which can result in wrongful liquidations and loss of all funds. 
+Velocity relies on Pyth (via Pyth Lazer) for its price feeds to power liquidations. There is a risk that these oracles report incorrect prices which can result in wrongful liquidations and loss of all funds. 
 
 **Levered/Social Loss Risk**
 
@@ -22,13 +22,13 @@ In the event of sharp price movements, traders with levered positions can lose m
 
 **Liquidation Risk**
 
-Drift offers both leveraged perpetual swaps and borrow/lend. For perpetual swaps, there is the risk of liquidation when a user's margin ratio poses a stability risk to the exchange. The user's collateral can get liquidated when the value of the user's collateral drops below the user's maintenance margin fraction.
+Velocity offers both leveraged perpetual swaps and borrow/lend. For perpetual swaps, there is the risk of liquidation when a user's margin ratio poses a stability risk to the exchange. The user's collateral can get liquidated when the value of the user's collateral drops below the user's maintenance margin fraction.
 
 **Long/Short Imbalance Risk**
 
-Drift's AMM is the counterparty to all trades taken against the AMM. This means that the AMM itself has delta risk, and this risk is magnified when market conditions skew on either side and the imbalance between longs and shorts increases.
+Velocity's AMM is the counterparty to all trades taken against the AMM. This means that the AMM itself has delta risk, and this risk is magnified when market conditions skew on either side and the imbalance between longs and shorts increases.
 
-The AMM has protections in place to prevent the long short imbalance from skewing too heavily to either side. More information on that is here at: [Drift AMM](/protocol/about-v3/drift-amm). Despite these protections, there is still a risk that the AMM will be exposed to delta risk in periods of significant volatility.
+The AMM has protections in place to prevent the long short imbalance from skewing too heavily to either side. More information on that is here at: [Velocity AMM](/protocol/about-v3/drift-amm). Despite these protections, there is still a risk that the AMM will be exposed to delta risk in periods of significant volatility.
 
 **No Off-Setting Loss Risk**
 

@@ -45,7 +45,7 @@ Occasionally, stale oracle information may result in unfilled orders during cert
 
 **Why did my take profit order not work?**
 
-Take profit orders on Drift use the oracle price, not the mark price. This means the order is triggered based on a fair market price from a reliable source (Pyth) instead of the current trading price on the exchange. You can switch between the oracle and mark price view on the chart for better understanding.
+Take profit orders on Velocity use the oracle price, not the mark price. This means the order is triggered based on a fair market price from a reliable source (Pyth) instead of the current trading price on the exchange. You can switch between the oracle and mark price view on the chart for better understanding.
 
 **My stop-loss order didn't trigger, and the price went up. Why did I lose money?**
 
@@ -63,7 +63,7 @@ Trigger price refers to the price the particular asset needs to hit before the l
 
 **Why is the orderbook constructed off-chain?**
 
-Drift doesn't construct a central limit orderbook on-chain and instead opts for a flat structure to achieve cost-effective scalability. The network of Keepers monitor on-chain orders and construct their own orderbooks off-chain. This achieves (1) decentralisation (as each Keeper stores its own copy of the orderbook); and (2) computational efficiency (as the high throughput and intensive computations are calculated off-chain).
+Velocity doesn't construct a central limit orderbook on-chain and instead opts for a flat structure to achieve cost-effective scalability. The network of Keepers monitor on-chain orders and construct their own orderbooks off-chain. This achieves (1) decentralisation (as each Keeper stores its own copy of the orderbook); and (2) computational efficiency (as the high throughput and intensive computations are calculated off-chain).
 
 Theoretically, this should also translate to better performance during periods of high network congestion.
 

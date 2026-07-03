@@ -1,5 +1,9 @@
 # Data API Glossary
 
+<Callout type="warning">
+**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized — see [Data API](/developers/data-api). This glossary describes the column set inherited from Drift's Data API; some columns describe features Velocity removed (noted inline) and are kept here only for historical/comparison reference until Velocity's own Data API schema is confirmed.
+</Callout>
+
 <Callout type="important">
   This is extensive list for every API endpoint. Choose the category of
   historical data you're analysing in the right sidebar for quick access. ➡️ ➡️
@@ -17,13 +21,13 @@ Columns in the table below are part of each category:
 | slot            | int       |                     | Slot number of the event.                                                                                             |
 | user            | pubkey    |                     |                                                                                                                       |
 | amount          | int       |                     |                                                                                                                       |
-| programId       | pubkey    |                     | Solana program identifier (AMM\* = Drift protocol mainnet).                                                           |
-| marketType      | perp/spot |                     | Type of market where the order was filled ("Spot", "Perpetual").                                                      |
-| marketIndex     | int       |                     | Perpetual contract [market index](https://github.com/drift-labs/protocol-v1/blob/master/sdk/src/constants/markets.ts) |
+| programId       | pubkey    |                     | Solana program identifier. On Velocity this is `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` on both devnet and mainnet-beta. |
+| marketType      | perp/spot |                     | Type of market where the order was filled ("Spot", "Perpetual"). Note: spot order-book trading (the DLOB) is disabled on Velocity — spot fill events no longer occur.                                                      |
+| marketIndex     | int       |                     | Perpetual contract market index. See the SDK's market config (`@velocity-exchange/sdk` `configs`) rather than any Drift-specific constants file. |
 | spotMarketIndex | int       |                     | Index of the spot market.                                                                                             |
 | perpMarketIndex | int       |                     | Index of the perpetual contract market.                                                                               |
 | userAuthority   | pubkey    |                     | Public key of the user's authority account (wallet).                                                                  |
-| oraclePrice     | int       |                     | Oracle price at the time of an event (provided by Pyth/Switchboard).                                                  |
+| oraclePrice     | int       |                     | Oracle price at the time of an event (provided by Pyth or Pyth Lazer on Velocity — legacy Pyth pull and Switchboard are deprecated, see [Account Model](/developers/concepts/account-model)). |
 
 ---
 
@@ -55,7 +59,7 @@ Columns in the table below are part of each category:
 | maker                                      | pubkey                            |           | Address of the maker who placed the opposing order.                        |
 | makerOrderId                               | int                               |           | Unique identifier for the maker's order.                                   |
 | makerOrderDirection                        | long/short                        |           | Direction of the maker's order (e.g., "Buy", "Sell").                      |
-| spotFulfillmentMethodFee                   | int                               |           | Fee associated with the spot fulfillment method used.                      |
+| ~~spotFulfillmentMethodFee~~               | int                               |           | **Removed on Velocity.** External spot fulfillment (Serum/Phoenix/OpenBook v2) was deleted and the spot DLOB is disabled (`SpotDlobTradingDisabled`); this column no longer applies. |
 
 ### Market Trades
 
@@ -85,7 +89,7 @@ Columns in the table below are part of each category:
 | maker                                      | pubkey                                                               |           | Address of the maker who placed the opposing order.                     |
 | makerOrderId                               | int                                                                  |           | Unique identifier for the maker's order.                                |
 | makerOrderDirection                        | long/short                                                           |           | Direction of the maker's order (e.g., "Buy", "Sell").                   |
-| spotFulfillmentMethodFee                   | int                                                                  |           | Fee associated with the spot fulfillment method used.                   |
+| ~~spotFulfillmentMethodFee~~               | int                                                                  |           | **Removed on Velocity** — see note above. |
 
 ### Funding Rates
 
@@ -159,6 +163,10 @@ Columns in the table below are part of each category:
 
 ### LP (BAL)
 
+<Callout type="warning">
+**Removed on Velocity.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely — there is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table. This section is kept only as a historical reference for readers migrating a Drift LP-events integration.
+</Callout>
+
 | Column                | Unit                           | Description                                      |
 | --------------------- | ------------------------------ | ------------------------------------------------ |
 | action                | addLiquidity / settleLiquidity |                                                  |
@@ -168,6 +176,10 @@ Columns in the table below are part of each category:
 | pnl                   | int                            | Profit or loss from the trade.                   |
 
 ### Insurance Fund
+
+<Callout type="info">
+The insurance fund is now **100% staker-owned** on Velocity — the protocol-owned-shares path and IF rebalance instructions (`transferProtocolIfSharesToRevenuePool`, `beginInsuranceFundSwap`/`endInsuranceFundSwap`, `IfRebalanceConfig`) were removed. `userIfFactor`/`totalIfFactor` below map to the per-market `insuranceFund.ifFeeFactor` concept rather than a protocol/user split.
+</Callout>
 
 | Column                     | Unit | Precision | Description                                                |
 | -------------------------- | ---- | --------- | ---------------------------------------------------------- |
@@ -190,26 +202,3 @@ Columns in the table below are part of each category:
 | userIfSharesAfter          | int           |           | User's individual IF share balance after staking.   |
 | totalIfSharesAfter         | int           |           | Total IF factor for all users after staking.        |
 | insuranceVaultAmountBefore | int           |           | Total amount in the insurance vault before staking. |
-
-## 🟪 v1
-
-### Trades
-
-| Column              | unit          | Precision           | description                                                                                           | Ext. Link                                                                                     |
-| ------------------- | ------------- | ------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| id                  | int           |                     |                                                                                                       |                                                                                               |
-| programId           | publickey     |                     | the on-chain program interacted with (AMM\* == drift protocol mainnet)                                |                                                                                               |
-| recordId            | int           |                     | sequential count of all trades that ever occured (ensures proper ordering vs by the second timestamp) |                                                                                               |
-| userAuthority       | publickey     |                     |                                                                                                       |                                                                                               |
-| user                | publickey     |                     |                                                                                                       |                                                                                               |
-| baseAssetAmount     | int           | 1e13                | BASE amt of swap (e.g. SOL-PERP)                                                                      |                                                                                               |
-| quoteAssetAmount    | int           | 1e6                 | USDC of swap                                                                                          |                                                                                               |
-| markPriceBefore     | int           | 1e10                |                                                                                                       |                                                                                               |
-| markPriceAfter      | int           | 1e10                |                                                                                                       |                                                                                               |
-| fee                 | int           | 1e6                 | fee paid to AMM by user for swap                                                                      |                                                                                               |
-| liquidation         | bool          |                     | was trade a forced liquidation                                                                        |                                                                                               |
-| direction           | Long \| Short |                     | did user go Long (buy) or Short (sell) the Base amt                                                   |                                                                                               |
-| blockChainTimeStamp | int           | seconds(since 1970) | unix on-chain time stamp                                                                              |                                                                                               |
-| serverTimeStamp     | int           | seconds(since 1970) | exchange history server off-chain time stamp (can be delayed due to outages)                          |                                                                                               |
-| marketIndex         | int           |                     | market Index in Markets Account that user swapped                                                     | [markets](https://github.com/drift-labs/protocol-v1/blob/master/sdk/src/constants/markets.ts) |
-| oraclePrice         | int           | 1e10                | oracle price at time of swap (provided by pyth/switchboard)                                           |                                                                                               |

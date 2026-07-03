@@ -1,17 +1,17 @@
-# Drift Builder Codes
+# Velocity Builder Codes
 
 ## Overview
 
-Drift’s Builder Code (DBC) system enables any builder to build on top of Drift **while earning fees** for routing trades.
+Velocity’s Builder Code (VBC) system enables any builder to build on top of Velocity **while earning fees** for routing trades.
 
-Drift Builder Codes establish the financial infrastructure layer on Solana, by allowing anyone tap into Drift’s deep liquidity and efficient execution, without building their own backend. This enables a fully open, composable UI layer for perps on Solana.
+Velocity Builder Codes establish the financial infrastructure layer on Solana, by allowing anyone tap into Velocity’s deep liquidity and efficient execution, without building their own backend. This enables a fully open, composable UI layer for perps on Solana.
 
-This Builder Code system makes Drift the first on-chain DEX on Solana to offer **per order monetization** for third-party frontends, setting the stage for a permissionless ecosystem of apps, bots, and aggregators all aligned with Drift and Solana’s liquidity growth. 
+This Builder Code system makes Velocity an on-chain DEX on Solana that offers **per order monetization** for third-party frontends, setting the stage for a permissionless ecosystem of apps, bots, and aggregators all aligned with Velocity and Solana’s liquidity growth. 
 
-### Getting started with DBC
+### Getting started with VBC
 
 - **Builder Registration:**
-In order to receive fees, builders are required to have an existing Drift account, as well as set up a `RevenueShareAccount`
+In order to receive fees, builders are required to have an existing Velocity account, as well as set up a `RevenueShareAccount`
 
 - **User Onboarding:**  
 Before placing any orders, users must approve the builder and the maximum allowed builder fee.  
@@ -33,7 +33,7 @@ When an order is filled, the fee is credited to the user’s `RevenueShareEscrow
    On `settle_pnl`, any accrued fees in the escrow are swept to the builder’s `RevenueShareAccount`:
 </Steps>
 
-Code examples can be found [here](/developers/drift-sdk/builder-codes)
+Code examples can be found [here](/developers/velocity-sdk/builder-codes)
 
 ### Notes on builder codes for MM’s
 

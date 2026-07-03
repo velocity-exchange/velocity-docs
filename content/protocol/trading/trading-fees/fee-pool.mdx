@@ -1,7 +1,9 @@
 # Fee Pool
 
-Both Perpetual and Spot Markets have Fee Pools. Fee pools are set up to accumulate a fraction of exchange fees to eventually be sent to the associated Revenue Pool.
+The **AMM Fee Pool** (`amm.feePool`) is a token pool holding only the AMM's own money: its share of the per-fill fee split (the `amm_fee_numerator` provision) plus any spread surplus it captures, tokenized out of the market's pnl pool by the fee sweep. It is not a generic "fraction of all exchange fees" pool — the protocol's and insurance fund's cuts of the same fill never enter it; they accrue as separate `protocol_fee_pool` and `revenue_pool` balances instead. See [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for the full per-fill split.
 
 <Callout type="important">
-Perpetual Market Fee Pool can be utilized for bankruptcy resolution after its insurance fund threshold is reached.
+The AMM Fee Pool can be clawed back for bankruptcy resolution — capped at the cumulative amount the AMM has ever received via the fee split (`feeLedger.ammProtocolFeesReceived`). The AMM's own trading/spread capital beyond that provision is never touched. See [How Perp Bankruptcy Resolution Works](/protocol/trading/liquidations/liquidation-engine#how-perp-bankruptcy-resolution-works).
 </Callout>
+
+Spot markets have an analogous **`revenue_pool`**, which stages the insurance fund's cut of trading, liquidation, and lending fees before it settles to the Insurance Fund vault — see [Revenue Pool](/protocol/about-v3/revenue-pool).

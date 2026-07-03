@@ -2,32 +2,34 @@
 
 ## Failed to get token account balance
 
-The account in `KEEPER_PRIVATE_KEY` does not have a USDC account
+The account in `KEEPER_PRIVATE_KEY` does not have a token account for the spot market's mint (USDC on mainnet-beta; dUSDT on devnet).
 
 ```shell
 SolanaJSONRPCError: failed to get token account balance: Invalid param: could not find account
-    at Connection.getTokenAccountBalance (/Users/user/Drift/keeper-bots-v2/node_modules/@solana/web3.js/src/connection.ts:2704:13)
+    at Connection.getTokenAccountBalance (/Users/user/velocity-v1/node_modules/@solana/web3.js/src/connection.ts:2704:13)
     at processTicksAndRejections (internal/process/task_queues.js:95:5)
-    at async runBot (/Users/user/Drift/keeper-bots-v2/src/index.ts:252:22)
-    at async recursiveTryCatch (/Users/user/Drift/keeper-bots-v2/src/index.ts:473:3)
-    at async recursiveTryCatch (/Users/user/Drift/keeper-bots-v2/src/index.ts:481:3) {
+    at async runBot (/Users/user/velocity-v1/apps/keeper-bots-v2/src/index.ts:252:22)
+    at async recursiveTryCatch (/Users/user/velocity-v1/apps/keeper-bots-v2/src/index.ts:473:3)
+    at async recursiveTryCatch (/Users/user/velocity-v1/apps/keeper-bots-v2/src/index.ts:481:3) {
   code: -32602,
   data: undefined
 }
 ```
 
-## `ClearingHouseUser` does not exist
+## `User` does not exist
 
-The account in `KEEPER_PRIVATE_KEY` has not been initialised on the `ClearingHouse` program yet. See [Keeper Bots](/developers/trading-automation/keeper-bots) for how to initialise the `ClearingHouseUser`
+The account in `KEEPER_PRIVATE_KEY` has not initialized a Velocity `User` (sub-account) yet. See [Keeper Bots](/developers/trading-automation/keeper-bots) for how to initialize it.
 
 ```shell
-[2022-08-15T22:46:19.236Z] error: ClearingHouseUser for bot69e9FXGoKzvAdGnN8uVVDCfLdLUX6K5wsXdrS3Dd3 does not exist
-Error: Run with '--init-user' flag to initialize a ClearingHouseUser
-    at runBot (/Users/user/Drift/keeper-bots-v2/src/index.ts:271:10)
+[2026-01-15T22:46:19.236Z] error: User for bot69e9FXGoKzvAdGnN8uVVDCfLdLUX6K5wsXdrS3Dd3 does not exist (subAccountId: 0)
+Error: Run with '--init-user' flag to initialize a User
+    at runBot (/Users/user/velocity-v1/apps/keeper-bots-v2/src/index.ts:1091:10)
     at processTicksAndRejections (internal/process/task_queues.js:95:5)
-    at async recursiveTryCatch (/Users/user/Drift/keeper-bots-v2/src/index.ts:473:3)
+    at async recursiveTryCatch (/Users/user/velocity-v1/apps/keeper-bots-v2/src/index.ts:473:3)
 ```
+
+Run once with `--init-user` (see [Keeper Bots](/developers/trading-automation/keeper-bots)) to create the account, then restart without the flag.
 
 ## Misc Transaction Errors
 
-Since running a Keeper is a profit-seeking endeavour, it is not unusual to run into competition while filling orders and liquidating dangerous positions. These errors can happen at various commitment levels, and how you handle them will be dependent on your skillset and craftiness. If you're looking for friends, come to [#dev-chat](https://discord.com/channels/849494028176588802/878700556904980500) and leak some alpha 🤓.
+Since running a Keeper is a profit-seeking endeavour, it is not unusual to run into competition while filling orders and liquidating dangerous positions. These errors can happen at various commitment levels, and how you handle them will be dependent on your skillset and craftiness. If you're looking for friends, come to [#research-and-dev-chat](https://discord.com/invite/95kByNnDy5) and leak some alpha 🤓.

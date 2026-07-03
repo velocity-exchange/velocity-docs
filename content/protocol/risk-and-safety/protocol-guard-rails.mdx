@@ -2,7 +2,7 @@
 
 ## Oracle Validity
 
-Drift Protocol's dependence on external oracle accounts requires thoughtful consideration of the data point in the streams received.
+Velocity Protocol's dependence on external oracle accounts requires thoughtful consideration of the data point in the streams received.
 
 In the program [\[code\]](https://github.com/velocity-exchange/protocol-v2/blob/e04139e49e41dbbbaecbd5af9f038f6ce194f591/programs/clearing_house/src/math/oracle.rs#L15), this is encoded as a spectrum from Valid to Invalid, with a few different categories of questionability that depend on the action taken (ordered by severity):
 
@@ -79,7 +79,7 @@ A user's asset / liabilities when calculating total collateral for initial margi
 
 ### Exchange & Market Status
 
-ExchangeStatus and MarketStatus can be updated to prevent certain actions when specific issues are identified (described [here](https://github.com/velocity-exchange/protocol-v2/blob/8b46cfc628f317e4f07cd62f111dd73fabff8a96/programs/clearing_house/src/state/state.rs#L35)). These actions can include:
+ExchangeStatus and MarketStatus can be updated to prevent certain actions when specific issues are identified. These actions can include:
 
 *   funding rate updates;
 
@@ -91,3 +91,10 @@ ExchangeStatus and MarketStatus can be updated to prevent certain actions when s
 
 *   withdraws
 
+### Solvency Status
+
+Independent of the general exchange pause bits above, Velocity tracks a separate `State.solvencyStatus` bitflag. Resolving bad debt (`resolve_perp_pnl_deficit`, `resolve_perp_bankruptcy`, `resolve_spot_bankruptcy`) is gated by a dedicated "solvency repair" pause bit rather than the general withdraw-pause bit, so an admin can pause withdrawals without also blocking bankruptcy resolution (or vice versa). Only the cold-admin key can flip solvency status, via `update_solvency_status`.
+
+### Withdraw Guard Threshold
+
+Each spot market has a per-market withdraw guard threshold that limits how much net token outflow can occur in a short window before withdrawals for that market are paused pending admin review. Setting this threshold now requires passing the market's oracle account, and the protocol rejects any threshold worth more than **$10,000 notional** (priced at the max of the live oracle price and its 5-minute TWAP) — a cap intended to keep the guard rail from being configured into uselessness. Swapping a spot market's oracle (which re-prices this notional cap) and setting its withdraw guard threshold are both cold-admin-only operations.

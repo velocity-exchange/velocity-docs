@@ -6,20 +6,65 @@ The examples below use placeholders like `<RPC_URL>` and `<KEYPAIR_PATH>`.
 
 | Network | Program ID |
 |---|---|
-| Drift (mainnet & devnet) | `dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH` |
-| Drift Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` |
+| Velocity (mainnet & devnet) | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` |
+| Velocity Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` |
 
-You can also import the Drift program ID directly from the SDK:
+Velocity uses the same program ID on devnet and mainnet-beta. On-chain state does not carry over from Drift Protocol v2 — Velocity is an entirely new deployment, so user accounts must be re-initialized and balances start fresh.
+
+You can also import the Velocity program ID directly from the SDK:
 
 <SDKDoc>
-  <TypeScript name="DRIFT_PROGRAM_ID" type="variable">
+  <TypeScript name="VELOCITY_PROGRAM_ID" type="variable">
 ```js
-import { DRIFT_PROGRAM_ID } from "@drift-labs/sdk";
+import { VELOCITY_PROGRAM_ID } from "@velocity-exchange/sdk";
 
-// The Drift program's public key on mainnet-beta and devnet.
+// The Velocity program's public key on mainnet-beta and devnet.
 // Use this when deriving PDAs or referencing the program directly.
-console.log(DRIFT_PROGRAM_ID.toBase58());
-// dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH
+console.log(VELOCITY_PROGRAM_ID);
+// vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P
+```
+  </TypeScript>
+</SDKDoc>
+
+### Quote Mint
+
+The protocol's quote asset mint address is environment-specific and available via the SDK's config presets:
+
+<SDKDoc>
+  <TypeScript name="getConfig" type="function">
+```js
+import { getConfig, initialize } from "@velocity-exchange/sdk";
+
+initialize({ env: "devnet" });
+console.log(getConfig().QUOTE_MINT_ADDRESS);
+// devnet: GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6 (dUSDT, a devnet placeholder)
+// mainnet-beta: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (USDC, unchanged from Drift)
+```
+  </TypeScript>
+</SDKDoc>
+
+On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDC — mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is still USDC at its original mint address.
+
+<SDKDoc>
+  <TypeScript name="TokenFaucet" type="class">
+```js
+import { TokenFaucet, BN } from "@velocity-exchange/sdk";
+import { PublicKey } from "@solana/web3.js";
+
+// <FAUCET_PROGRAM_ID> is the devnet token-faucet program's own program ID
+// (a separate deployment from the Velocity program), not documented here as a
+// fixed constant — obtain it from your devnet environment/deploy config.
+const tokenFaucet = new TokenFaucet(
+  connection,
+  wallet,
+  new PublicKey("<FAUCET_PROGRAM_ID>"),
+  new PublicKey("GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6") // dUSDT mint (devnet)
+);
+
+const [associatedTokenAccount] = await tokenFaucet.createAssociatedTokenAccountAndMintTo(
+  wallet.publicKey,
+  new BN(1_000_000_000) // 1,000 dUSDT at 1e6 precision
+);
 ```
   </TypeScript>
 </SDKDoc>
@@ -45,7 +90,7 @@ Then load the keypair in your code:
 <SDKDoc>
   <TypeScript name="Wallet / Authentication" type="example">
 ```js
-import { Wallet, loadKeypair } from "@drift-labs/sdk";
+import { Wallet, loadKeypair } from "@velocity-exchange/sdk";
 
 const keyPairFile = `${process.env.HOME}/.config/solana/my-keypair.json`;
 const wallet = new Wallet(loadKeypair(keyPairFile));
@@ -60,12 +105,12 @@ Make sure the wallet has some SOL, as it is used to pay for transaction fees and
 <SDKDoc>
   <TypeScript>
 ```bash
-npm i @drift-labs/sdk
+npm i @velocity-exchange/sdk
 ```
   </TypeScript>
 </SDKDoc>
 
-### Create a Drift Client
+### Create a Velocity Client
 
 At a minimum you provide a Solana `connection`, a `wallet`, and the `env`. Then call `subscribe()` to start receiving account updates.
 
@@ -73,84 +118,39 @@ At a minimum you provide a Solana `connection`, a `wallet`, and the `env`. Then 
   <TypeScript>
 ```js
 import { Connection } from "@solana/web3.js";
-import { DriftClient, Wallet, loadKeypair } from "@drift-labs/sdk";
+import { VelocityClient, Wallet, loadKeypair } from "@velocity-exchange/sdk";
 
 const connection = new Connection("<RPC_URL>", "confirmed");
 const wallet = new Wallet(loadKeypair("<KEYPAIR_PATH>"));
 
-const driftClient = new DriftClient({
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   env: "mainnet-beta",
 });
 
-await driftClient.subscribe();
+await velocityClient.subscribe();
 ```
   </TypeScript>
-  <Rust name="drift_rs::DriftClient">
-```rust
-use drift_rs::{AccountFilter, DriftClient, Wallet, grpc::GrpcSubscribeOpts};
-use solana_sdk::signature::Keypair;
-
-async fn main() {
-    let client = DriftClient::new(
-        Context::MainNet,
-        RpcClient::new("https://rpc-provider.com"),
-        Keypair::new().into(),
-    )
-    .await
-    .expect("connects");
-}
-```
-  </Rust>
 </SDKDoc>
 
 <SDKDoc>
-  <TypeScript name="subscribe" type="method" owner="DriftClient">
+  <TypeScript name="subscribe" type="method" owner="VelocityClient">
 ```js
-await driftClient.subscribe();
+await velocityClient.subscribe();
 ```
   </TypeScript>
-
-  <Rust name="subscribe" type="method" owner="DriftGrpcClient">
-```rust
-    // Subscribe via WebSocket
-    //
-    // 1) Ws-based live market and price changes
-    let markets = [MarketId::spot(1), MarketId::perp(0)];
-    client.subscribe_markets(&markets).await.unwrap();
-    client.subscribe_oracles(&markets).await.unwrap();
-    client.subscribe_account("SUBACCOUNT_1");
-
-    // OR 2) subscribe via gRPC (advanced)
-    // gRPC automatically subscribes to all markets and oracles
-    client.grpc_subscribe(
-      "https://grpc.example.com".into(),
-      "API-X-TOKEN".into(),
-      GrpcSubscribeOpts::default()
-        .user_accounts("SUBACCOUNT_1", "SUB_ACCOUNT_2")
-        .on_slot(move |new_slot| {
-          // do something on slot
-        })
-        .on_account(
-          AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
-          move |account| {
-              // do something on user account updates
-          })
-    ).await;
-```
-  </Rust>
 </SDKDoc>
 
 <SDKDoc>
-  <TypeScript name="unsubscribe" type="method" owner="DriftClient">
+  <TypeScript name="unsubscribe" type="method" owner="VelocityClient">
 ```js
-await driftClient.unsubscribe();
+await velocityClient.unsubscribe();
 ```
   </TypeScript>
 </SDKDoc>
 
-**Key DriftClient parameters:**
+**Key VelocityClientConfig parameters:**
 
 | Parameter | Description | Optional | Default |
 |---|---|---|---|
@@ -174,7 +174,7 @@ For most bots, websocket subscriptions are the easiest way to keep markets and u
 <SDKDoc>
   <TypeScript name="BulkAccountLoader" type="class">
 ```js
-import { BulkAccountLoader } from "@drift-labs/sdk";
+import { BulkAccountLoader } from "@velocity-exchange/sdk";
 ```
   </TypeScript>
 </SDKDoc>
@@ -182,11 +182,11 @@ import { BulkAccountLoader } from "@drift-labs/sdk";
 <SDKDoc>
   <TypeScript name="Polling subscription" type="example">
 ```js
-import { BulkAccountLoader } from "@drift-labs/sdk";
+import { BulkAccountLoader } from "@velocity-exchange/sdk";
 
 const accountLoader = new BulkAccountLoader(connection, "confirmed", 0);
 
-const driftClient = new DriftClient({
+const velocityClient = new VelocityClient({
   connection,
   wallet,
   env: "mainnet-beta",
@@ -205,37 +205,22 @@ const driftClient = new DriftClient({
 
 ### Multiple Subaccounts
 
-Drift supports multiple subaccounts per wallet, each with its own isolated position and order state. This lets you run separate strategies (e.g., a market-making bot and a hedging bot) under the same authority without cross-contaminating risk or PnL. Use `addUser()` to subscribe to additional subaccounts after initialization.
+Velocity supports multiple subaccounts per wallet, each with its own isolated position and order state. This lets you run separate strategies (e.g., a market-making bot and a hedging bot) under the same authority without cross-contaminating risk or PnL. Use `addUser()` to subscribe to additional subaccounts after initialization.
 
 <SDKDoc>
-  <TypeScript name="hasUser" type="method" owner="DriftClient">
+  <TypeScript name="hasUser" type="method" owner="VelocityClient">
 ```js
-if (!driftClient.hasUser(1)) {
-  await driftClient.addUser(1);
+if (!velocityClient.hasUser(1)) {
+  await velocityClient.addUser(1);
 }
 ```
   </TypeScript>
 </SDKDoc>
 
 <SDKDoc>
-  <TypeScript name="addUser" type="method" owner="DriftClient">
+  <TypeScript name="addUser" type="method" owner="VelocityClient">
 ```js
-await driftClient.addUser(1);
-```
-  </TypeScript>
-</SDKDoc>
-
-### High Leverage Mode
-
-High Leverage Mode allows eligible accounts to trade with increased maximum leverage (up to 50x on supported markets) compared to the standard 10x cap. It is an opt-in feature that requires the account to meet specific criteria set by the protocol. You can fetch the current high leverage configuration to check limits and eligibility conditions.
-
-<SDKDoc>
-  <TypeScript name="getHighLeverageModeConfigPublicKey" type="function">
-```js
-import { getHighLeverageModeConfigPublicKey } from "@drift-labs/sdk";
-
-const pda = getHighLeverageModeConfigPublicKey(driftClient.program.programId);
-const config = await driftClient.program.account.highLeverageModeConfig.fetch(pda);
+await velocityClient.addUser(1);
 ```
   </TypeScript>
 </SDKDoc>

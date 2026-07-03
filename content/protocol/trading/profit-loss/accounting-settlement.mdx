@@ -1,6 +1,6 @@
 # Accounting & Settlement
 
-Within Drift Protocol, all token deposits are held in a global collateral vault. This is required for seamless cross-margin and borrow-lend. The only exception to this is the insurance fund vault residing outside.
+Within Velocity, all token deposits are held in a global collateral vault. This is required for seamless cross-margin and borrow-lend. The only exception to this is the insurance fund vault residing outside. [Isolated positions](/protocol/trading/margin) are still backed by the same vault — their collateral is just accounted for separately from the account's cross-margin balance.
 
 Ensuring proper accounting across users requires a robust settlement mechanism. The protocol uses intermediate Pool Balances to facilitate transfers and ensure that claimed gains are required to come from settled offsetting losses.
 
@@ -10,41 +10,35 @@ Ensuring proper accounting across users requires a robust settlement mechanism. 
 
 An individual perpetual market has two pools:
 
- A. P&L Pool: to accumulate funds from users with losses for settlement to users with profits
+ A. **P&L Pool**: accumulates funds from users with losses for settlement to users with profits. Trade-fee value also lands here first as fills settle, before the fee sweep routes it onward.
 
- B. Fee Pool: to accumulate a fraction of exchange fees for the Quote Spot Market's Revenue Pool
+ B. **AMM Fee Pool** (`amm.feePool`): holds only the AMM's own money — its cut of the per-fill fee split plus any spread surplus, tokenized out of the P&L Pool by the fee sweep.
 
-The P&L Pool receives the highest priority on claimed funds, in order to give user's the best possible experience. The default fraction of exchange fees for the Fee Pool is `total_exchange_fee / 2` and this fraction is determined by: `SHARE_OF_FEES_ALLOCATED_TO_CLEARING_HOUSE`.
+The P&L Pool receives the highest priority on claimed funds, in order to give users the best possible experience. Every fill also carves out **protocol** and **insurance-fund** cuts of the fee remainder (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`, protocol = residual) — see [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for the full split. Those two cuts accrue as pending counters in the market's `feeLedger` and are swept out of the P&L Pool's surplus (above live user claims) into the withdrawable `protocol_fee_pool` and the quote spot market's `revenue_pool`, respectively — they never pass through the AMM Fee Pool.
 
 <Callout type="important">
-The Fee Pool will only get partially filled up by up to 1% of intermediate P&L settled from a user's losses and aggressively drawn down for the benefit of the P&L Pool otherwise.
+The streaming sweep reserves `max(net_user_pnl, 0)` in the P&L Pool on every drain so live user claims stay fully backed. The protocol's cut sweeps first and is exempt from the per-market retention buffer (`fee_pool_buffer_target`); the insurance-fund cut and AMM-provision tokenization sweep next, above that buffer.
 </Callout>
 
 ### Spot Market
 
-An individual spot market has two pools:
-
- A. Revenue Pool: to accumulate revenue across the protocol, denominated in this token
-
- B. Fee Pool: to pay fillers and settle portions to the revenue pool
+An individual spot market has a **Revenue Pool**, which stages the insurance fund's cut of protocol revenue (perp trading fees route to spot market 0 / USDC; spot lending and liquidation revenue stay in their own market) before it settles to the Insurance Fund vault.
 
 The Revenue Pool can collect fees from:
 
--   Borrow interest
+-   Borrow interest (`InsuranceFund.ifFeeFactor`)
 
--   Liquidations
+-   Liquidations (the insurance-fund cut of `if_liquidation_fee`)
 
--   Perpetual Markets
+-   Perpetual Markets (the insurance-fund cut of the per-fill fee split)
 
-and can pay out to:
+and pays out to:
 
--   Insurance Fund Stakers
-
--   Perpetual Markets
+-   Insurance Fund Stakers (100% of every settle — there are no protocol-owned IF shares)
 
 (see details of these rules in [Revenue Pool](/protocol/about-v3/revenue-pool))
 
-The Fee Pool collects exchange fees from swaps and uses them to pay out the Keeper Network [Keepers & Decentralised Orderbook](/protocol/about-v3/keepers/keepers-dlob-faq)
+The protocol's own cut of these same fee sources goes directly to each market's withdrawable `protocol_fee_pool` instead — it never routes through the Revenue Pool or the Insurance Fund.
 
 ### Future Work
 

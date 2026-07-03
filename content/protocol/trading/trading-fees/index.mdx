@@ -1,13 +1,18 @@
 # Trading Fees
 
-Drift offers a highly competitive fee structure with low taker fees and attractive maker rebates across all tiers, with the potential for even lower fees as trading volume increases. Fees are calculated per trade based on the filled notional position size and are charged in the market's quote asset (USDC), affecting the position's cost basis.
+Velocity offers a highly competitive fee structure with low taker fees and a flat maker rebate, with the potential for even lower fees as trading volume increases. Fees are calculated per trade based on the filled notional position size and are charged in the market's quote asset (USDC), affecting the position's cost basis.
 
 If a user holds only non-USDC assets, a USDC borrow may be triggered upon settlement of a loss in perpetual markets (see [P&L](/protocol/trading/profit-loss)).
 
-Drift's tiered fees for futures markets are based on an on-chain calculation of **30-Day Volume**. You can earn discounts on taker fees and extra rebates on maker fees by staking
-DRIFT. These apply *on top* of your volume tier.
+Velocity's tiered fees for futures markets are based **only** on an on-chain calculation of **30-Day Volume** — there is no governance-token staking discount. (Drift's DRIFT-staking fee discount was removed as part of the [fee redesign](#fee-redesign).)
+
+<Callout type="important">
+Velocity has no spot order book, so spot trades are not charged a trading fee — see [Spot Market Fees](#spot-market-fees) below.
+</Callout>
 
 ## Perp Market Fees
+
+Tier is selected purely by the account's trailing 30-day perp volume; the maker rebate is flat across every tier.
 
 <div style={{ marginTop: '1.5em', overflowX: 'auto' }}>
 <table class="fees">
@@ -15,209 +20,112 @@ DRIFT. These apply *on top* of your volume tier.
     <tr>
       <th>Tier</th>
       <th>30D Volume</th>
-      <th>Rookie Taker</th>
-      <th>Rookie Maker</th>
-      <th>Champion Taker</th>
-      <th>Champion Maker</th>
-      <th>Kickstarter Taker</th>
-      <th>Kickstarter Maker</th>
-      <th>Racer Taker</th>
-      <th>Racer Maker</th>
-      <th>Elite Taker</th>
-      <th>Elite Maker</th>
-      <th>Master Taker</th>
-      <th>Master Maker</th>
+      <th>Taker Fee</th>
+      <th>Maker Rebate</th>
     </tr>
   </thead>
   <tbody>
     <tr>
+      <td>0</td>
+      <td>&lt; $2M</td>
+      <td>0.100%</td>
+      <td>-0.020%</td>
+    </tr>
+    <tr>
       <td>1</td>
-      <td>≤ $2M</td>
-      <td>0.0350%</td>
-      <td>-0.0025%</td>
-      <td>0.0210%</td>
-      <td>-0.0035%</td>
-      <td>0.0333%</td>
-      <td>-0.0026%</td>
-      <td>0.0315%</td>
-      <td>-0.0028%</td>
-      <td>0.0280%</td>
-      <td>-0.0030%</td>
-      <td>0.0245%</td>
-      <td>-0.0033%</td>
+      <td>$2M – $10M</td>
+      <td>0.090%</td>
+      <td>-0.020%</td>
     </tr>
     <tr>
       <td>2</td>
-      <td>&gt; $2M</td>
-      <td>0.0300%</td>
-      <td>-0.0025%</td>
-      <td>0.0180%</td>
-      <td>-0.0035%</td>
-      <td>0.0285%</td>
-      <td>-0.0026%</td>
-      <td>0.0270%</td>
-      <td>-0.0028%</td>
-      <td>0.0240%</td>
-      <td>-0.0030%</td>
-      <td>0.0210%</td>
-      <td>-0.0033%</td>
+      <td>$10M – $20M</td>
+      <td>0.080%</td>
+      <td>-0.020%</td>
     </tr>
     <tr>
       <td>3</td>
-      <td>&gt; $10M</td>
-      <td>0.0275%</td>
-      <td>-0.0025%</td>
-      <td>0.0165%</td>
-      <td>-0.0035%</td>
-      <td>0.0261%</td>
-      <td>-0.0026%</td>
-      <td>0.0248%</td>
-      <td>-0.0028%</td>
-      <td>0.0220%</td>
-      <td>-0.0030%</td>
-      <td>0.0193%</td>
-      <td>-0.0033%</td>
+      <td>$20M – $80M</td>
+      <td>0.070%</td>
+      <td>-0.020%</td>
     </tr>
     <tr>
       <td>4</td>
-      <td>&gt; $20M</td>
-      <td>0.0250%</td>
-      <td>-0.0025%</td>
-      <td>0.0150%</td>
-      <td>-0.0035%</td>
-      <td>0.0238%</td>
-      <td>-0.0026%</td>
-      <td>0.0225%</td>
-      <td>-0.0028%</td>
-      <td>0.0200%</td>
-      <td>-0.0030%</td>
-      <td>0.0175%</td>
-      <td>-0.0033%</td>
+      <td>$80M – $200M</td>
+      <td>0.060%</td>
+      <td>-0.020%</td>
     </tr>
     <tr>
-      <td>5</td>
-      <td>&gt; $80M</td>
-      <td>0.0225%</td>
-      <td>-0.0025%</td>
-      <td>0.0135%</td>
-      <td>-0.0035%</td>
-      <td>0.0214%</td>
-      <td>-0.0026%</td>
-      <td>0.0203%</td>
-      <td>-0.0028%</td>
-      <td>0.0180%</td>
-      <td>-0.0030%</td>
-      <td>0.0158%</td>
-      <td>-0.0033%</td>
-    </tr>
-    <tr>
-      <td>VIP</td>
-      <td>&gt; $200M</td>
-      <td>0.0200%</td>
-      <td>-0.0025%</td>
-      <td>0.0120%</td>
-      <td>-0.0035%</td>
-      <td>0.0190%</td>
-      <td>-0.0026%</td>
-      <td>0.0180%</td>
-      <td>-0.0028%</td>
-      <td>0.0160%</td>
-      <td>-0.0030%</td>
-      <td>0.0140%</td>
-      <td>-0.0033%</td>
+      <td>5 (VIP)</td>
+      <td>&ge; $200M</td>
+      <td>0.050%</td>
+      <td>-0.020%</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-### Fee Benefits via DRIFT Staking
-Earn **additional discounts on taker fees** and **extra rebates on maker fees** by staking DRIFT.
-These stack on top of your volume tier. These benefits only apply to perp fees.
+These are the protocol's default `FeeStructure.feeTiers` — an admin can update them (`updatePerpFeeStructure`), so treat the table above as the shipped default rather than an immutable constant.
 
-<div style={{ marginTop: '1.5em', overflowX: 'auto' }}>
-<table class="fees">
-  <thead>
-    <tr>
-      <th>Tier</th>
-      <th>DRIFT Staked</th>
-      <th>Taker Fee Discount</th>
-      <th>Maker Fee Rebate</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Rookie</td>
-      <td>0</td>
-      <td>0%</td>
-      <td>0%</td>
-    </tr>
-    <tr>
-      <td>Kickstarter</td>
-      <td>1,000</td>
-      <td>–5%</td>
-      <td>+5%</td>
-    </tr>
-    <tr>
-      <td>Racer</td>
-      <td>10,000</td>
-      <td>–10%</td>
-      <td>+10%</td>
-    </tr>
-    <tr>
-      <td>Elite</td>
-      <td>50,000</td>
-      <td>–20%</td>
-      <td>+20%</td>
-    </tr>
-    <tr>
-      <td>Master</td>
-      <td>100,000</td>
-      <td>–30%</td>
-      <td>+30%</td>
-    </tr>
-    <tr>
-      <td>Champion</td>
-      <td>250,000</td>
-      <td>–40%</td>
-      <td>+40%</td>
-    </tr>
-  </tbody>
-</table>
-</div>
+Every tier also carries the same **referrer reward** (15% of the taker fee, paid to the referrer) and **referee discount** (5% off the taker fee, for accounts that signed up via a referral) — see [Referee Discount / Referrer Reward](#referee-discount--referrer-reward) below.
 
+## Builder Fees
 
-**Examples:**  
-- *A Tier 3 taker (0.0275%) with 20% staking discount pays 0.022% effective fee.*  
-- *A maker (–0.0025% rebate) with 20% staking gets –0.003% rebate.*
+Order params can optionally carry a **builder code** (`builderIdx` + `builderFeeTenthBps`, set via `VelocityClient.changeApprovedBuilder`). The builder fee is:
+
+```
+builder_fee = notional × fee_tenth_bps / 100_000
+```
+
+This is charged **on top of** the taker fee (it doesn't reduce the taker's fee tier or the protocol's cut) and accrues to the builder's `RevenueShareEscrow`, swept out on the next `settlePnl`. Existing order placements are unaffected — the fields are optional.
+
+## Fee Redesign
+
+Velocity's fee model is a clean per-fill split rather than Drift's insurance-fund waterfall. The full taker-fee decomposition, in order:
+
+```
+taker_fee  = ceil(notional × fee_numerator / FEE_DENOMINATOR)   tiered by 30d volume only,
+                                                                 ± per-market fee_adjustment
+          − referee_discount          (reduces what the taker pays; never collected)
+          − referrer_reward           (→ referrer, via RevenueShareEscrow)
+          − filler_reward             (→ keeper, as perp quote PnL)
+          − maker_rebate              (→ maker; match path only)
+          ───────────────────────────
+remainder ── × amm_fee_numerator%      → AMM fee provision (spendable AMM liquidity; the
+          │                              bankruptcy backstop of last resort)
+          ── × if_fee_numerator%       → insurance fund (via the pnl-pool sweep)
+          ── residual                  → protocol (withdrawable `protocol_fee_pool`)
+
+builder_fee = notional × fee_tenth_bps / 100_000   ADDED on top of taker_fee; pure pass-through
+```
+
+The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to 0%/0% — the protocol receives 100% of the trade-fee remainder as the residual claimant — and is admin-configurable up to `ammFeeNumerator + ifFeeNumerator ≤ 100%`.
+
+Key differences from the pre-redesign model:
+
+- **Protocol fees are directly withdrawable, not part of the backstop.** They land in a per-market `protocol_fee_pool` and exit via `withdraw_protocol_fees_perp` / `withdraw_protocol_fees_spot`, recipient-locked to `State.protocolFeeRecipientPerp` / `protocolFeeRecipientSpot` and gated by a dedicated `FeeWithdraw` hot key.
+- **The AMM's books contain only its own money.** Its fee provision is real, spendable liquidity — but the market tracks the cumulative amount received (`feeLedger.ammProtocolFeesReceived`) so a perp bankruptcy can claw back what's still recoverable as the backstop of last resort. The AMM's own trading/spread capital beyond that provision is never touched.
+- **The Insurance Fund is 100% staker-owned.** There are no protocol IF shares — every settled dollar accrues to stakers as share-price appreciation (see [Liquidations](/protocol/trading/liquidations) and [Insurance Fund](/protocol/insurance-fund)).
+- **Liquidations carry an explicit protocol cut** (`protocol_liquidation_fee`), split IF-first against the existing insurance-fee budget so it can never push a liquidation into bankruptcy — see [Liquidations](/protocol/trading/liquidations#liquidation-fees).
 
 ## Spot Market Fees
 
-<SpotFeeStructureTable />
+Spot trading on Velocity charges **no trading fee** — the swap fee is hardcoded to zero, and (per [Order Types](/protocol/trading/order-types)) there's no spot order book to charge a maker/taker fee on in the first place. Spot trades route through `begin_swap` / `end_swap` (direct swaps) or the LP pool swap. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply — see [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
 
----
+### Referee Discount / Referrer Reward
 
-### Drift staking benefits
-
-The fee benefits via DRIFT staking only apply to perpetual contract fees.
-
-### Taker Fees (High Leverage Mode)
-
-If a user has High Leverage Mode turned on, taker trading fees for all perp markets will be 2x the bottom fee tier.
-
-### Referee Discount / Referer Reward
-
-These apply to accounts that were signed up using a referred account. These percentages are applied to the effective taker fee paid.
+These apply to accounts that were signed up using a referred account. These percentages are applied to the effective taker fee paid: a 5% discount for the referee, and 15% of the taker fee paid to the referrer's `RevenueShareEscrow`.
 
 ### Filler Reward
 
-Filler rewards are variable but up to 10% of the effective taker fee paid by the user. See [Keeper Incentives](/protocol/about-v3/keepers/keeper-incentives).
+Filler rewards are the lesser of a size-based component (10% of the fee) and a time-based component that grows with slots since the order was placed, so keepers are incentivized to fill older orders. See [Keeper Incentives](/protocol/about-v3/keepers/keeper-incentives).
 
 ### Fee Adjustments
 
-Longer tail assets can have increased fees to stay in line with external markets fee schedules. Some markets will periodically have flat discounts applied to all fee tiers. [See Fee-Adjusted Markets](#fee-adjusted-markets)
+Longer tail assets can have increased fees to stay in line with external markets' fee schedules via a per-market `fee_adjustment`. Some markets will periodically have flat discounts applied to all fee tiers.
 
 ### Disclaimers
 
-_Drift Protocol reserves the right to end the promotional period and the Taker Incentive Program at any time. If the Drift Protocol chooses to do so, it will provide notice to participating users, but such notice is not required in order to conclude the program early or extend the program. Please note that the terms and conditions of this program are subject to change without notice._
+_Velocity reserves the right to end any promotional period or taker incentive program at any time. If it chooses to do so, it will provide notice to participating users, but such notice is not required in order to conclude the program early or extend the program. Please note that the terms and conditions of this program are subject to change without notice._
 
-_There are risks associated with Insurance Fund Staking. Read more about the [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) and [Risks](/protocol/risk-and-safety/risks))._\*\*
+_There are risks associated with Insurance Fund Staking. Read more about the [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) and [Risks](/protocol/risk-and-safety/risks))._

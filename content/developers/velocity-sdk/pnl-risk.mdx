@@ -2,11 +2,15 @@
 
 ## How it works
 
-Drift calculates your account's risk using a **health** metric (0-100) derived from total collateral vs margin requirements. Health 100 = no margin used, health 0 = liquidation eligible.
+Velocity calculates your account's risk using a **health** metric (0-100) derived from total collateral vs margin requirements. Health 100 = no margin used, health 0 = liquidation eligible.
 
 **PnL** (Profit and Loss) comes in two forms: **unrealized** (mark-to-market value of open positions) and **realized** (settled when positions close). Unrealized PnL is calculated by comparing your position's entry price to the current oracle price. For perps, you also have **funding PnL** from periodic funding rate payments between longs and shorts.
 
 **Free collateral** is the amount of collateral not currently backing positions, it's what you can withdraw or use to open new positions. Margin requirements increase with position size and vary by market. Leverage is calculated as notional position value divided by total collateral. These metrics update in real-time as prices and positions change.
+
+<Callout type="info">
+**The $100 initial-margin uPnL cap.** When total collateral or free collateral is computed under `'Initial'` margin (i.e. for opening new positions, not for liquidation checks), each position's *weighted, positive* unrealized PnL is capped at **$100** (`MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`, `QUOTE_PRECISION`) before it can count toward buying power. This guards against a single dangerously-configured or manipulated market inflating a user's initial margin capacity. The cap is per-position, applies only to gains (losses are never capped), and only kicks in when you request the asset-weighted PnL (see `getUnrealizedPNL` below) — it has no effect on `'Maintenance'`-margin health/liquidation math, and it doesn't cap raw unweighted PnL.
+</Callout>
 
 ## SDK Usage
 
@@ -19,7 +23,7 @@ Return an overall account health score from 0-100, where lower values mean highe
 <SDKDoc>
   <TypeScript name="getHealth" type="method" owner="User">
 ```js
-const user = driftClient.getUser();
+const user = velocityClient.getUser();
 const health = user.getHealth(); // returns number 0-100
 console.log(health); // e.g. 85 means 85% healthy
 ```
@@ -33,11 +37,11 @@ Get total account collateral value in quote units (typically USD precision).
 <SDKDoc>
   <TypeScript name="getTotalCollateral" type="method" owner="User">
 ```js
-import { QUOTE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { QUOTE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 // getTotalCollateral returns BN in QUOTE_PRECISION (1e6)
 // marginCategory defaults to 'Initial'; pass 'Maintenance' for liquidation checks
-const total = driftClient.getUser().getTotalCollateral();
+const total = velocityClient.getUser().getTotalCollateral();
 console.log(convertToNumber(total, QUOTE_PRECISION)); // e.g. 1500.50 (USD)
 ```
   </TypeScript>
@@ -48,9 +52,9 @@ Get the required margin for the account under initial or maintenance rules.
 <SDKDoc>
   <TypeScript name="getMarginRequirement" type="method" owner="User">
 ```js
-// getMarginRequirement(marginCategory, strict?)
+// getMarginRequirement(marginCategory, liquidationBuffer?, strict?, includeOpenOrders?, perpMarketIndex?)
 // marginCategory: 'Initial' (for new positions) or 'Maintenance' (for liquidation)
-const req = driftClient.getUser().getMarginRequirement('Initial');
+const req = velocityClient.getUser().getMarginRequirement('Initial');
 console.log(convertToNumber(req, QUOTE_PRECISION)); // USD
 ```
   </TypeScript>
@@ -61,7 +65,7 @@ Get currently available collateral that can be used for new positions or withdra
 <SDKDoc>
   <TypeScript name="getFreeCollateral" type="method" owner="User">
 ```js
-const free = driftClient.getUser().getFreeCollateral();
+const free = velocityClient.getUser().getFreeCollateral();
 console.log(convertToNumber(free, QUOTE_PRECISION)); // USD available
 ```
   </TypeScript>
@@ -72,14 +76,36 @@ Get current account leverage as a scaled value (convert to human-readable x leve
 <SDKDoc>
   <TypeScript name="getLeverage" type="method" owner="User">
 ```js
-import { TEN_THOUSAND } from "@drift-labs/sdk";
+import { TEN_THOUSAND } from "@velocity-exchange/sdk";
 
 // getLeverage() returns BN scaled by 10000 (e.g. 2x = BN(20000))
-const lev = driftClient.getUser().getLeverage();
+const lev = velocityClient.getUser().getLeverage();
 console.log(lev.toNumber() / TEN_THOUSAND.toNumber()); // e.g. 2.5 (2.5x leverage)
 ```
   </TypeScript>
 </SDKDoc>
+
+### Isolated positions
+
+A perp position opened in **isolated margin mode** is backed only by its own dedicated quote deposit rather than the account's shared cross-margin pool — a loss on an isolated position cannot draw down collateral backing your other positions, and vice versa. Every risk helper above accepts an optional trailing `perpMarketIndex` to scope its result to a single market's isolated position bucket instead of the cross-margin account:
+
+<SDKDoc>
+  <TypeScript name="Isolated position risk" type="example">
+```js
+const user = velocityClient.getUser();
+const isolatedMarketIndex = 2;
+
+// Health, collateral, margin requirement, and leverage can all be scoped
+// to one isolated market instead of the cross-margin account.
+const isolatedHealth = user.getHealth(isolatedMarketIndex);
+const isolatedFreeCollateral = user.getFreeCollateral('Initial', isolatedMarketIndex);
+const isolatedMarginReq = user.getMarginRequirement('Initial', undefined, undefined, undefined, isolatedMarketIndex);
+const isolatedLeverage = user.getLeverage(true, isolatedMarketIndex);
+```
+  </TypeScript>
+</SDKDoc>
+
+`getFreeCollateral` and `getLeverage` return `ZERO` for a market with no open isolated position; `getMarginRequirement` does the same. `getTotalCollateral(marginCategory, strict, includeOpenOrders, liquidationBuffer, perpMarketIndex)` is the one exception — it **throws** if no isolated margin calculation exists for that market, so guard the call if the position may not exist.
 
 ### Unrealized PnL
 
@@ -88,9 +114,11 @@ Get unrealized PnL across open positions (optionally including funding effects).
 <SDKDoc>
   <TypeScript name="getUnrealizedPNL" type="method" owner="User">
 ```js
+// getUnrealizedPNL(withFunding?, marketIndex?, withWeightMarginCategory?, strict?, liquidationBuffer?)
 // Returns BN in QUOTE_PRECISION. Positive = profit, negative = loss.
-// Pass withWeightMarginCategory to apply asset/liability weights.
-const pnl = driftClient.getUser().getUnrealizedPNL(true); // withFunding=true
+// withWeightMarginCategory ('Initial' | 'Maintenance') applies asset weighting;
+// under 'Initial' it also applies the $100-per-position cap described above.
+const pnl = velocityClient.getUser().getUnrealizedPNL(true); // withFunding=true, raw (uncapped) PnL
 console.log(convertToNumber(pnl, QUOTE_PRECISION)); // e.g. -25.50 (USD)
 ```
   </TypeScript>
@@ -102,7 +130,7 @@ Get unrealized funding PnL only, separated from price-movement PnL.
   <TypeScript name="getUnrealizedFundingPNL" type="method" owner="User">
 ```js
 // Funding PnL only (accumulated funding payments)
-const fundingPnl = driftClient.getUser().getUnrealizedFundingPNL();
+const fundingPnl = velocityClient.getUser().getUnrealizedFundingPNL();
 console.log(convertToNumber(fundingPnl, QUOTE_PRECISION)); // USD
 ```
   </TypeScript>
@@ -115,9 +143,9 @@ Compute the effective entry price for a perp position from its cumulative trade 
 <SDKDoc>
   <TypeScript name="calculateEntryPrice" type="function">
 ```js
-import { calculateEntryPrice, PRICE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { calculateEntryPrice, PRICE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
-const position = driftClient.getUser().getPerpPosition(0);
+const position = velocityClient.getUser().getPerpPosition(0);
 if (position) {
   const entryPrice = calculateEntryPrice(position); // BN in PRICE_PRECISION
   console.log(convertToNumber(entryPrice, PRICE_PRECISION)); // e.g. 150.25
@@ -131,10 +159,10 @@ if (position) {
 Realize and settle a user's perp PnL for a specific market into spot balances.
 
 <SDKDoc>
-  <TypeScript name="settlePNL" type="method" owner="DriftClient">
+  <TypeScript name="settlePNL" type="method" owner="VelocityClient">
 ```js
-const user = driftClient.getUser();
-await driftClient.settlePNL(user.userAccountPublicKey, user.getUserAccount(), 0);
+const user = velocityClient.getUser();
+await velocityClient.settlePNL(user.userAccountPublicKey, user.getUserAccount(), 0);
 ```
   </TypeScript>
 </SDKDoc>

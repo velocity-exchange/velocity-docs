@@ -2,9 +2,9 @@
 
 ### Is this the same as a traditional orderbook? How are the limit orders filled?
 
-Drift's decentralised orderbook (DLOB) is different to a traditional orderbook.
+Velocity's decentralised orderbook (DLOB) is different to a traditional orderbook.
 
-Limit orders placed on Drift's decentralised orderbook are filled either:
+Limit orders placed on Velocity's decentralised orderbook are filled either:
 
 -   against each other (buys and sells at the same price);
 
@@ -26,7 +26,7 @@ To accomplish this, Keeper Bots construct an orderbook structure off-chain categ
 
 ### Why is the orderbook constructed off-chain?
 
-Drift doesn't construct a central limit orderbook on-chain and instead opts for a flat structure to achieve cost-effective scalability.
+Velocity doesn't construct a central limit orderbook on-chain and instead opts for a flat structure to achieve cost-effective scalability.
 
 The network of Keepers monitor on-chain orders and constructs their own orderbooks off-chain.
 
@@ -38,4 +38,4 @@ This should translate to better performance during periods of high network conge
 
 A Keeper will track and fill orders and earn a reward. The guide to run is listed in [Keeper Bots](/developers/trading-automation/keeper-bots).
 
-Incentive structures are listed in <a href="/about-v3/keeper-incentives">Keeper Incentives</a>.
+Incentive structures are listed in <a href="/protocol/about-v3/keepers/keeper-incentives">Keeper Incentives</a>.

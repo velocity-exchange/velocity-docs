@@ -1,10 +1,14 @@
 # Creating and Managing Subaccounts
 
-Drift features a powerful subaccount tool for users to clearly separate positions within a single address.  
+Velocity features a powerful subaccount tool for users to clearly separate positions within a single address.  
 
 Each subaccount's margin and positions are isolated from other subaccounts, meaning that users can trade on isolated margin via different subaccounts.  
 
-Each subaccount has independent positions, balances and margins, and can trade independently. Balances or liquidations from each subaccount will not affect other subaccounts. Each subaccount is cross-margined.
+Each subaccount has independent positions, balances and margins, and can trade independently. Balances or liquidations from each subaccount will not affect other subaccounts. By default, every position and deposit within a single subaccount is cross-margined.
+
+<Callout type="info">
+Don't confuse subaccount-level isolation with **[isolated positions](/protocol/trading/margin)** — a newer feature that lets you segregate a *single perp position's* collateral and liquidation risk from the rest of one subaccount, without needing a separate subaccount for it.
+</Callout>
 
 <Callout type="important">
 A subaccount can hold up to 8 perpetual and 8 spot positions and 32 open orders total. A perpetual position with 0 base, but only unsettled P&L counts as an open position. 
@@ -31,7 +35,7 @@ You'll be asked to name your new subaccount and deposit collateral from your wal
 
 ## Editing and Deleting a Subaccount
 
-You can edit and delete subaccounts from the [accounts screen](https://app.drift.trade/portfolio/accounts)
+You can edit and delete subaccounts from the [accounts screen](https://app.velocity.exchange/portfolio/accounts)
 
 <Steps>
 ### Settle balances
@@ -67,7 +71,7 @@ Once you've created a new account, you can use the same account switcher to move
 
 ## Managing Subaccount Assets
 
-You can easily manage your assets via the Accounts button in the [Accounts Dropdown](https://app.drift.trade) or via 
+You can easily manage your assets via the Accounts button in the [Accounts Dropdown](https://app.velocity.exchange) or via 
 
 
 -   Deposit additional assets

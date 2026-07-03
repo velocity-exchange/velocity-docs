@@ -22,14 +22,14 @@ Matching Bots are similar to [Tutorial: Order Trigger Bot](/developers/trading-a
 
 ## Getting Started
 
-The reference implementation of the Order Matching Bot is available [here](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/filler.ts).
+The reference implementation of the Order Matching Bot is available [here](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/filler.ts) in the `velocity-v1` monorepo.
 
-Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Drift user account.
+Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Velocity user account.
 
 Start the Matching Bot:
 
 ```shell copy
-yarn run dev:filler
+bun run dev:filler
 ```
 
 ## Technical Explanation
@@ -42,15 +42,10 @@ The matching bot runs a continuous loop: fetch fillable orders from the DLOB, fi
 Market orders first go through [JIT Auctions](/protocol/about-v3/matching-engine). After the auction period ends, they become available for matching bots to fill. The DLOB exposes a `findNodesToFill` method that returns these eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
 
 ```typescript copy
-const market = this.clearingHouse.getMarketAccounts()[0]; // get a MarketAccount
+const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;
 
-const oraclePriceData = this.driftClient.getOracleDataForMarket(marketIndex);
-const oracleIsValid = isOracleValid(
-    market.amm,
-    oraclePriceData,
-    this.driftClient.getStateAccount().oracleGuardRails,
-    this.slotSubscriber.getSlot()
-);
+const oraclePriceData = this.velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+const slot = this.slotSubscriber.getSlot();
 
 const vAsk = calculateAskPrice(market, oraclePriceData);
 const vBid = calculateBidPrice(market, oraclePriceData);
@@ -59,14 +54,18 @@ const nodesToFill = this.dlob.findNodesToFill(
     marketIndex,
     vBid,
     vAsk,
-    this.slotSubscriber.getSlot(),
-    oracleIsValid ? oraclePriceData : undefined
+    slot,
+    Date.now() / 1000, // unix ts, used to find expired orders
+    MarketType.PERP,
+    oraclePriceData,
+    this.velocityClient.getStateAccount(),
+    market
 );
 ```
 
 ### Filter for fillable nodes
 
-Not every node returned is profitable to attempt. Filter out limit orders that are too small for the AMM to execute — submitting a fill for these would waste transaction fees and fail on-chain.
+Not every node returned is profitable to attempt. Skip orders below the market's minimum step size against the AMM — submitting a fill for these would waste transaction fees and fail on-chain.
 
 ```typescript copy
 if (
@@ -74,29 +73,24 @@ if (
     (isVariant(nodeToFill.node.order.orderType, "limit") ||
         isVariant(nodeToFill.node.order.orderType, "triggerLimit"))
 ) {
-    const baseAssetAmountMarketCanExecute =
-        calculateBaseAssetAmountMarketCanExecute(
-            market,
-            nodeToFill.node.order,
-            oraclePriceData
-        );
+    const remainingBaseAssetAmount = nodeToFill.node.order.baseAssetAmount.sub(
+        nodeToFill.node.order.baseAssetAmountFilled
+    );
 
-    if (
-        baseAssetAmountMarketCanExecute.lt(market.amm.baseAssetAmountStepSize)
-    ) {
+    if (remainingBaseAssetAmount.lt(market.orderStepSize)) {
         // skip order
         continue;
     }
 }
 ```
 
-### Call `fill_order` on `DriftClient`
+### Call `fillPerpOrder` on `VelocityClient`
 
 Submit the fill transaction. On success, the keeper earns a small reward. Expect occasional failures from competing bots filling the same order — handle errors gracefully and continue to the next node.
 
 ```typescript copy
 const user = this.userMap.get(nodeToFill.node.userAccount.toString());
-const txSig = await this.driftClient.fillOrder(
+const txSig = await this.velocityClient.fillPerpOrder(
     nodeToFill.node.userAccount,
     user.getUserAccount(),
     nodeToFill.node.order,

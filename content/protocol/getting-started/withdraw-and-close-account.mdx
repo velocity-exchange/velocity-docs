@@ -8,7 +8,7 @@ To withdraw collateral, ensure you meet the following requirements:
 - No open borrows (check your 'Balances' page - opens in a new tab).
 - No unsettled PnL (settle any PnL before proceeding).
 
-You can partially withdraw collateral if you have enough initial free collateral. To check your collateral, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://app.drift.trade/portfolio) screen.
+You can partially withdraw collateral if you have enough initial free collateral. To check your collateral, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://app.velocity.exchange/portfolio) screen.
 <img src="/assets/withdraw-and-close-account-3.png" alt="" width="800" height="auto"></img>
 
 <Callout type="warning">
@@ -21,30 +21,30 @@ Referred accounts cannot be deleted.
 
 ### Dynamic rent reclaiming
 
-Every account incurs a base account rent of ~0.035 SOL. During periods of high sign-ups (sybil activity), Drift's program adds an excess fee on top of this base rent. For example, a user might pay 0.035 SOL (base rent) + 0.1901 SOL (excess fee) = 0.2251 SOL to create an account.
+Every account incurs a base account rent of ~0.035 SOL. During periods of high sign-ups (sybil activity), Velocity's program adds an excess fee on top of this base rent. For example, a user might pay 0.035 SOL (base rent) + 0.1901 SOL (excess fee) = 0.2251 SOL to create an account.
 
 ### Idle Account Deletion
 
-The Drift Security Council periodically triggers the cleanup of idle accounts in the Drift program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion [must be inactive for ~3 months and hold under ~$0.05 in notional value](https://github.com/velocity-exchange/protocol-v2/blob/d005aae63375f6d8884480f089034a9d6d072d13/programs/drift/src/instructions/keeper.rs#L2138). Account history will still available through the UI and the account may be re-created by the user at any time.
+A keeper holding the `UserFlag` hot-admin role periodically triggers the cleanup of idle accounts in the Velocity program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion must be inactive for ~3 months and hold under ~$0.05 in notional value (`handle_force_delete_user`, `instructions/keeper.rs`). Account history will still available through the UI and the account may be re-created by the user at any time.
 
 ### Recovering Funds
 
 **Excess Fee**
 
-Users can reclaim the excess fee after a 7-day waiting period. Visit the [Accounts Page](https://app.drift.trade/portfolio/accounts) in your portfolio. Look for the "Reclaimable Rent" section and click "Claim" to retrieve any excess fees paid during account creation. 
+Users can reclaim the excess fee after a 7-day waiting period. Visit the [Accounts Page](https://app.velocity.exchange/portfolio/accounts) in your portfolio. Look for the "Reclaimable Rent" section and click "Claim" to retrieve any excess fees paid during account creation. 
 
 <img src="/assets/withdraw-and-close-account-1.png" alt="" width="800" height="auto"></img>
 
 **Base Rent**
 
-To reclaim the base rent (0.035 SOL in the example above), you'll need to delete your Drift account via the [Accounts Page](https://app.drift.trade/portfolio/accounts)
+To reclaim the base rent (0.035 SOL in the example above), you'll need to delete your Velocity account via the [Accounts Page](https://app.velocity.exchange/portfolio/accounts)
 
 Click the trash button next to your main account. This will permanently delete your account history and instantly redeem your base account rent. No further steps are required.
 
 <img src="/assets/withdraw-and-close-account-2.png" alt="" width="800" height="auto"></img>
 
 <Callout type="important">
-Ensure you have no open borrows, unsettled PnL, open positions, or any remaining balances before deleting your account. Withdraw any balances from Drift before proceeding.
+Ensure you have no open borrows, unsettled PnL, open positions, or any remaining balances before deleting your account. Withdraw any balances from Velocity before proceeding.
 </Callout>
 
 

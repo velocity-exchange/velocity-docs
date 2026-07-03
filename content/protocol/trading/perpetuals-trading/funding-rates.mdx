@@ -6,14 +6,29 @@ Perpetuals futures have no expiry date, final settlement, or delivery. As such, 
 
 | Field               | Description                                     |
 | ------------------- | ----------------------------------------------- |
-| Funding Rate % Calc | `1/24 \* (market_twap - oracle_twap)/oracle_twap` |
+| Funding Rate % Calc | `1/24 \* (market_twap - oracle_twap)/oracle_twap`, plus the floor and dead-zone described below |
 | TWAP Parameters     | EMA with span = 1 hour                          |
 | Mark TWAP Calc      | `(bid TWAP + ask TWAP) / 2`                       |
 | Frequency           | End of Hour\* (9:00 AM, 10:00 AM, ...)          |
 
+## Funding Floor and Dead Zone
+
+Velocity always adds a baseline offset to the funding premium so funding never fully flattens to zero: the floor is **10.95% annualized** (`FUNDING_RATE_OFFSET_DENOMINATOR = 3333`).
+
+On top of the floor, each market has a **continuous dead zone** around zero divergence, rather than the flat per-tier clamp used elsewhere:
+
+- **`fundingClampThreshold`** (default 5 bps of the oracle TWAP): while `|mark_twap − oracle_twap|` stays inside this band, it's treated as noise and the premium collapses to the floor-only value.
+- **`fundingRampSlope`** (default 1.0×): once the spread exceeds the threshold, the excess is shrunk by the threshold and then scaled by the ramp slope, so the premium leaves the dead zone smoothly instead of jumping by the full threshold at the boundary.
+
+Both are per-market and admin-configurable (`update_perp_market_funding_dead_zone`).
+
 <Callout type="important">
-Note: Funding rate hourly magnitudes are clamped according to the market's Contract Tier (B or greater: 0.125%, C: 0.208%, lower than C: 0.4167%) and can be delayed at large divergences (see [Oracles](/protocol/trading/oracles)). Individual Market TWAP updates utilize the side of the book for trade executions, Bid and Ask TWAPs in the market are calculated and/or estimated on every trade.
+Note: this dead zone can also be delayed at large oracle divergences (see [Oracles](/protocol/trading/oracles)). Individual Market TWAP updates utilize the side of the book for trade executions, Bid and Ask TWAPs in the market are calculated and/or estimated on every trade.
 </Callout>
+
+## Funding Bias Spread Widening
+
+While the AMM is on the paying side of funding (i.e. its inventory means it owes the offset-floor funding rather than receiving it), each market can widen the AMM's quote on that paying side via `AMM.fundingBiasSensitivity` (`s`, admin-set via `update_perp_market_funding_bias_sensitivity`) — up to `1 + s/100` at the funding offset floor. This makes it costlier to trade further into the side the AMM is already paying funding on. Default is `0` (off); enabling it doesn't change quotes until sensitivity is set above zero.
 
 <Callout type="warning">
 \*If no market trades and/or funding update calls occur within the first ~20 minutes of the hour, the next funding update will be delayed an additional hour.
@@ -35,13 +50,11 @@ Note: Funding rate hourly magnitudes are clamped according to the market's Contr
 
 ### Capped Symmetric Funding
 
-Drift Protocol aims to provide a symmetric funding rate to both sides of the market. When there is a long-short imbalance within the AMM, the protocol's market-specific Rebate Pool can be used to pay (or receive) the cost delta between the longs and the shorts.
+Velocity aims to provide a symmetric funding rate to both sides of the market. When there is a long-short imbalance within the AMM, the AMM's own retained equity (`total_fee_minus_distributions` — its accumulated fees and trading PnL net of what it's already paid out) covers the cost delta between longs and shorts.
 
-If the pool is empty or does not have enough to provide for funding (2/3 of the Rebate Pool balance available at each funding interval), then the receipts for funding will be capped to the available amount.
+Each funding period, the AMM can spend at most **1/3 of its retained equity** paying asymmetric funding. If the imbalance would cost more than that, the payout side's funding rate is capped so the AMM's retained equity never goes negative — the receipts for funding will be capped to the available amount. This budget lives entirely inside the AMM's own books; the Insurance Fund is never drawn on to cover a funding shortfall.
 
-See [Rebates](/protocol/market-makers/maker-fee-rebate) for funding pool sizes where the funding paid from the Rebate Pool will be capped. This ensures that the risk is spread in the system and the Insurance Fund isn't drained by funding rates.
-
-Over the hour, the amount available in the Rebate Pool will increase from fees as trades occur, so any existing predicted capped rate should move closer to being balanced.
+As the AMM collects more fees over time, its retained equity — and therefore its funding budget — grows, so any existing predicted capped rate should move closer to being balanced.
 
 <Callout type="info">
 **Example:**
@@ -53,7 +66,7 @@ For SOL-PERP you can check the recent history to get a better idea of what short
 
 ### Oracle Resilience
 
-Drift's on-chain calculation of a market's oracle TWAP is updated only on trades which incorporates the oracle's confidence interval and a few interpolations to provide the most accurate and resilient value.
+Velocity's on-chain calculation of a market's oracle TWAP is updated only on trades which incorporates the oracle's confidence interval and a few interpolations to provide the most accurate and resilient value.
 
 Read more about protective checks in [Oracles](/protocol/trading/oracles).
 

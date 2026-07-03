@@ -1,6 +1,6 @@
 # Precision and Types
 
-The Drift SDK uses integer big numbers (BN) for most values. Always convert using the SDK's precision constants and helpers.
+The Velocity SDK uses integer big numbers (BN) for most values. Always convert using the SDK's precision constants and helpers.
 
 ## Precision Constants
 
@@ -19,7 +19,7 @@ Each constant is a `BN` representing a power of 10. Divide a raw value by its pr
 <SDKDoc>
   <TypeScript name="convertToNumber" type="function">
 ```js
-import { BN, PRICE_PRECISION, BASE_PRECISION, QUOTE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { BN, PRICE_PRECISION, BASE_PRECISION, QUOTE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 // Oracle price: raw 150_500_000 → 150.5 USD
 const rawPrice = new BN(150_500_000);
@@ -31,7 +31,7 @@ const rawBase = new BN(2_500_000_000);
 const size = convertToNumber(rawBase, BASE_PRECISION);
 console.log(size); // 2.5
 
-// Collateral: raw 10_000_000 → 10 USDC
+// Collateral: raw 10_000_000 → 10 USDC (or dUSDT on devnet)
 const rawQuote = new BN(10_000_000);
 const usd = convertToNumber(rawQuote, QUOTE_PRECISION);
 console.log(usd); // 10
@@ -44,7 +44,7 @@ console.log(usd); // 10
 <SDKDoc>
   <TypeScript name="Human Number to BN" type="example">
 ```js
-import { BN, BASE_PRECISION, PRICE_PRECISION } from "@drift-labs/sdk";
+import { BN, BASE_PRECISION, PRICE_PRECISION } from "@velocity-exchange/sdk";
 
 // 1 SOL in base precision
 const oneSol = new BN(1).mul(BASE_PRECISION); // BN(1_000_000_000)
@@ -52,10 +52,10 @@ const oneSol = new BN(1).mul(BASE_PRECISION); // BN(1_000_000_000)
 // $21.23 in price precision
 const price = new BN(21_230_000); // 21.23 * 1e6
 
-// Or use DriftClient convenience helpers (available after setup):
-const size = driftClient.convertToPerpPrecision(1);     // 1 base unit as BN
-const px = driftClient.convertToPricePrecision(21.23);   // price as BN
-const spot = driftClient.convertToSpotPrecision(0, 100); // 100 USDC as BN
+// Or use VelocityClient convenience helpers (available after setup):
+const size = velocityClient.convertToPerpPrecision(1);     // 1 base unit as BN
+const px = velocityClient.convertToPricePrecision(21.23);   // price as BN
+const spot = velocityClient.convertToSpotPrecision(0, 100); // 100 quote-asset units as BN
 ```
   </TypeScript>
 </SDKDoc>
@@ -69,10 +69,10 @@ Spot balances are stored as interest-bearing scaled values. These helpers conver
 <SDKDoc>
   <TypeScript name="getTokenAmount" type="function">
 ```js
-import { getTokenAmount, SpotBalanceType, convertToNumber } from "@drift-labs/sdk";
+import { getTokenAmount, SpotBalanceType, convertToNumber } from "@velocity-exchange/sdk";
 
-const spotMarket = driftClient.getSpotMarketAccount(0); // e.g. USDC
-const user = driftClient.getUser();
+const spotMarket = velocityClient.getSpotMarketAccount(0); // e.g. dUSDT on devnet, USDC on mainnet
+const user = velocityClient.getUser();
 const spotPosition = user.getUserAccount().spotPositions[0];
 
 const tokenAmount = getTokenAmount(
@@ -90,10 +90,10 @@ console.log("Token amount:", tokenAmount.toString());
 <SDKDoc>
   <TypeScript name="getSignedTokenAmount" type="function">
 ```js
-import { getTokenAmount, getSignedTokenAmount } from "@drift-labs/sdk";
+import { getTokenAmount, getSignedTokenAmount } from "@velocity-exchange/sdk";
 
-const spotMarket = driftClient.getSpotMarketAccount(0);
-const spotPosition = driftClient.getUser().getUserAccount().spotPositions[0];
+const spotMarket = velocityClient.getSpotMarketAccount(0);
+const spotPosition = velocityClient.getUser().getUserAccount().spotPositions[0];
 
 const tokenAmount = getTokenAmount(
   spotPosition.scaledBalance,
@@ -106,5 +106,4 @@ console.log("Signed amount:", signed.toString());
 ```
   </TypeScript>
 </SDKDoc>
-
 

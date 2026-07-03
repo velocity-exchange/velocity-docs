@@ -1,218 +1,152 @@
 # Reading Data
 
-This page covers every way to read Drift state in your app -- from the high-level `AuthorityDrift` caches (what `drift-ui-template` uses) to the raw Data API REST endpoints.
+This page covers every way to read Velocity state in your app — from the subscribed `VelocityClient`/`User` caches, to the stateless `VelocityCore` decoders, to the Data API REST endpoints.
 
-## Account data via AuthorityDrift
+## Account data via VelocityClient / User
 
-Once `AuthorityDrift` is subscribed (see [setup](/developers/ecosystem-builders#setup)), user account data flows through the `userAccountCache` as `EnhancedAccountData` objects. Each object contains pre-computed positions, orders, balances, and margin info for a single subaccount.
+Once `velocityClient` is subscribed (see [setup](/developers/ecosystem-builders#setup)), account data is available synchronously from the `User` wrapper for the active (or any) subaccount.
 
 ### Get the active account
 
 ```ts
-import { UserAccountCache, EnhancedAccountData } from "@drift-labs/common";
+const user = velocityClient.getUser();           // active subaccount
+const otherUser = velocityClient.getUser(1);      // subaccount 1
 
-const accountKey = UserAccountCache.getUserAccountKey(subAccountId, authority);
-const account: EnhancedAccountData = userAccountLookup[accountKey];
+const userAccount = user.getUserAccount();        // raw decoded UserAccount
+userAccount.authority;
+userAccount.subAccountId;
+userAccount.name;                                 // number[] — decode with `decodeName()`
 ```
-
-`EnhancedAccountData` contains:
-
-| Field | Type | What it gives you |
-|---|---|---|
-| `subAccountId` | `number` | Subaccount index |
-| `authority` | `PublicKey` | Wallet that owns this account |
-| `name` | `string` | User-assigned account name |
-| `poolId` | `number` | Pool the account belongs to |
-| `openPerpPositions` | `PerpPositionInfo[]` | Active perp positions with PnL, liquidation price, funding |
-| `openOrders` | `UISerializableOrder[]` | Open orders with price, size, type, flags |
-| `spotBalances` | `SpotBalanceInfo[]` | Spot token balances per market |
-| `marginInfo` | `AccountMarginInfo` | Net USD value, leverage, health |
 
 ### Positions
 
-`account.openPerpPositions` is an array of `PerpPositionInfo` objects. Each position includes everything you need for a positions table:
-
 ```ts
-import { PerpPositionInfo, ENUM_UTILS, TRADING_UTILS, MarketId } from "@drift-labs/common";
-import { PositionDirection } from "@drift-labs/sdk";
+import { decodeName } from "@velocity-exchange/sdk";
 
-for (const position of account.openPerpPositions) {
-  const isLong = ENUM_UTILS.match(position.direction, PositionDirection.LONG);
+for (const position of userAccount.perpPositions) {
+  if (position.baseAssetAmount.isZero()) continue;
 
-  position.marketIndex;                                    // market index
-  position.baseSize.prettyPrint();                         // "1.5" SOL
-  position.notionalSize.toNotional();                      // "$150.00"
-  position.entryPrice.toNotional();                        // "$100.00"
-  position.liquidationPrice.toNotional();                  // "$85.00"
-
-  // PnL breakdown
-  position.positionPnl.markBased.positionNotionalPnl;      // BigNum, unrealized PnL
-  position.positionPnl.markBased.positionPnlPercentage;    // number, e.g. 12.5
-  position.feesAndFundingPnl;                              // BigNum, cumulative fees + funding
-  position.costBasis;                                      // BigNum
-  position.quoteBreakEvenAmount;                           // BigNum
-
-  // Settlement
-  position.totalUnsettledPnl;                              // BigNum, unsettled PnL
-  position.totalClaimablePnl;                              // BigNum, claimable now
-  position.totalSettledPnl;                                // BigNum, already settled
+  position.marketIndex;
+  position.baseAssetAmount;         // BASE_PRECISION (1e9), signed: + long, - short
+  position.quoteAssetAmount;        // QUOTE_PRECISION (1e6)
+  position.quoteEntryAmount;
+  position.quoteBreakEvenAmount;
+  position.lastCumulativeFundingRate;
+  position.openOrders;
+  position.openBids;
+  position.openAsks;
 }
+
+// Higher-level PnL/health accessors live on `User` — see PnL & Risk
+const unrealizedPnl = user.getUnrealizedPNL(true, 0);   // withFunding=true, market 0
+const health = user.getHealth();                        // 0-100
 ```
 
-Use `TRADING_UTILS.getMarketTickSizeDecimals(driftClient, marketId)` to determine the right number of decimal places for price display.
+See [PnL & Risk](/developers/velocity-sdk/pnl-risk) for `getTotalCollateral`, `getMarginRequirement`, `getFreeCollateral`, `getLeverage`, and isolated-position variants.
 
 ### Open orders
 
-`account.openOrders` is an array of `UISerializableOrder` objects:
-
 ```ts
-import { UISerializableOrder, COMMON_UI_UTILS, TRADING_UTILS, ENUM_UTILS } from "@drift-labs/common";
-import { PositionDirection } from "@drift-labs/sdk";
+for (const order of userAccount.orders) {
+  if (order.status !== 1 /* OrderStatus.Open */) continue;
 
-for (const order of account.openOrders) {
   order.orderId;
   order.marketIndex;
-  order.direction;               // PositionDirection enum
-  order.price;                   // BigNum, limit price (zero for market orders)
-  order.triggerPrice;            // BigNum, trigger price for stop/take-profit
-  order.baseAssetAmount;         // BigNum, total size
-  order.baseAssetAmountFilled;   // BigNum, filled so far
-  order.oraclePriceOffset;       // BN, offset from oracle for oracle orders
-  order.reduceOnly;              // boolean
-  order.postOnly;                // boolean
-  order.immediateOrCancel;       // boolean
-
-  // Human-readable order type label
-  const label = COMMON_UI_UTILS.getUIOrderTypeFromSdkOrderType(
-    order.orderType,
-    order.triggerCondition,
-    order.direction,
-    order.oraclePriceOffset,
-  ).label;  // e.g. "Limit", "Stop Market", "Oracle Limit"
-
-  // Check if order covers the entire position
-  const isEntirePosition = TRADING_UTILS.isEntirePositionOrder(order.baseAssetAmount);
+  order.direction;
+  order.price;                    // PRICE_PRECISION (1e6), 0 for market orders
+  order.triggerPrice;
+  order.baseAssetAmount;
+  order.baseAssetAmountFilled;
+  order.oraclePriceOffset;        // BN (i64) — always wrap in `new BN(...)` when constructing
+  order.reduceOnly;
+  order.bitFlags;                 // OrderBitFlag bitmask: postOnly / reduceOnly / HasBuilder / IsIsolatedPosition
 }
 ```
 
 ### Spot balances and collateral
 
-`account.spotBalances` contains a `SpotBalanceInfo` entry for each spot market the user has a balance in:
-
 ```ts
-for (const balance of account.spotBalances) {
-  balance.marketIndex;
-  balance.baseBalance;  // BigNum, token amount in market precision
+for (const position of userAccount.spotPositions) {
+  if (position.scaledBalance.isZero()) continue;
+  position.marketIndex;
+  position.balanceType;           // { deposit: {} } | { borrow: {} }
+  position.scaledBalance;         // SPOT_BALANCE_PRECISION (1e9); multiply by the market's cumulative interest for token amount
 }
+
+const totalCollateral = user.getTotalCollateral();  // BN, QUOTE_PRECISION (1e6)
 ```
 
-For total account collateral, use `marginInfo`:
+## Decoding accounts without a subscription: `VelocityCore`
+
+For read-only tooling (indexers, one-off scripts, serverless functions) where a fully subscribed `VelocityClient` is overkill, `VelocityCore` decodes accounts directly from an RPC fetch or a raw buffer:
 
 ```ts
-account.marginInfo.netUsdValue.toNotional();  // "$1,234.56"
+import { VelocityCore } from "@velocity-exchange/sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("<RPC_URL>");
+
+// Fetch + decode a User account in one call, no subscription required
+const userAccount = await VelocityCore.fetchUserAccount(connection, userAccountPublicKey);
+
+// Or decode a buffer you already have (e.g. from a websocket account notification)
+const decoded = VelocityCore.decodeUserAccount(rawAccountBuffer);
+
+// PDA helpers (state, user, perp/spot market, vaults) are re-exported statically
+const userPda = VelocityCore.pdas.getUserAccountPublicKeySync(programId, authority, 0);
 ```
 
-## Market data via AuthorityDrift
+For account types beyond `User`, build a coder directly against the bundled IDL:
+
+```ts
+import { VelocityCore } from "@velocity-exchange/sdk";
+
+const coder = VelocityCore.coder(); // defaults to VelocityCore.defaultIdl()
+const perpMarket = coder.accounts.decode("perpMarket", rawAccountBuffer);
+```
+
+<Callout type="warning">
+**IDL account names are camelCase in Anchor 1.0.** Any string-keyed coder call must use `'perpMarket'`, `'spotMarket'`, `'user'`, `'userStats'`, `'state'` — not the PascalCase Drift used with Anchor 0.29 (`'PerpMarket'`, `'SpotMarket'`, ...). Passing the old casing throws or silently returns `undefined` depending on the coder version.
+</Callout>
+
+<Callout type="warning">
+**`MarketStatus` discriminants shifted.** Velocity's surviving `MarketStatus` variants are `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4) — Drift had `ReduceOnly` (6), `Settlement` (7), `Delisted` (8). A raw/cached decoder built against Drift's numbering will silently misread these. Always decode against the current `sdk/src/idl/velocity.json`, never a hardcoded enum copied from a Drift integration. `PerpMarketAccount` is also a different size (1304 bytes vs Drift's 1216) — see [Account Model](/developers/concepts/account-model) for the full layout diff.
+</Callout>
+
+## Market data
 
 ### Oracle and mark prices
 
-After subscribing, `AuthorityDrift` exposes price caches and emits updates via callbacks:
-
 ```ts
-// One-time read from cache
-const oraclePrices = drift.oraclePriceCache;   // Record<MarketKey, OraclePriceData>
-const markPrices = drift.markPriceCache;        // Record<MarketKey, MarkPriceData>
+const oraclePriceData = velocityClient.getMMOracleDataForPerpMarket(0); // MMOraclePriceData
+const perpMarket = velocityClient.getPerpMarketAccount(0);
 
-// Continuous updates
-drift.onOraclePricesUpdate((lookup) => { /* OraclePriceLookup */ });
-drift.onMarkPricesUpdate((lookup) => { /* MarkPriceLookup */ });
+perpMarket.marketStats;    // mark/oracle TWAPs live here, not on the top-level PerpMarket
+perpMarket.oracle;         // top-level now (moved off amm.* in the AMM decoupling)
+perpMarket.oracleSource;
 ```
 
-Each `MarkPriceData` entry contains `markPrice`, `bestBid`, `bestAsk`, and `lastUpdateSlot` (all `BN` values).
+### Orderbook (DLOB)
 
-In React, use `useOraclePriceStore` from `@drift-labs/react`:
-
-```tsx
-import { useOraclePriceStore } from "@drift-labs/react";
-import { MarketId } from "@drift-labs/common";
-
-const priceData = useOraclePriceStore((s) =>
-  s.getMarketPriceData(MarketId.createPerpMarket(0))
-);
-```
-
-### Orderbook
-
-`AuthorityDrift` manages an L2 orderbook via DLOB websocket. Read the current snapshot and subscribe to updates:
-
-```ts
-import { L2WithOracleAndMarketData, DEFAULT_ORDERBOOK_GROUPING } from "@drift-labs/common";
-
-const currentBook: L2WithOracleAndMarketData = drift.orderbookCache;
-// currentBook.bids, currentBook.asks, currentBook.bestBidPrice, currentBook.bestAskPrice
-
-const subscription = drift.onOrderbookUpdate((newBook) => {
-  // L2WithOracleAndMarketData with updated bids/asks
-});
-
-// Change price grouping
-drift.orderbookManager.updateSubscription({
-  marketId: MarketId.createPerpMarket(0),
-  grouping: 10,  // OrderbookGrouping multiplier
-});
-
-// Cleanup
-subscription.unsubscribe();
-```
-
-For lower-level orderbook access (REST snapshots, raw websocket), see [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
-
-### Candle charts
-
-`CandleClient` from `@drift-labs/common` fetches historical OHLCV data and streams live updates:
-
-```ts
-import { CandleClient, MarketId, UIEnv, JsonCandle } from "@drift-labs/common";
-
-const candleClient = new CandleClient();
-const env = UIEnv.createMainnet();
-
-// Fetch historical candles
-const candles: JsonCandle[] = await candleClient.fetch({
-  env,
-  marketId: MarketId.createPerpMarket(0),
-  resolution: "15",   // CandleResolution: "1", "5", "15", "60", "240", "1440"
-  fromTs: Math.floor(Date.now() / 1000) - 86400,
-  toTs: Math.floor(Date.now() / 1000),
-});
-
-// Each candle: { ts, fillOpen, fillHigh, fillLow, fillClose, baseVolume }
-
-// Subscribe to live updates
-const key = "sol-perp-15m";
-await candleClient.subscribe({ env, marketId: MarketId.createPerpMarket(0), resolution: "15" }, key);
-
-candleClient.on(key, "candle-update", (candle: JsonCandle) => {
-  // Update your chart with the new/updated candle
-});
-
-// Cleanup
-candleClient.unsubscribe(key);
-```
+For a live L2/L3 orderbook, subscribe to the DLOB directly with the SDK's `SlotSubscriber` / `OrderSubscriber` / `DLOBSubscriber` classes — see [DLOB](/developers/velocity-sdk/dlob) for the full setup sequence and [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) for the hosted DLOB server's REST/websocket API if you'd rather not run your own DLOB.
 
 ## Data API (REST)
 
-The Data API provides historical and aggregate data via REST endpoints. No authentication required. Use this for dashboards, analytics, or any non-SDK integration.
+The Data API provides historical and aggregate data via REST endpoints, without running your own indexer. Use it for dashboards, analytics, or any non-SDK integration.
 
-- Base URL: `https://data.api.drift.trade`
+<Callout type="warning">
+**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized. The examples below use `data.velocity.exchange` as a placeholder pattern — confirm the real host before shipping against it. See [Data API](/developers/data-api) and the migration report's open questions.
+</Callout>
+
+- Base URL (provisional): `https://data.velocity.exchange`
 - [Data API playground](/developers/data-api)
 
 ### Market stats
 
-Returns aggregate stats for all markets -- volume, open interest, funding rate, oracle price, and market status.
+Returns aggregate stats for all markets — volume, open interest, funding rate, oracle price, and market status.
 
 ```
-GET https://data.api.drift.trade/stats/markets
+GET https://data.velocity.exchange/stats/markets
 ```
 
 Response shape:
@@ -232,73 +166,31 @@ Response shape:
 ]
 ```
 
-This is the best single endpoint for building a markets overview or dashboard.
-
 ### Funding rates
 
-Returns funding rate history for a specific market.
-
 ```
-GET https://data.api.drift.trade/fundingRates?symbol=SOL-PERP
-```
-
-Response shape:
-```json
-[
-  {
-    "ts": 1700000000,
-    "symbol": "SOL-PERP",
-    "marketIndex": 0,
-    "fundingRate": 0.00012,
-    "oraclePrice": 123.45,
-    "markPrice": 123.50
-  }
-]
+GET https://data.velocity.exchange/fundingRates?symbol=SOL-PERP
 ```
 
 ### Trades
 
-Returns recent trades for a market.
-
 ```
-GET https://data.api.drift.trade/trades?symbol=SOL-PERP&limit=100
+GET https://data.velocity.exchange/trades?symbol=SOL-PERP&limit=100
 ```
 
 Query parameters:
-- `symbol` -- Market symbol (required)
-- `limit` -- Max results (default varies, max typically 1000)
-- `pageIndex` -- For pagination
+- `symbol` — Market symbol (required)
+- `limit` — Max results (default varies, max typically 1000)
+- `pageIndex` — For pagination
 
-Response shape:
-```json
-[
-  {
-    "ts": 1700000000,
-    "marketIndex": 0,
-    "marketType": "perp",
-    "filler": "...",
-    "taker": "...",
-    "maker": "...",
-    "takerOrderId": 123,
-    "makerOrderId": 456,
-    "baseAssetAmountFilled": 1000000000,
-    "quoteAssetAmountFilled": 123450000,
-    "takerFee": 50000,
-    "makerFee": -25000,
-    "action": "fill",
-    "actionExplanation": "orderFilledWithMatch"
-  }
-]
-```
-
-Note: Amounts are in protocol precision (base: 1e9, quote: 1e6). Divide accordingly for human-readable values.
+Note: Amounts are in protocol precision (base: 1e9, quote: 1e6). Divide accordingly for human-readable values. See the [Data API glossary](/developers/data-api/glossary) for the full column reference, and note that spot-fulfillment-related columns no longer apply (spot DLOB trading and external fulfillment are both removed on Velocity).
 
 ### Fetching data in code
 
 <SDKDoc>
   <TypeScript name="fetch" type="function">
 ```js
-const marketsRes = await fetch("https://data.api.drift.trade/stats/markets");
+const marketsRes = await fetch("https://data.velocity.exchange/stats/markets");
 const markets = await marketsRes.json();
 
 for (const m of markets) {
@@ -306,50 +198,16 @@ for (const m of markets) {
 }
 
 const tradesRes = await fetch(
-  "https://data.api.drift.trade/trades?symbol=SOL-PERP&limit=100"
+  "https://data.velocity.exchange/trades?symbol=SOL-PERP&limit=100"
 );
 const trades = await tradesRes.json();
-
-const fundingRes = await fetch(
-  "https://data.api.drift.trade/fundingRates?symbol=SOL-PERP"
-);
-const fundingRates = await fundingRes.json();
-```
-  </TypeScript>
-</SDKDoc>
-
-## Live data via websockets
-
-The Data API also supports websocket subscriptions for live candles and trades:
-
-<SDKDoc>
-  <TypeScript name="WebSocket" type="class">
-```js
-const ws = new WebSocket("wss://data.api.drift.trade/ws");
-
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    type: "subscribe",
-    symbol: "SOL-PERP",
-    resolution: "1"
-  }));
-};
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log("Candle update:", data);
-};
-
-ws.onerror = (error) => {
-  console.error("WebSocket error:", error);
-};
 ```
   </TypeScript>
 </SDKDoc>
 
 ## DLOB + Swift for live order flow
 
-For real-time orderbook and order flow, Drift uses separate services:
+For real-time orderbook and order flow, Velocity uses separate services (both hostnames below are provisional pending final infra naming):
 
-- **DLOB server** (`https://dlob.drift.trade`) -- Orderbook snapshots and streaming. See [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
-- **Swift server** (`https://swift.drift.trade`) -- Signed message orders for fast execution.
+- **DLOB server** (provisional: `https://dlob.velocity.exchange`) — Orderbook snapshots and streaming. See [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
+- **Swift server** (provisional: `https://swift.velocity.exchange`) — Signed message orders for fast execution. See [Swift](/developers/velocity-sdk/swift).

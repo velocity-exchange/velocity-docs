@@ -116,6 +116,11 @@ const nextConfig = {
         destination: "/protocol/about-v3/:path*",
         permanent: false,
       },
+      {
+        source: "/developers/drift-sdk/:path*",
+        destination: "/developers/velocity-sdk/:path*",
+        permanent: false,
+      },
       ...redirects.map(([source, destination]) => ({
         source,
         destination,

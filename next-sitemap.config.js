@@ -1,5 +1,6 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: 'https://docs.drift.trade',
+  // TODO(open-question): provisional hosted URL, confirm final docs domain.
+  siteUrl: 'https://docs.velocity.exchange',
   generateRobotsTxt: true,
 }

@@ -1,106 +1,146 @@
 # Account Model
 
-The Drift protocol is a Solana program (smart contract) that manages user accounts, positions, orders, and markets. Understanding the onchain data model helps you work effectively with any Drift SDK (TypeScript, Python, Rust) and understand how state updates propagate.
+Velocity is a Solana program (smart contract) that manages user accounts, positions, orders, and markets. Understanding the onchain data model helps you work effectively with the [Velocity SDK](/developers/velocity-sdk/setup) (TypeScript) and understand how state updates propagate.
+
+<Callout type="info">
+Velocity has no Python SDK. A Rust client (`velocity-rs`) exists in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/rust/velocity-rs) but is source-only and not published to crates.io — the interfaces below are TypeScript.
+</Callout>
 
 ## Core accounts
 
-Drift uses several account types, each serving a specific purpose:
+Velocity uses several account types, each serving a specific purpose:
 
 ### State account
 
 **Single global account** holding protocol-wide configuration:
 
-- **Oracle guards** - Stale price thresholds and validity checks
-- **Fee structures** - Separate fee tiers for perpetual and spot markets
-- **Sequencer settings** - Transaction ordering parameters
-- **Admin controls** - Protocol admin addresses and permissions
-- **Emergency flags** - Circuit breakers and pause mechanisms
+- **Oracle guards** - Stale price thresholds and validity checks (`oracleGuardRails`)
+- **Fee structures** - Separate default fee tiers for perpetual and spot markets
+- **Admin controls** - A tiered **cold / warm / hot** admin key model (see below), plus protocol fee treasuries
+- **Solvency status** - Bitflag gating bankruptcy/deficit-resolution instructions independently of the withdraw-pause flags
+- **Feature flags** - `exchangeStatus`, `featureBitFlags`, `lpPoolFeatureBitFlags`
 
-*The State account is a singleton, there's only one per deployment. It's read by almost every instruction to apply protocol-level rules.*
+*The State account is a singleton — there's only one per deployment. It's read by almost every instruction to apply protocol-level rules.*
+
+<Callout type="info">
+Velocity replaced Drift's single `State.admin` with a **tiered key model**: `coldAdmin`, `warmAdmin`, `pauseAdmin`, and a set of narrowly-scoped `hot*` keys (`hotAmmCrank`, `hotLpCache`, `hotFeatureFlag`, `hotFeeWithdraw`, `hotMmOracleCrank`, etc.) — each authorizing only the specific instructions it needs, rather than one address with full control. Code that reads `state.admin` directly no longer compiles against the current IDL.
+</Callout>
 
 <details>
-<summary>View TypeScript interface</summary>
+<summary>View TypeScript interface (abridged)</summary>
 
 ```typescript
-interface State {
-  admin: PublicKey;
+interface StateAccount {
+  coldAdmin: PublicKey;
+  warmAdmin: PublicKey;
+  pauseAdmin: PublicKey;
+  hotFeeWithdraw: PublicKey;
+  // ...additional narrowly-scoped hot* keys
+  protocolFeeRecipientPerp: PublicKey;
+  protocolFeeRecipientSpot: PublicKey;
+  exchangeStatus: number;              // bitmask, see ExchangeStatus
   whitelistMint: PublicKey;
   discountMint: PublicKey;
-  signer: PublicKey;
-  srmVault: PublicKey;
-  perpFeeStructure: FeeStructure;
-  spotFeeStructure: FeeStructure;
   oracleGuardRails: OracleGuardRails;
   numberOfAuthorities: BN;
   numberOfSubAccounts: BN;
-  lpCooldownTime: BN;
-  liquidationMarginBufferRatio: number;
-  settlementDuration: number;
   numberOfMarkets: number;
   numberOfSpotMarkets: number;
+  minPerpAuctionDuration: number;      // slots
+  defaultMarketOrderTimeInForce: number; // seconds
+  defaultSpotAuctionDuration: number;  // slots
+  liquidationMarginBufferRatio: number; // MARGIN_PRECISION (1e4)
+  settlementDuration: number;          // seconds
+  maxNumberOfSubAccounts: number;
+  signer: PublicKey;
   signerNonce: number;
-  minPerpAuctionDuration: number;
-  defaultMarketOrderTimeInForce: number;
-  defaultSpotAuctionDuration: number;
-  exchangeStatus: number;
-  liquidationDuration: number;
-  initialPctToLiquidate: number;
+  perpFeeStructure: FeeStructure;
+  spotFeeStructure: FeeStructure;
+  initialPctToLiquidate: number;       // LIQUIDATION_PCT_PRECISION (1e4)
+  liquidationDuration: number;         // seconds
+  maxInitializeUserFee: number;
+  featureBitFlags: number;             // bitmask, see FeatureBitFlags
+  lpPoolFeatureBitFlags: number;
+  solvencyStatus: number;              // bitmask, see SolvencyStatus
 }
 ```
+
+See `StateAccount` in [`packages/sdk/src/types.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/sdk/src/types.ts) for the full field list.
 
 </details>
 
 ### Market accounts
 
-
 **PerpMarketAccount**
-*One per perp market*
+*One per perp market — 1304 bytes on-chain*
 
 Manages perpetual futures markets with:
 
-- **AMM state** - Base/quote reserves, sqrt_k, and liquidity parameters
-- **Funding rates** - Tracks funding rate history and calculations
-- **Oracle integration** - Price feeds from Pyth, Switchboard, etc.
-- **Fee configuration** - Market-specific fee structures
-- **Risk parameters** - Margin ratios, open interest limits, contract tier
-- **Market status** - Active, paused, or other operational states
+- **AMM state** (`amm`) - Base/quote reserves and liquidity parameters for the constant-product vAMM
+- **Oracle fields** - `oracle`, `oracleSource` live at the **top level** of `PerpMarketAccount` (moved off `amm.*` when the AMM was decoupled)
+- **Market stats** (`marketStats`) - mark/oracle TWAPs, volume, and MM-oracle snapshot, shared across makers
+- **Hedge config** (`hedgeConfig`) - this market's relationship to its hedging [VLP pool](/developers/vault-managers) (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`) — replaces Drift's flat `lp*` LP-share fields
+- **Fee ledger** (`feeLedger`) - consolidated fee-split accounting (pending protocol/IF/AMM carveouts) from the fee redesign
+- **Risk parameters** - `marginRatioInitial` / `marginRatioMaintenance` (MARGIN_PRECISION, 1e4), `imfFactor`, `contractTier`
+- **Market status** - `status: MarketStatus` (see the discriminant note below)
+
+<Callout type="warning">
+Velocity has no vAMM LP shares — `PerpPosition.lpShares`, `lastQuoteAssetAmountPerLp`, and `perLpBase` from Drift do not exist, and the five flat LP-pool fields on `PerpMarketAccount` (`lpPoolId`, `lpStatus`, `lpPausedOperations`, `lpFeeTransferScalar`, `lpExchangeFeeExcluscionScalar`) were replaced by the single `hedgeConfig` object above. High leverage mode, protected maker mode, and fuel tracking were also removed — there is no `PerpMarket.highLeverageMarginRatioInitial`, `protectedMaker*`, or `fuelBoost*`.
+</Callout>
 
 <details>
-<summary>View TypeScript interface</summary>
+<summary>View TypeScript interface (abridged)</summary>
 
 ```typescript
 interface PerpMarketAccount {
-  pubkey: PublicKey;
+  status: MarketStatus;
+  contractType: ContractType;
+  contractTier: ContractTier;
   marketIndex: number;
-  amm: AMM;
-  pnlPool: PoolBalance;
+  pubkey: PublicKey;
   name: number[];
-  insuranceClaim: InsuranceClaim;
-  unrealizedPnlMaxImbalance: BN;
-  expiryTs: BN;
-  expiryPrice: BN;
-  nextFillRecordId: BN;
-  nextFundingRateRecordId: BN;
-  nextCurveRecordId: BN;
+  amm: AMM;
+  marketStats: MarketStats;
+  marginRatioInitial: number;        // MARGIN_PRECISION (1e4)
+  marginRatioMaintenance: number;    // MARGIN_PRECISION (1e4)
+  pnlPool: PoolBalance;
+  protocolFeePool: PoolBalance;
+  feeLedger: FeeLedger;
+  liquidatorFee: number;             // LIQUIDATOR_FEE_PRECISION (1e6)
+  ifLiquidationFee: number;
+  protocolLiquidationFee: number;
+  feePoolBufferTarget: BN;           // QUOTE_PRECISION (1e6)
   imfFactor: number;
   unrealizedPnlImfFactor: number;
-  liquidatorFee: number;
-  ifLiquidationFee: number;
-  marginRatioInitial: number;
-  marginRatioMaintenance: number;
+  unrealizedPnlMaxImbalance: BN;
   unrealizedPnlInitialAssetWeight: number;
   unrealizedPnlMaintenanceAssetWeight: number;
-  numberOfUsersWithBase: number;
-  numberOfUsers: number;
-  status: MarketStatus;
-  contractTier: ContractTier;
-  contractType: ContractType;
-  pausedOperations: number;
+  insuranceClaim: { /* revenue withdraw caps and used insurance */ };
+  quoteSpotMarketIndex: number;
+  feeAdjustment: number;
+  pausedOperations: number;          // bitmask, see PerpOperation
+  poolId: number;
+  hedgeConfig: {
+    poolId: number;
+    status: number;
+    pausedOperations: number;
+    exchangeFeeExclusionScalar: number;
+    feeTransferScalar: number;
+  };
+  oracle: PublicKey;
+  oracleSource: OracleSource;
+  baseAssetAmountLong: BN;           // BASE_PRECISION (1e9)
+  baseAssetAmountShort: BN;
+  fundingClampThreshold: number;     // BPS_PRECISION (1e4)
+  fundingRampSlope: number;          // PERCENTAGE_PRECISION (1e6)
+  orderStepSize: BN;
+  orderTickSize: BN;
 }
 ```
 
-</details>
+The current on-chain size is exactly **1304 bytes** (up from Drift's 1216, growing across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign). Any custom (non-IDL) decoder must be rebuilt against [`sdk/src/idl/velocity.json`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/sdk/src/idl/velocity.json) — see `PerpMarketAccount` in `types.ts` for the full field list.
 
+</details>
 
 **SpotMarketAccount**
 *One per spot market*
@@ -108,87 +148,81 @@ interface PerpMarketAccount {
 Manages spot markets and lending pools with:
 
 - **Interest rates** - Dynamic deposit/borrow rates based on utilization
-- **Utilization tracking** - Current and optimal utilization targets
-- **Insurance fund** - Insurance fund stake and coverage
-- **Oracle integration** - Price feeds for the spot asset
-- **Deposit/borrow limits** - Maximum deposit amounts and position sizes
-- **Asset weights** - Collateral weights for risk calculations
+- **Insurance fund** (`insuranceFund`) - Now **100% staker-owned**: `totalFactor`/`userFactor` were replaced by a single `ifFeeFactor` (the carveout of deposit-interest gains routed to stakers); there is no protocol-owned IF share anymore
+- **Protocol fee pool** (`protocolFeePool`) - Withdrawable protocol fee claim in this market's token
+- **Oracle integration** - Price feeds for the spot asset (Pyth, Pyth Lazer; legacy pull oracles and Switchboard are deprecated, see below)
+- **Asset/liability weights** - Collateral weights for risk calculations
+
+<Callout type="warning">
+Velocity disabled the **spot DLOB** — `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` no longer exist (calls fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral/borrow-lend and swaps, just not order-book trading. External fulfillment (Serum/Phoenix/OpenBook v2) is also removed entirely.
+</Callout>
 
 <details>
-<summary>View TypeScript interface</summary>
+<summary>View TypeScript interface (abridged)</summary>
 
 ```typescript
 interface SpotMarketAccount {
+  status: MarketStatus;
+  assetTier: AssetTier;
+  name: number[];
+  marketIndex: number;
   pubkey: PublicKey;
-  oracle: PublicKey;
   mint: PublicKey;
   vault: PublicKey;
-  name: number[];
+  oracle: PublicKey;
+  oracleSource: OracleSource;
   historicalOracleData: HistoricalOracleData;
   historicalIndexData: HistoricalIndexData;
+  insuranceFund: {
+    vault: PublicKey;
+    totalShares: BN;
+    userShares: BN;
+    ifFeeFactor: number;            // IF_FACTOR_PRECISION (1e6)
+  };
   revenuePool: PoolBalance;
-  spotFeePool: PoolBalance;
-  insuranceFund: InsuranceFund;
-  totalSpotFee: BN;
-  depositBalance: BN;
-  borrowBalance: BN;
-  cumulativeDepositInterest: BN;
-  cumulativeBorrowInterest: BN;
-  totalSocialLoss: BN;
-  totalQuoteSocialLoss: BN;
-  withdrawGuardThreshold: BN;
-  maxTokenDeposits: BN;
-  depositTokenTwap: BN;
-  borrowTokenTwap: BN;
-  utilizationTwap: BN;
-  lastInterestTs: BN;
-  lastTwapTs: BN;
-  expiryTs: BN;
-  orderStepSize: BN;
-  orderTickSize: BN;
-  minOrderSize: BN;
-  maxPositionSize: BN;
-  nextFillRecordId: BN;
-  nextDepositRecordId: BN;
-  initialAssetWeight: number;
-  maintenanceAssetWeight: number;
-  initialLiabilityWeight: number;
-  maintenanceLiabilityWeight: number;
-  imfFactor: number;
-  liquidatorFee: number;
+  protocolFeePool: PoolBalance;
   ifLiquidationFee: number;
+  protocolLiquidationFee: number;
+  protocolFeeFactor: number;
+  decimals: number;
   optimalUtilization: number;
   optimalBorrowRate: number;
   maxBorrowRate: number;
-  decimals: number;
-  marketIndex: number;
-  ordersEnabled: boolean;
-  oracleSource: OracleSource;
-  status: MarketStatus;
-  assetTier: AssetTier;
-  pausedOperations: number;
-  ifPausedOperations: number;
-  feeAdjustment: number;
+  cumulativeDepositInterest: BN;
+  cumulativeBorrowInterest: BN;
+  depositBalance: BN;               // SPOT_BALANCE_PRECISION (1e9) scaled balance
+  borrowBalance: BN;
+  maxTokenDeposits: BN;
+  initialAssetWeight: number;       // SPOT_WEIGHT_PRECISION (1e4)
+  maintenanceAssetWeight: number;
+  initialLiabilityWeight: number;
+  maintenanceLiabilityWeight: number;
+  liquidatorFee: number;
+  imfFactor: number;
+  withdrawGuardThreshold: BN;
 }
 ```
 
 </details>
 
-
-Markets are identified by numeric indices (market 0, market 1, etc.). The SDK caches market accounts for fast lookups.
+Markets are identified by numeric indices (market 0, market 1, etc). The SDK caches market accounts for fast lookups.
 
 ### User accounts
 
 **UserAccount**
 *Holds all trading state for a specific subaccount*
 
-Each UserAccount stores:
+Each `UserAccount` stores:
 
 - **Perp positions** - Market index, base amount, quote entry, last funding index
 - **Spot positions** - Deposits and borrows per market
-- **Open orders** - Up to 32 active orders per user
-- **Margin settings** - Leverage configuration and margin trading enabled flag
-- **Permissions** - Delegate addresses and access controls
+- **Open orders** - Up to 32 active orders per user, stored inline
+- **Special/status bitmasks** - `status` (`UserStatus`), `specialUserStatus` (`SpecialUserStatus`, e.g. `VammHedger`)
+- **Permissions** - Delegate address and access controls
+
+<Callout type="warning">
+Velocity removed high leverage mode: there is no `marginMode` field or `MarginMode` enum. Leverage is governed entirely by each market's `marginRatioInitial`/`marginRatioMaintenance` and the account's `maxMarginRatio` override.
+</Callout>
 
 <details>
 <summary>View TypeScript interface</summary>
@@ -198,83 +232,92 @@ interface UserAccount {
   authority: PublicKey;
   delegate: PublicKey;
   name: number[];
+  subAccountId: number;
   spotPositions: SpotPosition[];
   perpPositions: PerpPosition[];
   orders: Order[];
-  lastAddPerpLpSharesTs: BN;
+  status: number;                    // bitmask, see UserStatus
+  nextLiquidationId: number;
+  nextOrderId: number;
+  maxMarginRatio: number;            // MARGIN_PRECISION (1e4); 0 = use market defaults
+  settledPerpPnl: BN;                // QUOTE_PRECISION (1e6)
   totalDeposits: BN;
   totalWithdraws: BN;
   totalSocialLoss: BN;
-  settledPerpPnl: BN;
-  cumulativeSpotFees: BN;
   cumulativePerpFunding: BN;
+  cumulativeSpotFees: BN;
   liquidationMarginFreed: BN;
   lastActiveSlot: BN;
-  subAccountId: number;
-  status: number;
   isMarginTradingEnabled: boolean;
   idle: boolean;
   openOrders: number;
   hasOpenOrder: boolean;
   openAuctions: number;
   hasOpenAuction: boolean;
-  padding: number[];
+  poolId: number;
+  specialUserStatus: number;         // bitmask, see SpecialUserStatus
 }
 ```
 
 </details>
 
-
 **UserStatsAccount**
-*Tracks aggregated stats across all subaccounts*
+*Tracks aggregated stats across all subaccounts under one wallet*
 
 Maintains lifetime statistics:
 
-- **Fee tracking** - Total fees paid across all markets
-- **Volume metrics** - Maker, taker, and filler volume (30-day rolling)
-- **Referral data** - Referrer information and referral status
-- **Fuel points** - Maker incentive points for fee discounts
+- **Fee tracking** - `fees.totalFeePaid` / `totalFeeRebate` / `totalTokenDiscount` / `totalRefereeDiscount`
+- **Volume metrics** - `makerVolume30D` / `takerVolume30D` / `fillerVolume30D` (rolling 30-day windows)
+- **Referral data** - `referrer`, `referrerStatus` (bitmask, `ReferrerStatus`, now including `BuilderReferral`)
+- **Delegate permissions** - `delegatePermissions` (gates `transferDepositByDelegate`)
+
+<Callout type="warning">
+Fuel (points/incentives) is gone entirely — there is no `fuel` field. The gov-token (DRIFT) stake fee discount was also removed: `ifStakedGovTokenAmount` was replaced by padding and no longer affects fee tiers, which are now determined purely by 30-day volume.
+</Callout>
 
 <details>
 <summary>View TypeScript interface</summary>
 
 ```typescript
 interface UserStatsAccount {
-  authority: PublicKey;
-  referrer: PublicKey;
-  fees: UserFees;
-  nextEpochTs: BN;
-  makerVolume30d: BN;
-  takerVolume30d: BN;
-  fillerVolume30d: BN;
-  lastMakerVolume30dTs: BN;
-  lastTakerVolume30dTs: BN;
-  lastFillerVolume30dTs: BN;
-  ifStakedQuoteAssetAmount: BN;
   numberOfSubAccounts: number;
   numberOfSubAccountsCreated: number;
-  isReferrer: boolean;
-  disableUpdatePerpBidAskTwap: boolean;
-  fuel: Fuel;
+  makerVolume30D: BN;                // QUOTE_PRECISION (1e6)
+  takerVolume30D: BN;
+  fillerVolume30D: BN;
+  lastMakerVolume30DTs: BN;
+  lastTakerVolume30DTs: BN;
+  lastFillerVolume30DTs: BN;
+  fees: {
+    totalFeePaid: BN;
+    totalFeeRebate: BN;
+    totalTokenDiscount: BN;
+    totalRefereeDiscount: BN;
+  };
+  referrer: PublicKey;
+  referrerStatus: number;            // bitmask, see ReferrerStatus
+  disableUpdatePerpBidAskTwap: number;
+  pausedOperations: number;          // bitmask, see UserStatsPausedOperation
+  authority: PublicKey;
+  delegatePermissions: number;
 }
 ```
 
 </details>
 
-
-Users are PDAs derived from: `[authority, subaccount_id]`. Each wallet can have multiple subaccounts (0, 1, 2...) sharing cross-margin.
+Users are PDAs derived from seeds `["user", authority, subAccountId as u16 LE]`. Each wallet can have multiple subaccounts (0, 1, 2, ...) sharing cross-margin.
 
 ### Order accounting
 
-Orders are stored directly in the **UserAccount**, not as separate accounts. This design reduces transaction overhead and allows up to 32 orders per user.
+Orders are stored directly in the **UserAccount**, not as separate accounts. This reduces transaction overhead and allows up to 32 orders per user.
 
 Each order contains:
 
 - **Market identification** - Market index and type (perp/spot)
 - **Order parameters** - Type (limit, market, oracle, trigger), direction, base amount, price
-- **Order IDs** - System order ID and user-defined order ID
-- **Execution flags** - Post-only, reduce-only, immediate-or-cancel (IOC)
-- **Auction settings** - JIT auction parameters (start/end slot, duration)
+- **Order IDs** - System order ID (`orderId`) and user-defined order ID (`userOrderId`)
+- **Flags** - `bitFlags` (`OrderBitFlag`) — post-only, reduce-only, and now also `HasBuilder` (order attaches a builder fee) and `IsIsolatedPosition` (order trades against an isolated-margin position)
+- **Auction settings** - JIT auction parameters (`auctionStartPrice`, `auctionEndPrice`, `auctionDuration`)
 
 *When an order fills, it's marked as filled but not immediately removed, allowing order history tracking within the account.*
 
@@ -283,47 +326,52 @@ Each order contains:
 
 ```typescript
 interface Order {
-  slot: BN;
-  price: BN;
-  baseAssetAmount: BN;
-  baseAssetAmountFilled: BN;
-  quoteAssetAmountFilled: BN;
-  triggerPrice: BN;
-  auctionStartPrice: BN;
-  auctionEndPrice: BN;
-  maxTs: BN;
-  oraclePriceOffset: number;
-  orderId: number;
-  marketIndex: number;
   status: OrderStatus;
   orderType: OrderType;
   marketType: MarketType;
+  slot: BN;
+  orderId: number;
   userOrderId: number;
-  existingPositionDirection: PositionDirection;
+  marketIndex: number;
+  price: BN;                        // PRICE_PRECISION (1e6)
+  baseAssetAmount: BN;               // BASE_PRECISION (1e9) for perp
+  baseAssetAmountFilled: BN;
+  quoteAssetAmountFilled: BN;        // QUOTE_PRECISION (1e6)
   direction: PositionDirection;
   reduceOnly: boolean;
+  triggerPrice: BN;
+  triggerCondition: OrderTriggerCondition;
+  existingPositionDirection: PositionDirection;
   postOnly: boolean;
   immediateOrCancel: boolean;
-  triggerCondition: OrderTriggerCondition;
+  oraclePriceOffset: BN;             // now BN (i64), was `number` on Drift
   auctionDuration: number;
-  padding: number[];
+  auctionStartPrice: BN;
+  auctionEndPrice: BN;
+  maxTs: BN;
+  bitFlags: number;                  // bitmask, see OrderBitFlag
+  postedSlotTail: number;
 }
 ```
+
+`Order.quoteAssetAmount` from Drift is gone — it never existed on-chain (the decoder always populated it with `0`); read filled quote from `quoteAssetAmountFilled`.
 
 </details>
 
 ## PDAs (Program Derived Addresses)
 
-Drift extensively uses PDAs for deterministic address generation:
+Velocity extensively uses PDAs for deterministic address generation. Seed strings are unchanged from Drift, but since the **program ID is new**, every derived address is different from Drift's:
 
 ```
-User PDA: [b"user", authority.key(), subaccount_id as bytes]
-UserStats PDA: [b"user_stats", authority.key()]
-PerpMarket PDA: [b"perp_market", market_index as bytes]
-SpotMarket PDA: [b"spot_market", market_index as bytes]
+State PDA:      ["velocity_state"]
+User PDA:       ["user", authority.key(), subAccountId as u16 LE]
+UserStats PDA:  ["user_stats", authority.key()]
+PerpMarket PDA: ["perp_market", marketIndex as u16 LE]
+SpotMarket PDA: ["spot_market", marketIndex as u16 LE]
+SpotMarketVault PDA: ["spot_market_vault", marketIndex as u16 LE]
 ```
 
-Each SDK provides helpers to derive these addresses without onchain calls (e.g. `getUserAccountPublicKey()` in TypeScript, `get_user_account_public_key()` in Python).
+The SDK provides helpers to derive these addresses without onchain calls, e.g. `getUserAccountPublicKey()`, `getPerpMarketPublicKey()`, `getSpotMarketPublicKey()` from `@velocity-exchange/sdk`.
 
 ## Account relationships
 
@@ -331,29 +379,43 @@ Each SDK provides helpers to derive these addresses without onchain calls (e.g. 
 State (1)
   ├── PerpMarket[0..N]
   ├── SpotMarket[0..M]
-  └── Insurance Fund
+  └── Insurance Fund (100% staker-owned)
 
 Wallet
   ├── UserStats (1 per wallet)
-  └── UserAccount[0..N] (subaccounts)
-        ├── PerpPosition[0..N]
-        ├── SpotPosition[0..M]
+  └── User[0..N] (subaccounts)
+        ├── PerpPosition[0..8]
+        ├── SpotPosition[0..8]
         └── Order[0..32]
 ```
 
 ## How instructions modify state
 
-When you call an instruction (e.g., `placePerpOrder`), the program:
+When you call an instruction (e.g. `placePerpOrder`), the program:
 1. Loads accounts passed in the instruction
 2. Validates account ownership and PDAs
-3. Loads oracle price data
-4. Applies protocol rules from State account
-5. Updates UserAccount (adds order, updates positions, etc.)
-6. Updates market state if needed (AMM, funding, etc.)
+3. Loads and validates oracle price data
+4. Applies protocol rules from the `State` account
+5. Updates `UserAccount` (adds order, updates positions, etc)
+6. Updates market state if needed (AMM, funding, etc)
 7. Emits event logs for offchain indexing
 
-The SDK handles account passing automatically ,  you rarely need to manually construct the account list.
+The SDK handles account passing automatically — you rarely need to manually construct the account list.
 
 ## Remaining accounts pattern
 
-Many instructions use "remaining accounts" to dynamically pass oracle, market, and user accounts. This lets a single instruction handle variable market sets without requiring specific account slots. Each SDK provides a method to build this list based on which markets your positions touch (e.g. `getRemainingAccounts()` in TypeScript).
+Many instructions use "remaining accounts" to dynamically pass oracle, market, and user accounts. This lets a single instruction handle variable market sets without requiring fixed account slots. The SDK builds this list for you (`VelocityClient` does it internally, or use `VelocityCore.remainingAccounts.getRemainingAccounts()` for the stateless/subscription-free path — see [Reading Data](/developers/ecosystem-builders/reading-data)).
+
+## MarketStatus discriminants
+
+`MarketStatus` is stored directly in `PerpMarket.status` / `SpotMarket.status`. Velocity removed several deprecated Drift variants, which **shifted the surviving discriminants**:
+
+| Variant | Drift | Velocity |
+|---|---|---|
+| `Initialized` | 0 | 0 |
+| `Active` | 1 | 1 |
+| `ReduceOnly` | 6 | 2 |
+| `Settlement` | 7 | 3 |
+| `Delisted` | 8 | 4 |
+
+Any custom (non-IDL) decoder built against Drift's discriminants will silently misread these states — always decode against `sdk/src/idl/velocity.json`, not a hardcoded enum.

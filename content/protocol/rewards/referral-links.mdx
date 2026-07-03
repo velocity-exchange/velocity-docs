@@ -1,27 +1,28 @@
 # Referral Links
 
-Create your own referral link today, and boost your earnings when you refer new users to trade on Drift! For every new user, you will earn a portion of their trading fees!
+Create your own referral link today, and boost your earnings when you refer new users to trade on Velocity! For every new user, you will earn a portion of their trading fees!
 
-- Referrers earn **35%** of the fees from users they refer.
-- Referred users receive a **5%** discount on their trading fees.
+- Referrers earn **15%** of the taker fee paid by users they refer (the default `referrerRewardNumerator` on the perp fee tiers).
+- Referred users receive a **5%** discount on their taker fees (the default `refereeFeeNumerator`).
+
+These are the protocol's default fee-tier values and can be changed by governance; check the current `FeeTier` on the fee-structure account for the live numbers.
 
 This document will walk you through setting up your referral link to begin earning today.
 
 ## A few notes:
 
-- There is **no max cap** to the amount of receivable rewards!
 - Rewards for the referrer accrue only from taker volume.
-- Referring users that reach **tier 3 and above** (>10m monthly volume) will not generate any referrer rewards or referree discount. 
+- Referral rewards now flow through a per-user `RevenueShareEscrow` account rather than the old epoch-capped `UserStats` path. Fillers must attach a referred taker's escrow account for a fill to succeed — see the [builder codes](/developers/builder-codes) docs for the mechanics if you operate a filler/keeper.
 
 <Callout type="warning">
-The referral link applies solely to *new* Drift accounts created through your link. For it to apply, users must have clicked the link, connected their wallet, and made a deposit within the same session. 
+The referral link applies solely to *new* Velocity accounts created through your link. For it to apply, users must have clicked the link, connected their wallet, and made a deposit within the same session.
 </Callout>
 
 ## Setup
 
 <Steps>
 ### Navigate to referrals
-First, in order to create your own ref link you must click on the “Overview” tab inside the Drift app. Once there you will want to scroll down to where it says “Referrals”.
+First, in order to create your own ref link you must click on the “Overview” tab inside the Velocity app. Once there you will want to scroll down to where it says “Referrals”.
 
 <img src="/assets/ref-1.png" alt="" width="300" height="auto"></img>
 

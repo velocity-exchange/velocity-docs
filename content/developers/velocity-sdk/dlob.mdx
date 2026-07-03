@@ -2,14 +2,18 @@
 
 ## What is the DLOB?
 
-The **Decentralized Limit Order Book (DLOB)** is Drift's on-chain representation of all resting limit orders across all users. Unlike a traditional centralized order book maintained by an exchange, the DLOB is constructed locally by reading on-chain user accounts and aggregating their open limit orders into a price-ordered book.
+The **Decentralized Limit Order Book (DLOB)** is Velocity's on-chain representation of all resting limit orders across all users. Unlike a traditional centralized order book maintained by an exchange, the DLOB is constructed locally by reading on-chain user accounts and aggregating their open limit orders into a price-ordered book.
 
-When a new order arrives, keepers and market makers query the DLOB to find matching resting orders. Drift's matching engine then executes fills between the incoming taker and the resting makers on the DLOB, or routes to the AMM as a fallback.
+When a new order arrives, keepers and market makers query the DLOB to find matching resting orders. Velocity's matching engine then executes fills between the incoming taker and the resting makers on the DLOB, or routes to the AMM as a fallback.
+
+<Callout type="warning">
+Velocity removed **spot DLOB trading** — `place_spot_order`, `place_and_take_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist on-chain (calls now fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral/borrow-lend and for [swaps](/developers/velocity-sdk/swaps), but they can no longer be traded on an order book. In practice the DLOB only ever contains `MarketType.PERP` orders — the APIs below still accept a `marketType` parameter for API compatibility, but pass `MarketType.SPOT` and you'll only ever see an empty book.
+</Callout>
 
 **When you'd use the DLOB:**
 - **Market makers**: quote against the current best bid/ask and respond to order flow
-- **Keeper/filler bots**: identify and fill matchable orders for fee rewards
-- **Orderbook UIs**: display a live aggregated L2 or L3 view of the market
+- **Keeper/filler bots**: identify and fill matchable perp orders for fee rewards
+- **Orderbook UIs**: display a live aggregated L2 or L3 view of a perp market
 
 ## SDK Usage
 
@@ -22,10 +26,10 @@ Subscribes to all open user orders in real-time via WebSocket or polling. This i
 <SDKDoc>
   <TypeScript name="OrderSubscriber" type="class">
 ```js
-import { OrderSubscriber } from "@drift-labs/sdk";
+import { OrderSubscriber } from "@velocity-exchange/sdk";
 
 const orderSubscriber = new OrderSubscriber({
-  driftClient,
+  velocityClient,
   subscriptionConfig: { type: "websocket" },
   fastDecode: true,
   decodeData: true,
@@ -42,10 +46,10 @@ Builds and continuously maintains an aggregated orderbook from the order stream.
 <SDKDoc>
   <TypeScript name="DLOBSubscriber" type="class">
 ```js
-import { DLOBSubscriber } from "@drift-labs/sdk";
+import { DLOBSubscriber } from "@velocity-exchange/sdk";
 
 const dlobSubscriber = new DLOBSubscriber({
-  driftClient,
+  velocityClient,
   dlobSource: orderSubscriber,   // feeds from your OrderSubscriber
   slotSource: slotSubscriber,    // needed for order expiry/timing
   updateFrequency: 1000,         // rebuild the book every 1000ms
@@ -62,7 +66,7 @@ Tracks the current Solana slot. Required for timing-sensitive operations like JI
 <SDKDoc>
   <TypeScript name="SlotSubscriber" type="class">
 ```js
-import { SlotSubscriber } from "@drift-labs/sdk";
+import { SlotSubscriber } from "@velocity-exchange/sdk";
 
 const slotSubscriber = new SlotSubscriber(connection);
 await slotSubscriber.subscribe();
@@ -79,7 +83,7 @@ The core data structure with bid/ask sides and query methods. Under normal usage
 <SDKDoc>
   <TypeScript name="DLOB" type="class">
 ```js
-import { DLOB } from "@drift-labs/sdk";
+import { DLOB } from "@velocity-exchange/sdk";
 
 // Access via DLOBSubscriber (recommended)
 const dlob = dlobSubscriber.getDLOB();
@@ -94,7 +98,7 @@ Efficiently tracks and caches the accounts of many users simultaneously. Used by
 <SDKDoc>
   <TypeScript name="UserMap" type="class">
 ```js
-import { UserMap } from "@drift-labs/sdk";
+import { UserMap } from "@velocity-exchange/sdk";
 ```
   </TypeScript>
 </SDKDoc>
@@ -106,7 +110,7 @@ This is the full setup sequence to get a live, continuously-updated orderbook ru
 <SDKDoc>
   <TypeScript name="DLOB setup" type="example">
 ```js
-import { SlotSubscriber, OrderSubscriber, DLOBSubscriber } from "@drift-labs/sdk";
+import { SlotSubscriber, OrderSubscriber, DLOBSubscriber } from "@velocity-exchange/sdk";
 
 // 1. Track the current slot (needed for order expiry)
 const slotSubscriber = new SlotSubscriber(connection);
@@ -114,7 +118,7 @@ await slotSubscriber.subscribe();
 
 // 2. Subscribe to all open orders across all users
 const orderSubscriber = new OrderSubscriber({
-  driftClient,
+  velocityClient,
   subscriptionConfig: { type: "websocket" },
   fastDecode: true,
   decodeData: true,
@@ -123,7 +127,7 @@ await orderSubscriber.subscribe();
 
 // 3. Build and maintain the DLOB from the order stream
 const dlobSubscriber = new DLOBSubscriber({
-  driftClient,
+  velocityClient,
   dlobSource: orderSubscriber,
   slotSource: slotSubscriber,
   updateFrequency: 1000,
@@ -140,12 +144,12 @@ Once subscribed, query the aggregated L2 orderbook (price levels with cumulative
 <SDKDoc>
   <TypeScript name="L2 orderbook" type="example">
 ```js
-import { MarketType, PRICE_PRECISION, BASE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { MarketType, PRICE_PRECISION, BASE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 const dlob = dlobSubscriber.getDLOB();
 const marketIndex = 0; // SOL-PERP
 // For perp markets, use getMMOracleDataForPerpMarket (returns MMOraclePriceData)
-const oraclePriceData = driftClient.getMMOracleDataForPerpMarket(marketIndex);
+const oraclePriceData = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 const slot = slotSubscriber.getSlot();
 
 const l2 = dlob.getL2({
@@ -172,11 +176,11 @@ For quick access to the best bid and ask prices without fetching the full orderb
 <SDKDoc>
   <TypeScript name="Best bid/ask" type="example">
 ```js
-import { MarketType, PRICE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { MarketType, PRICE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 const dlob = dlobSubscriber.getDLOB();
 const marketIndex = 0;
-const oraclePriceData = driftClient.getMMOracleDataForPerpMarket(marketIndex);
+const oraclePriceData = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 const slot = slotSubscriber.getSlot();
 
 // Returns BN | undefined (undefined if no orders on that side)

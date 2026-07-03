@@ -3,10 +3,14 @@ import "swagger-ui-react/swagger-ui.css"
 
 # Data API Playground
 
-At a high level, the Drift Data API is the backbone for reading historical and real-time protocol data so that apps, analytics, and integrations don’t need to index the chain themselves. The Drift Data API follows the OpenAPI spec.
+At a high level, the Velocity Data API is the backbone for reading historical and real-time protocol data so that apps, analytics, and integrations don't need to index the chain themselves. It follows the OpenAPI spec.
 
-<Callout type="info">
-All endpoints are relative to `https://data.api.drift.trade`.
+<Callout type="warning">
+**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized. This page uses `data.velocity.exchange` as a placeholder pattern (mirroring Drift's `data.api.drift.trade`) — confirm the real host and OpenAPI spec URL before shipping against it.
 </Callout>
 
-<SwaggerUI url="https://data.api.drift.trade/playground/json" />
+<Callout type="info">
+All endpoints are relative to `https://data.velocity.exchange`.
+</Callout>
+
+<SwaggerUI url="https://data.velocity.exchange/playground/json" />

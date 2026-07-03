@@ -1,6 +1,6 @@
 # DLOB MM
 
-DLOB market making on Drift means placing **resting** two sided quotes on the [decentralized orderbook](/protocol/about-v3/decentralized-orderbook) (orderbook / DLOB) and earning [maker rebates](/protocol/market-makers/maker-fee-rebate) when takers trade against you. You can also participate in JIT when relevant. For protocol background, see [Market Maker Participation](/protocol/market-makers/market-maker-participation) and [JIT FAQ](/protocol/about-v3/jit-faq).
+DLOB market making on Velocity means placing **resting** two sided quotes on the decentralized orderbook (orderbook / DLOB) and earning maker rebates when takers trade against you. You can also participate in JIT when relevant.
 
 ### Maker vs taker
 
@@ -9,13 +9,13 @@ DLOB market making on Drift means placing **resting** two sided quotes on the [d
 
 ### Always use post-only for maker quotes
 
-Post-only flags ensure your order is never executed as a taker (which would cost fees instead of earning rebates). Drift offers three post-only modes:
+Post-only flags ensure your order is never executed as a taker (which would cost fees instead of earning rebates). Velocity offers three post-only modes:
 
 | Flag | Behavior | Use case |
 |---|---|---|
-| `MUST_POST_ONLY` | **Rejects** the order if it would cross the spread and fill as taker | Default for MM, guarantees maker-only execution |
-| `TRY_POST_ONLY` | **Amends** the price to the best non crossing price if it would cross | Useful when you want the order placed regardless, even at a slightly different price |
-| `SLIDE` | Similar to TRY_POST_ONLY but slides price to the best bid/ask | Ensures placement at the top of book without crossing |
+| `MUST_POST_ONLY` | **Reverts the transaction** if the order would cross the spread and fill as taker | Default for MM, guarantees maker-only execution (or a clear failure to react to) |
+| `TRY_POST_ONLY` | Transaction still succeeds, but the order is **silently not placed** if it would cross | Useful when you'd rather skip a stale quote than fail the whole tx |
+| `SLIDE` | **Amends the price** to the best non-crossing price if it would cross | Ensures placement at the top of book without crossing, at whatever price that requires |
 
 **Recommendation:** Use `MUST_POST_ONLY` for all quotes. If the order would cross (e.g., oracle moved), you'd rather cancel and re quote at the new price than accidentally take.
 
@@ -26,16 +26,16 @@ A two-sided quote means placing a bid (buy) and an ask (sell) simultaneously. Th
 Each quote is an `OrderParams` object passed to a placement method. Key fields are `direction` (long for bid, short for ask), `price` or `oraclePriceOffset`, `baseAssetAmount`, and `postOnly`. The examples below show the most common patterns.
 
 <SDKDoc>
-  <TypeScript name="placePerpOrder" type="method" owner="DriftClient">
+  <TypeScript name="placePerpOrder" type="method" owner="VelocityClient">
 ```js
-import { OrderType, PositionDirection, PostOnlyParams } from "@drift-labs/sdk";
+import { OrderType, PositionDirection, PostOnlyParams } from "@velocity-exchange/sdk";
 
-await driftClient.placePerpOrder({
+await velocityClient.placePerpOrder({
   orderType: OrderType.LIMIT,
   marketIndex: 0,
   direction: PositionDirection.LONG,
-  baseAssetAmount: driftClient.convertToPerpPrecision(1),
-  price: driftClient.convertToPricePrecision(99),
+  baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+  price: velocityClient.convertToPricePrecision(99),
   postOnly: PostOnlyParams.MUST_POST_ONLY,
 });
 ```
@@ -45,18 +45,18 @@ await driftClient.placePerpOrder({
 ### Two sided quotes (place in one tx)
 
 <SDKDoc>
-  <TypeScript name="placeOrders" type="method" owner="DriftClient">
+  <TypeScript name="placeOrders" type="method" owner="VelocityClient">
 ```js
-import { MarketType, OrderType, PositionDirection, PostOnlyParams } from "@drift-labs/sdk";
+import { MarketType, OrderType, PositionDirection, PostOnlyParams } from "@velocity-exchange/sdk";
 
-await driftClient.placeOrders([
+await velocityClient.placeOrders([
   {
     orderType: OrderType.LIMIT,
     marketType: MarketType.PERP,
     marketIndex: 0,
     direction: PositionDirection.LONG,
-    baseAssetAmount: driftClient.convertToPerpPrecision(1),
-    price: driftClient.convertToPricePrecision(99.5),
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+    price: velocityClient.convertToPricePrecision(99.5),
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
   {
@@ -64,8 +64,8 @@ await driftClient.placeOrders([
     marketType: MarketType.PERP,
     marketIndex: 0,
     direction: PositionDirection.SHORT,
-    baseAssetAmount: driftClient.convertToPerpPrecision(1),
-    price: driftClient.convertToPricePrecision(100.5),
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+    price: velocityClient.convertToPricePrecision(100.5),
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
 ]);
@@ -76,11 +76,11 @@ await driftClient.placeOrders([
 ### Quote around oracle
 
 <SDKDoc>
-  <TypeScript name="getOracleDataForPerpMarket" type="method" owner="DriftClient">
+  <TypeScript name="getOracleDataForPerpMarket" type="method" owner="VelocityClient">
 ```js
-import { PRICE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { PRICE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
-const oracle = driftClient.getOracleDataForPerpMarket(0);
+const oracle = velocityClient.getOracleDataForPerpMarket(0);
 const oraclePrice = convertToNumber(oracle.price, PRICE_PRECISION);
 console.log(oraclePrice);
 ```
@@ -89,7 +89,7 @@ console.log(oraclePrice);
 
 ### Oracle offset orders
 
-Oracle offset orders are the **most efficient way to quote on Drift**. Instead of specifying a fixed price, you set an offset from the oracle price. The order automatically floats with the oracle, so when the oracle moves, your order's effective price moves with it.
+Oracle offset orders are the **most efficient way to quote on Velocity**. Instead of specifying a fixed price, you set an offset from the oracle price. The order automatically floats with the oracle, so when the oracle moves, your order's effective price moves with it.
 
 **Why this matters:** With fixed price limit orders, you need to cancel and replace every time the oracle moves (thousands of transactions per day). With oracle offset orders, you place them once and they track the oracle automatically. A typical MM using oracle offsets sends **~30 transactions per day** (just to adjust spread or size) vs **thousands** with cancel-replace.
 
@@ -99,8 +99,10 @@ Oracle offset orders are the **most efficient way to quote on Drift**. Instead o
 - Positive offset = above oracle, negative = below oracle
 - The onchain program evaluates `oracle_price + offset` at fill time
 
+> **`oraclePriceOffset` is a `BN`, not a `number`.** It's stored on-chain as an `i64`, so the SDK's `OrderParams.oraclePriceOffset` type is `BN`. Pass the `BN` directly (don't call `.toNumber()` on it) — the examples below do this correctly.
+
 <SDKDoc>
-  <TypeScript name="placeOrders" type="method" owner="DriftClient">
+  <TypeScript name="placeOrders" type="method" owner="VelocityClient">
 ```js
 import {
   BN,
@@ -109,19 +111,19 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 const spreadOffset = 0.5; // $0.50 from oracle on each side
 const offsetBN = new BN(spreadOffset * PRICE_PRECISION.toNumber());
 
-await driftClient.placeOrders([
+await velocityClient.placeOrders([
   {
     orderType: OrderType.ORACLE,
     marketType: MarketType.PERP,
     marketIndex: 0,
     direction: PositionDirection.LONG,
-    baseAssetAmount: driftClient.convertToPerpPrecision(1),
-    oraclePriceOffset: offsetBN.neg().toNumber(), // bid: oracle - $0.50
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+    oraclePriceOffset: offsetBN.neg(), // bid: oracle - $0.50
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
   {
@@ -129,8 +131,8 @@ await driftClient.placeOrders([
     marketType: MarketType.PERP,
     marketIndex: 0,
     direction: PositionDirection.SHORT,
-    baseAssetAmount: driftClient.convertToPerpPrecision(1),
-    oraclePriceOffset: offsetBN.toNumber(), // ask: oracle + $0.50
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+    oraclePriceOffset: offsetBN, // ask: oracle + $0.50
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
 ]);
@@ -147,7 +149,7 @@ console.log("Placed oracle offset quotes, these float with the oracle automatica
 When you do need to update quotes (e.g., changing spread or size based on inventory), use `cancelAndPlaceOrders` to atomically cancel existing orders and place new ones in a single transaction. This avoids the risk window where you have no orders on the book (between a cancel and a separate place).
 
 <SDKDoc>
-  <TypeScript name="cancelAndPlaceOrders" type="method" owner="DriftClient">
+  <TypeScript name="cancelAndPlaceOrders" type="method" owner="VelocityClient">
 ```js
 import {
   BN,
@@ -156,10 +158,10 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 
 // Atomically cancel all perp orders for market 0 and place new quotes (single tx)
-const txSig = await driftClient.cancelAndPlaceOrders(
+const txSig = await velocityClient.cancelAndPlaceOrders(
   {
     marketType: MarketType.PERP,
     marketIndex: 0,
@@ -170,8 +172,8 @@ const txSig = await driftClient.cancelAndPlaceOrders(
       marketType: MarketType.PERP,
       marketIndex: 0,
       direction: PositionDirection.LONG,
-      baseAssetAmount: driftClient.convertToPerpPrecision(1),
-      oraclePriceOffset: new BN(-0.3 * PRICE_PRECISION.toNumber()).toNumber(), // tighter bid
+      baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+      oraclePriceOffset: new BN(-0.3 * PRICE_PRECISION.toNumber()), // tighter bid
       postOnly: PostOnlyParams.MUST_POST_ONLY,
     },
     {
@@ -179,8 +181,8 @@ const txSig = await driftClient.cancelAndPlaceOrders(
       marketType: MarketType.PERP,
       marketIndex: 0,
       direction: PositionDirection.SHORT,
-      baseAssetAmount: driftClient.convertToPerpPrecision(1),
-      oraclePriceOffset: new BN(0.3 * PRICE_PRECISION.toNumber()).toNumber(), // tighter ask
+      baseAssetAmount: velocityClient.convertToPerpPrecision(1),
+      oraclePriceOffset: new BN(0.3 * PRICE_PRECISION.toNumber()), // tighter ask
       postOnly: PostOnlyParams.MUST_POST_ONLY,
     },
   ]
@@ -196,9 +198,9 @@ You can widen/tighten one side of your spread based on current inventory to redu
 <SDKDoc>
   <TypeScript name="getPerpPosition" type="method" owner="User">
 ```js
-import { BASE_PRECISION, convertToNumber } from "@drift-labs/sdk";
+import { BASE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
-const user = driftClient.getUser();
+const user = velocityClient.getUser();
 const position = user.getPerpPosition(0);
 
 if (position) {
@@ -216,13 +218,13 @@ if (position) {
 
 ### JIT maker (onchain "place-and-make")
 
-If you're reacting to onchain taker auctions, Drift exposes a helper that "places a maker order and fills against a taker" atomically. This lets you participate in JIT auctions even while running resting orders, a hybrid approach.
+If you're reacting to onchain taker auctions, Velocity exposes a helper that "places a maker order and fills against a taker" atomically. This lets you participate in JIT auctions even while running resting orders, a hybrid approach.
 
 <SDKDoc>
-  <TypeScript name="placeAndMakePerpOrder" type="method" owner="DriftClient">
+  <TypeScript name="placeAndMakePerpOrder" type="method" owner="VelocityClient">
 ```js
 // `takerInfo` comes from your taker discovery / order intake logic.
-await driftClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
+await velocityClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
 ```
   </TypeScript>
 </SDKDoc>
@@ -237,22 +239,24 @@ Common MM guardrails:
 - **Emergency cancel:** cancel all orders on errors, volatility spikes, or stale oracle
 
 <SDKDoc>
-  <TypeScript name="cancelOrders" type="method" owner="DriftClient">
+  <TypeScript name="cancelOrders" type="method" owner="VelocityClient">
 ```js
-import { MarketType } from "@drift-labs/sdk";
+import { MarketType } from "@velocity-exchange/sdk";
 
 // Cancel all orders for a specific market
-await driftClient.cancelOrders(MarketType.PERP, 0);
+await velocityClient.cancelOrders(MarketType.PERP, 0);
 
 // Cancel ALL orders across all markets (emergency)
-await driftClient.cancelOrders();
+await velocityClient.cancelOrders();
 ```
   </TypeScript>
 </SDKDoc>
 
 ## Reference implementation
 
-The [`FloatingPerpMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
+Resting orders you place are picked up by the hosted DLOB server — [`apps/dlob-server`](https://github.com/velocity-exchange/protocol-v2/tree/master/apps/dlob-server) in the [velocity-v1 monorepo](https://github.com/velocity-exchange/protocol-v2) — which is what backs the REST/WebSocket orderbook described in [Orderbook & Matching](./orderbook-and-matching#accessing-the-dlob). You don't need to run it yourself to make markets; it's listed here in case you want to run your own instance or read its source for how order filtering/aggregation works.
+
+The [`FloatingPerpMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
 
 - **Slot based cooldown:** waits `MARKET_UPDATE_COOLDOWN_SLOTS` (30 slots) before re quoting a market, avoiding excessive transactions
 - **Mutex guarded periodic tasks:** uses `async mutex` to prevent overlapping quote updates
@@ -265,6 +269,7 @@ The [`FloatingPerpMaker`](https://github.com/velocity-exchange/keeper-bots-v2/bl
 - **Oracle offset orders still need updates:** while they track the oracle automatically, you must cancel and re place when changing spread width, order size, or the number of levels. The `cancelAndPlaceOrders` method handles this atomically.
 - **32 order limit per subaccount:** if you quote 5 markets x 2 sides x 3 levels = 30 orders, you're near the limit. Use multiple subaccounts for multi market strategies (see `JitMaker` config for subaccount per market pattern).
 - **`MUST_POST_ONLY` rejection:** if the oracle moves sharply and your offset order would cross the spread, it's rejected (not silently filled as taker). This is the desired behavior; catch the error and re quote.
-- **Spot markets:** oracle offset orders work for spot markets too. Use `MarketType.SPOT` and `placeSpotOrder` / `placeAndMakeSpotOrder`.
+- **No spot DLOB trading:** Velocity removed spot order-book trading entirely (`place_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist on-chain). Spot markets still exist for collateral and borrow-lend, but everything in this guide (`placeOrders`, `MarketType.PERP`, etc.) only applies to perp markets — there's no spot equivalent to quote against.
+- **Tick size:** limit and oracle-offset prices are standardized to the market's `orderTickSize` on-chain, and the DLOB does the same when computing effective/auction prices client-side. See [Orderbook & Matching — tick size](/developers/market-makers/orderbook-and-matching#tick-size) if you compute prices manually instead of letting the program clamp them.
 
 For production patterns (subscription loops, throttling, priority fees, graceful shutdown), see [Bot architecture patterns](/developers/market-makers/bot-architecture).

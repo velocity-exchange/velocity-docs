@@ -1,6 +1,6 @@
 # Borrow Interest Rate
 
-Drift's lending pools use a borrow interest rate model inspired by [Aave](https://docs.aave.com/risk/liquidity-risk/borrow-interest-rate). 
+Velocity's lending pools use a borrow interest rate model inspired by [Aave](https://docs.aave.com/risk/liquidity-risk/borrow-interest-rate). 
 Each spot market defines:
 - A **minimum rate** `R_min`
 - An **optimal rate** `R_opt` at a target utilization `U*`
@@ -14,7 +14,7 @@ The borrow interest rate is a function of utilization (U), or how much capital i
 - If **U** is low -> capital within the system is scarce and the protocol will increase interest rates to incentivise more capital supply and repayment of debt.
 
 ### Multi-Kink Interest Rate Model
-To balance capital efficiency with liquidity protection, Drift uses a **multi-kink model**. This allows linear rates up to the optimal utilization point, and then introduces increasingly steeper rate hikes as utilization increases, especially in the 85–100% range.
+To balance capital efficiency with liquidity protection, Velocity uses a **multi-kink model**. This allows linear rates up to the optimal utilization point, and then introduces increasingly steeper rate hikes as utilization increases, especially in the 85–100% range.
 
 This design allows for more aggressive max utilization rates while not adding too much rate volatility near optimal rate.
 
@@ -70,4 +70,4 @@ The latest values can be retrieved directly from the on-chain `SpotMarketAccount
 | 0.995 to 1.00       | Max slope (+250 bps)        |
 
 ---
-_Last updated: May 2025._
+_The multi-kink model and segment weights above are unchanged from the pre-fork Drift Protocol v2 codebase._

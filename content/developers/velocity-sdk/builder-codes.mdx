@@ -1,0 +1,188 @@
+# Builder Codes
+
+Builder Codes let integrators earn fees by routing order flow through their application. A builder fee is an extra fee (on top of the taker's normal tiered fee) attached to an order via `builderIdx`/`builderFeeTenthBps`, and settled to the builder's revenue-share account when the order fills.
+
+<Callout type="info">
+Builder codes work on **any** perp order — regular on-chain order placement (`placePerpOrder`, `placeAndTakePerpOrder`, `placeAndMakePerpOrder`, `fillPerpOrder`) as well as [Swift](/developers/velocity-sdk/swift) signed-message orders. `builderIdx`/`builderFeeTenthBps` are plain optional fields on `OrderParams`, not a Swift-only mechanism.
+</Callout>
+
+The model has three actors and three setup steps:
+
+1. **Builder** initializes a `RevenueShare` account — a one-time, per-authority setup that lets the builder accrue fee-share rewards.
+2. **User** initializes a `RevenueShareEscrow` account — tracks the builders this user has approved and any pending (unsettled) builder-fee orders.
+3. **User** approves the builder in their escrow with a maximum fee cap (`changeApprovedBuilder`).
+
+Only after all three steps can the user's orders carry that builder's fee.
+
+## Setup
+
+Create and subscribe separate `VelocityClient` instances for the builder and user authorities:
+
+<SDKDoc>
+  <TypeScript name="Builder codes setup" type="example">
+```js
+import { VelocityClient } from "@velocity-exchange/sdk";
+import { Connection, Keypair } from "@solana/web3.js";
+
+// Initialize connection
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+// Builder wallet (revenue share provider)
+const builderWallet = Keypair.fromSecretKey(/* builder secret key */);
+const builderAuthority = builderWallet.publicKey;
+
+// User wallet (end user)
+const userWallet = Keypair.fromSecretKey(/* user secret key */);
+const takerAuthority = userWallet.publicKey;
+
+// Builder client
+const builderClient = new VelocityClient({
+  connection,
+  wallet: builderWallet,
+  env: "mainnet-beta",
+});
+await builderClient.subscribe();
+
+// User client
+const userClient = new VelocityClient({
+  connection,
+  wallet: userWallet,
+  env: "mainnet-beta",
+});
+await userClient.subscribe();
+```
+  </TypeScript>
+</SDKDoc>
+
+## SDK Usage
+
+### Builder: Initialize Revenue Share
+
+Create the builder's onchain `RevenueShare` configuration account (one per authority, not per subaccount). This must exist before the builder can receive any fees:
+
+<SDKDoc>
+  <TypeScript name="initializeRevenueShare" type="method" owner="VelocityClient">
+```js
+await builderClient.initializeRevenueShare(builderAuthority);
+```
+  </TypeScript>
+</SDKDoc>
+
+### User: Initialize Escrow
+
+Create the user's `RevenueShareEscrow` account used for builder-fee tracking and approvals. `numOrders` sizes the pending-order slot list (it can be grown later with `resizeRevenueShareEscrowOrders`, but never shrunk) — size it to at least the number of concurrently open orders you expect across all of this user's subaccounts:
+
+<SDKDoc>
+  <TypeScript name="initializeRevenueShareEscrow" type="method" owner="VelocityClient">
+```js
+// numOrders should cover concurrent open orders across all of the user's subaccounts
+await userClient.initializeRevenueShareEscrow(takerAuthority, 16);
+```
+  </TypeScript>
+</SDKDoc>
+
+On creation, the escrow's `referrer` field is copied from the user's existing `UserStats.referrer`, if any (see [Fill-time enforcement](#fill-time-enforcement) below).
+
+### User: Approve a Builder (Max Fee)
+
+Approve a builder and set the maximum fee they may charge. The `builderIdx` used on orders references the position of this approval in the user's `RevenueShareEscrow.approvedBuilders` list:
+
+<SDKDoc>
+  <TypeScript name="changeApprovedBuilder" type="method" owner="VelocityClient">
+```js
+// maxFeeTenthBps is in tenths of a basis point (100 = 1 bp = 0.01%)
+await userClient.changeApprovedBuilder(builderAuthority, 200, true);
+```
+  </TypeScript>
+</SDKDoc>
+
+Call with `add = false` to revoke a builder — this fails with `CannotRevokeBuilderWithOpenOrders` if that builder has open (unsettled) orders outstanding, which must be cancelled or settled first.
+
+### Order Placement (Builder Fee on a Regular Order)
+
+Include `builderIdx` and `builderFeeTenthBps` directly on `OrderParams` for any perp order placement:
+
+<SDKDoc>
+  <TypeScript name="Order with a builder fee" type="example">
+```js
+import { OrderType, MarketType, PositionDirection } from "@velocity-exchange/sdk";
+
+await userClient.placePerpOrder({
+  orderType: OrderType.LIMIT,
+  marketType: MarketType.PERP,
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: userClient.convertToPerpPrecision(1),
+  price: userClient.convertToPricePrecision(150),
+
+  // Builder fee fields, set by the builder's app UI
+  builderIdx: 0,           // index in taker's approvedBuilders list
+  builderFeeTenthBps: 50,  // fee for this order: 5 bps (50 * 0.1 bps)
+});
+```
+  </TypeScript>
+</SDKDoc>
+
+The same two fields are set on a Swift signed order message the same way — see [Order Placement (Builder adds fee to Swift order)](/developers/velocity-sdk/swift) in the Swift guide.
+
+## Fill-time enforcement
+
+Perp fills fail on-chain with `UnableToLoadRevenueShareAccount` (error `6324` / `0x18b4`) unless the **taker's** `RevenueShareEscrow` is passed as a remaining account when either:
+
+- the taker's order carries a builder code (`hasBuilderParams(orderParams)` is true), or
+- the taker's `UserStats.referrerStatus` has the `BuilderReferral` bit set and their escrow has a referrer (`escrowHasReferrer(escrow)`).
+
+Liquidation fills and the feature-flag-off state are exempt. Fillers/keepers must attach the escrow for any taker that matches one of the above — the SDK's fill and place-and-make builders accept the taker's decoded escrow directly:
+
+<SDKDoc>
+  <TypeScript name="takerEscrow on fills" type="example">
+```js
+import { isBuilderReferral, escrowHasReferrer, hasBuilderParams } from "@velocity-exchange/sdk";
+
+// Resolve whether this taker's escrow must be attached
+const takerNeedsEscrow =
+  hasBuilderParams(takerOrder) || isBuilderReferral(takerUserStats);
+
+const takerEscrow = takerNeedsEscrow
+  ? await revenueShareEscrowMap.mustGet(takerAuthority.toString())
+  : undefined;
+
+await fillerClient.fillPerpOrder(
+  takerUserAccountPublicKey,
+  takerUserAccount,
+  order,
+  makerInfo,
+  txParams,
+  fillerSubAccountId,
+  fillerAuthority,
+  hasBuilderFee,
+  takerEscrow // attached only when required; validated against taker's authority
+);
+```
+  </TypeScript>
+</SDKDoc>
+
+`fillPerpOrder`/`getFillPerpOrderIx`, `placeAndTakePerpOrder`/`getPlaceAndTakePerpOrderIx`, `placeAndMakePerpOrder`/`getPlaceAndMakePerpOrderIx`, and `getPlaceAndMakeSignedMsgPerpOrderIxs` all accept this optional trailing `takerEscrow`. The builders validate `takerEscrow.authority` against the taker's authority and throw if they don't match.
+
+For keepers filling many takers, `RevenueShareEscrowMap` caches escrow accounts by authority so you don't re-fetch per fill:
+
+<SDKDoc>
+  <TypeScript name="RevenueShareEscrowMap" type="class">
+```js
+import { RevenueShareEscrowMap } from "@velocity-exchange/sdk";
+
+const revenueShareEscrowMap = new RevenueShareEscrowMap(fillerClient);
+await revenueShareEscrowMap.subscribe();
+
+const escrow = revenueShareEscrowMap.get(takerAuthority.toString()); // undefined if not (yet) cached
+```
+  </TypeScript>
+</SDKDoc>
+
+<Callout type="info">
+Referral rewards also only accrue (and referral slots are only created) for escrows that have a referrer — an escrow with no referrer set is exempt from the enforcement above even if the taker's `referrerStatus` bit happens to be set.
+</Callout>
+
+### Notes on builder codes for MMs
+
+Market makers filling as `makerInfo` are unaffected by this enforcement — it only gates the **taker's** escrow. Makers do not need to pass their own `RevenueShareEscrow` to fill orders, builder-coded or not.

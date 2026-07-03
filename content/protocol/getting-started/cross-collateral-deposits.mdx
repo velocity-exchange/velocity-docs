@@ -2,7 +2,7 @@
 
 By default, markets are quoted in USD and P&L is settled in USDC. All tokens deposited within the protocol can earn yield via Borrow/Lend. Until unrealised P&L is settled into your Balances, it will not earn (if profits) or be charged (if losses) the deposit/borrow interest respectively.
 
-Below is a table of assets supported by Drift Protocol.
+Below is a table of assets supported by Velocity.
 
 Each asset counts towards margin for derivatives trading and has a weight applied to account for their respective volatilities.
 
@@ -25,7 +25,7 @@ Each asset counts towards margin for derivatives trading and has a weight applie
 
 <AssetWeightsTable poolId={3} />
 
-Initial Asset Weights are also scaled lower based on notional value of total deposits. As a reference, you can check out UI or the SpotMarket `get_scaled_initial_weight_asset` for this scale factor.
+Initial Asset Weights are also scaled lower based on notional value of total deposits. As a reference, you can check out UI or the SpotMarket `get_scaled_initial_asset_weight` for this scale factor.
 
 The IMF Factor acts as a discount on account size:
 

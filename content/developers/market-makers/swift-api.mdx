@@ -1,6 +1,6 @@
 # SWIFT API
 
-**SWIFT** (Signed Wrapped Instant Fulfillment Transactions) allows market makers to receive signed taker orders offchain via WebSocket before they hit the JIT auction. This enables ultra-low-latency market making.
+**SWIFT** is Velocity's offchain signed-order protocol: it lets market makers receive signed taker orders over WebSocket before they hit the onchain JIT auction. This enables ultra-low-latency market making. In the SDK, SWIFT orders are called "signed-message" orders (`SignedMsgOrderParams`, `isSignedMsgOrder`, `SwiftOrderSubscriber`) — the "SWIFT" name is the product-facing term for the same feature.
 
 ## How SWIFT works
 
@@ -34,17 +34,20 @@ The tradeoff: you need fast infrastructure (dedicated RPC node, low-latency WebS
 
 ### Basic subscription
 
+> **Endpoint is provisional.** `SwiftOrderSubscriber` defaults `endpoint` based on `velocityEnv` when you don't pass one explicitly: `wss://swift.velocity.exchange/ws` for `mainnet-beta`, `wss://swift.master.velocity.exchange/ws` for `devnet` (both hardcoded in `sdk/src/swift/swiftOrderSubscriber.ts`). These are real values shipped in the SDK today, but the hostnames haven't been confirmed as final/DNS-live production endpoints — check with the team before depending on them in production.
+
 <SDKDoc>
   <TypeScript name="SwiftOrderSubscriber" type="class">
 ```typescript
-import { SwiftOrderSubscriber, loadKeypair } from "@drift-labs/sdk";
+import { SwiftOrderSubscriber, loadKeypair } from "@velocity-exchange/sdk";
 
 const swiftSubscriber = new SwiftOrderSubscriber({
-  driftClient,
-  driftEnv: "mainnet-beta",
+  velocityClient,
+  velocityEnv: "mainnet-beta",
   marketIndexes: [0, 1, 2], // SOL, BTC, ETH perp markets to listen to
   keypair: loadKeypair("<KEYPAIR_PATH>"), // used for WebSocket auth
-  // endpoint: "wss://swift.drift.trade/ws", // optional, defaults based on driftEnv
+  // endpoint: "wss://swift.velocity.exchange/ws", // optional -- defaults based on velocityEnv:
+  // mainnet-beta -> wss://swift.velocity.exchange/ws, devnet -> wss://swift.master.velocity.exchange/ws
 });
 
 await swiftSubscriber.subscribe(
@@ -75,18 +78,18 @@ Optionally provide a `userAccountGetter` to resolve taker UserAccount details. T
 <SDKDoc>
   <TypeScript name="UserMap" type="class">
 ```typescript
-import { UserMap, loadKeypair } from "@drift-labs/sdk";
+import { UserMap, loadKeypair } from "@velocity-exchange/sdk";
 
 const userMap = new UserMap({
-  driftClient,
+  velocityClient,
   connection,
   subscriptionConfig: { type: "websocket" },
 });
 await userMap.subscribe();
 
 const swiftSubscriber = new SwiftOrderSubscriber({
-  driftClient,
-  driftEnv: "mainnet-beta",
+  velocityClient,
+  velocityEnv: "mainnet-beta",
   marketIndexes: [0, 1, 2],
   keypair: loadKeypair("<KEYPAIR_PATH>"),
   // userAccountGetter implements { mustGetUserAccount(publicKey: string): Promise<UserAccount> }
@@ -102,10 +105,10 @@ SWIFT fills use a special instruction (`placeAndMakeSignedMsgPerpOrder`) that in
 
 For the standard onchain place-and-make pattern, see [JIT Auctions - Place-and-make](./jit-auctions#place-and-make-pattern). The SWIFT variant adds the signature verification step.
 
-### Using DriftClient (recommended)
+### Using VelocityClient (recommended)
 
 <SDKDoc>
-  <TypeScript name="placeAndMakeSignedMsgPerpOrder" type="method" owner="DriftClient">
+  <TypeScript name="placeAndMakeSignedMsgPerpOrder" type="method" owner="VelocityClient">
 ```typescript
 import {
   getLimitOrderParams,
@@ -114,7 +117,7 @@ import {
   isVariant,
   PositionDirection,
   PostOnlyParams,
-} from "@drift-labs/sdk";
+} from "@velocity-exchange/sdk";
 import { PublicKey } from "@solana/web3.js";
 
 // From the SWIFT subscription callback
@@ -134,10 +137,10 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
 
   // Resolve taker account addresses
   const takerPubkey = await getUserAccountPublicKey(
-    driftClient.program.programId, takerAuthority, subAccountId
+    velocityClient.program.programId, takerAuthority, subAccountId
   );
   const takerStatsPubkey = getUserStatsAccountPublicKey(
-    driftClient.program.programId, takerAuthority
+    velocityClient.program.programId, takerAuthority
   );
 
   // Build your maker order params (opposite direction of taker)
@@ -154,7 +157,7 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
   const takerUserAccount = await userMap.mustGetUserAccount(takerPubkey.toString());
 
   // Submit place-and-make (SDK handles ed25519 verification ix)
-  const txSig = await driftClient.placeAndMakeSignedMsgPerpOrder(
+  const txSig = await velocityClient.placeAndMakeSignedMsgPerpOrder(
     signedOrderParams,          // { orderParams: Buffer, signature: Buffer }
     uuidBytes,                  // Uint8Array
     {
@@ -177,21 +180,22 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
 If you need more control over transaction construction (e.g., custom priority fees, specific ALTs, or bundling multiple instructions):
 
 <SDKDoc>
-  <TypeScript name="getPlaceAndMakeSignedMsgPerpOrderIxs" type="method" owner="DriftClient">
+  <TypeScript name="getPlaceAndMakeSignedMsgPerpOrderIxs" type="method" owner="VelocityClient">
 ```typescript
 import { Transaction } from "@solana/web3.js";
 
 // Same params as placeAndMakeSignedMsgPerpOrder, returns instruction array
-const ixs = await driftClient.getPlaceAndMakeSignedMsgPerpOrderIxs(
+const ixs = await velocityClient.getPlaceAndMakeSignedMsgPerpOrderIxs(
   signedOrderParams,  // { orderParams, signature }
   uuidBytes,          // Uint8Array
   { taker: takerPubkey, takerStats: takerStatsPubkey, takerUserAccount, signingAuthority },
   makerOrderParams,
 );
 
-// ixs includes:
+// Returns [ed25519VerifyIx, placeSignedMsgTakerOrderIx, placeAndMakeSignedMsgPerpOrderIx]:
 // 1. ed25519 verification instruction (proves taker signature)
-// 2. place-and-make instruction (places your order + fills taker)
+// 2. registers the taker's signed order onchain (same as placeSignedMsgTakerOrder)
+// 3. places your maker order and fills the taker atomically
 
 // Send transaction with your preferred method
 const tx = new Transaction().add(...ixs);
@@ -284,7 +288,7 @@ Use `isSignedMsgOrder()` to identify SWIFT-origin orders and avoid double-handli
 <SDKDoc>
   <TypeScript name="isSignedMsgOrder" type="function">
 ```typescript
-import { isSignedMsgOrder } from "@drift-labs/sdk";
+import { isSignedMsgOrder } from "@velocity-exchange/sdk";
 
 // In your AuctionSubscriber callback
 auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey, slot) => {

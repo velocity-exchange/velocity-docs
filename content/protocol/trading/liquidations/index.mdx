@@ -16,13 +16,13 @@ If a position drops below its Minimum Maintenance Margin, liquidators are incent
 
 ## How do Liquidations work?  
 
-In the Drift v3 margin system, all positions within a subaccount (deposits, borrows, and perpetuals positions) are cross-margined.
+By default, all positions within a subaccount (deposits, borrows, and perpetuals positions) are **cross-margined** — liquidations are calculated based on your account level leverage rather than isolated to the leverage present in your perpetuals and/or borrow account.
 
-As such, liquidations are calculated based on your account level leverage rather than isolated to the leverage present in your perpetuals and/or borrow account.  
+Velocity also supports **[isolated positions](/protocol/trading/margin)** — a perp position funded and margined independently of the rest of the subaccount. Isolated positions are liquidated on their own, without touching the account's cross-margin collateral or other positions, and (unlike cross-margin) close **100% in a single liquidation** rather than unwinding gradually — see [below](#isolated-position-liquidations).
 
 You can be liquidated when your `totalCollateral` becomes less than your`maintenanceMarginRequirement`. Your total collateral is the weighted value of your deposits and perp pnl. Your margin requirement is the weighted value of your borrows and perp positions.  
 
-Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders + LP positions. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Drift State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.  
+Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders + LP positions. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Velocity State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.  
 
 The `Health` measure on the user page can help visualise how close a user is to liquidation territory. At 0 Health, a user can get liquidated.
 
@@ -57,6 +57,24 @@ You are liquidated if the price of SOL decreases by 5.28% to $23.6825. This is b
 
 At that point your total collateral is less than your margin requirement and liquidation is triggered.
 </Callout>
+
+## Isolated Position Liquidations
+
+Cross-margin liquidations unwind gradually — a throttled percentage per slot window that accelerates or slows based on how the price moves after liquidation begins (see [Liquidation Engine](/protocol/trading/liquidations/liquidation-engine)). **Isolated positions skip this ramp entirely: once an isolated position is under-margined, it is liquidated 100% in one shot**, since its collateral and risk can't spill over into the rest of the account the way a cross-margined position's can.
+
+## Liquidation Fees
+
+Per-market liquidation fee rates are split three ways when a position is liquidated:
+
+- **`liquidator_fee`** — paid to the liquidator, unchanged from a standard liquidation reward.
+- **`if_liquidation_fee`** — the insurance fund's cut.
+- **`protocol_liquidation_fee`** — a protocol cut, introduced alongside the [fee redesign](/protocol/trading/trading-fees). The combined insurance-side budget (`if_liquidation_fee + protocol_liquidation_fee`) is computed once against the user's margin shortfall, then split **IF-first**: the insurance fund receives exactly what it would have received without the protocol fee, and the protocol only captures margin headroom *beyond* that. This means adding a protocol cut can never push a liquidation into bankruptcy that wouldn't otherwise have happened — it only reduces the excess margin the liquidatee would have kept.
+
+Perp liquidations accrue the IF and protocol cuts as pending fee-ledger counters (materialized by the fee sweep); spot liquidations credit the liability market's `revenue_pool` and `protocol_fee_pool` directly.
+
+## Bankruptcy and Solvency Status
+
+If a liquidation leaves a user with an outstanding liability and no further assets, the account becomes bankrupt and is resolved via `resolve_perp_bankruptcy` / `resolve_spot_bankruptcy` (or `resolve_perp_pnl_deficit` for a market-wide PnL deficit short of full bankruptcy). These solvency-repair instructions are gated by a dedicated `State.solvencyStatus` bitflag (`SolvencyStatus.SOLVENCY_REPAIR_PAUSED`) rather than the general withdraw-pause flag — an admin can pause deposits/withdrawals without also blocking bad-debt resolution, or pause solvency repair independently via `AdminClient.updateSolvencyStatus` (cold-admin only). See [Insurance Fund](/protocol/insurance-fund) for the backstop waterfall itself.
 
 ## Being a Liquidator
 

@@ -18,16 +18,20 @@ The Revenue Pool is funded by various aspects of the protocol:
 
 An Insurance Fund Staker's proportionate share is calculated by: `Total Staked Amount / Total Insurance Fund`
 
-Each revenue settlement is split between Insurance Fund Stakers and a protocol-owned portion of the insurance fund.
+The Insurance Fund is **100% staker-owned** on Velocity — there is no protocol-owned share of the fund. Each revenue settlement (by default, at most once per hour per market) accrues entirely to Insurance Fund Stakers as share-price appreciation; the legacy protocol/staker split (and the instructions to withdraw or rebalance a protocol-owned portion) do not exist.
 
 <Callout type="important">
 **Example:**
 
-The Insurance Fund is at \$5000 USDC. You decide to stake \$10,000 USDC, bringing the total to \$15,000 USDC. Your proportionate share of the Revenue Pool paid every hour for stakers would be 10000/15000 = 66.6%. 
+The Insurance Fund is at \$5000 USDC. You decide to stake \$10,000 USDC, bringing the total to \$15,000 USDC. Your proportionate share of the fund is 10000/15000 = 66.6%.
 
-Each hour, as the revenue pool settles fees earned to the Insurance Fund, let's say \$30. Half of this is reserved for the protocol, while the other half is designated for stakers, making the staker payout \$15. You will receive 66.6% of the payout (\$10) and the remaining Insurance Fund stakers would receive 33.3% (\$5).
+Each hour, as the revenue pool settles fees earned to the Insurance Fund, let's say \$30 is settled — all \$30 accrues to stakers as share-price appreciation, none to the protocol. You will receive 66.6% of that value (\$20) and the remaining Insurance Fund stakers would receive 33.3% (\$10).
 
 All rewards earned accumulate and compound the account's insurance amount staked.
+</Callout>
+
+<Callout type="info">
+A portion of each spot market's deposit-interest gains (the market's `ifFeeFactor`) is also carved out directly to that market's Insurance Fund, on top of revenue-pool settlements — see [What is the Insurance Fund?](/protocol/insurance-fund).
 </Callout>
 
 ### Cooldown Period

@@ -19,10 +19,10 @@ Liquidations transfer liability from the liquidated account to the liquidator. T
 
 ### Choose a reference implementation
 
-The canonical implementations in `keeper-bots-v2` are:
+The canonical implementations live in [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the `velocity-v1` monorepo:
 
-- [`src/bots/liquidator.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/liquidator.ts)
-- [`src/bots/liquidatorDerisk.ts`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/liquidatorDerisk.ts) (derisk helper)
+- [`src/bots/liquidator.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/liquidator.ts)
+- [`src/bots/liquidatorDerisk.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/liquidatorDerisk.ts) (derisk helper)
 
 The full source is the best reference for implementation details — it handles user scanning, margin checks, and derisk logic.
 
@@ -32,11 +32,11 @@ Follow the base keeper setup first:
 
 - [Keeper Bots](/developers/trading-automation/keeper-bots)
 
-Liquidator bots require collateral. Make sure the wallet is funded and has USDC deposited before starting.
+Liquidator bots require collateral. Make sure the wallet is funded and has the spot market's quote asset deposited before starting (USDC on mainnet-beta; dUSDT on devnet).
 
 ### Run and tune
 
-Run the liquidator bot via your `keeper-bots-v2` config and monitor:
+Run the liquidator bot via your `apps/keeper-bots-v2` config and monitor:
 
 - RPC latency / timeouts
 - Competing liquidators
@@ -59,4 +59,4 @@ If you're interested to make the liquidator bot run better, you can make edits t
 
 2.  Monitor the market's price to determine when to run liquidation checks / RPC checks.
 
-We encourage the community to build out stronger liquidations engines and bots to secure our Insurance Fund and user collateral. If interested to chat or have any questions, please reach out to us on [Discord](https://discord.com/invite/95kByNnDy5) or [Twitter](https://twitter.com/driftprotocol)!
+We encourage the community to build out stronger liquidations engines and bots to secure our Insurance Fund and user collateral. If interested to chat or have any questions, please reach out to us on [Discord](https://discord.com/invite/95kByNnDy5)!

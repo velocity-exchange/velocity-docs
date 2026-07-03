@@ -2,6 +2,10 @@
 
 The DLOB (Decentralized Limit Order Book) server powers the UI orderbook and trades feed. It provides both a websocket interface for real-time updates and REST endpoints for snapshots.
 
+<Callout type="warning">
+**Provisional endpoint.** Velocity's hosted DLOB server host is not yet finalized. This page uses `dlob.velocity.exchange` as a placeholder pattern (mirroring Drift's `dlob.drift.trade`) — confirm the real host before shipping against it.
+</Callout>
+
 ## REST endpoints (recommended starting point)
 
 Before wiring up websockets, you can fetch orderbook snapshots via simple HTTP requests. This is useful for polling-based UIs or quick prototyping.
@@ -9,7 +13,7 @@ Before wiring up websockets, you can fetch orderbook snapshots via simple HTTP r
 ### L2 orderbook (aggregated by price level)
 
 ```
-GET https://dlob.drift.trade/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true
+GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true
 ```
 
 Query parameters:
@@ -37,7 +41,7 @@ Response shape:
 ### L3 orderbook (individual orders)
 
 ```
-GET https://dlob.drift.trade/l3?marketName=SOL-PERP&includeVamm=true
+GET https://dlob.velocity.exchange/l3?marketName=SOL-PERP&includeVamm=true
 ```
 
 Returns every individual order with maker address and order ID ,  useful for building order-level analytics or matching simulations.
@@ -46,7 +50,7 @@ Returns every individual order with maker address and order ID ,  useful for bui
 
 For real-time streaming, connect to the DLOB websocket:
 
-- Base URL: `wss://dlob.drift.trade/ws`
+- Base URL: `wss://dlob.velocity.exchange/ws`
 
 ### Subscribe to channels
 
@@ -55,7 +59,7 @@ Supported channels: `orderbook`, `trades`
 <SDKDoc>
   <TypeScript name="WebSocket" type="class">
 ```js
-const ws = new WebSocket("wss://dlob.drift.trade/ws");
+const ws = new WebSocket("wss://dlob.velocity.exchange/ws");
 
 ws.onopen = () => {
   // Subscribe to orderbook updates with full liquidity

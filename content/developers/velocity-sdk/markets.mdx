@@ -1,0 +1,149 @@
+# Markets, Oracles, and Positions
+
+## How it works
+
+Velocity has two types of markets: **perp markets** (perpetual futures with funding rates) and **spot markets** (token deposits/borrows that serve as collateral). Each market has an onchain account storing configuration like oracle source, fees, funding rates, AMM parameters, and current open interest.
+
+### Market Indexes
+
+Markets are identified by a **numeric index** starting from 0. For example:
+- Perp market 0 is typically SOL-PERP
+- Spot market 0 is typically the quote asset (dUSDT on devnet, USDC on mainnet-beta)
+- Perp market 1 might be BTC-PERP, and so on
+
+**Where to find market indexes:**
+- **State account**: Query `velocityClient.getStateAccount()` which contains arrays of all perp and spot market configurations
+- **SDK methods**: Use `velocityClient.getPerpMarketAccounts()` or `velocityClient.getSpotMarketAccounts()` to get all markets and inspect their indexes
+- **Market account directly**: Each market account has a `marketIndex` field you can read
+- **Symbol lookup**: Most bots maintain their own mapping from symbol (e.g., "SOL-PERP") to market index, or query all markets and build the mapping at startup
+
+Each market integrates with an **oracle** that provides real-time price data — Pyth (push), Pyth Lazer, `Prelaunch` (for pre-listing markets), or (for the quote asset) `QuoteAsset`. Switchboard is deprecated (its `OracleSource` variants are retained only as `Deprecated*` stubs) and legacy Pyth pull/push oracles are not supported on Velocity. The SDK lets you read oracle prices, check if they're valid/stale, and use them for quoting or risk calculations. Prices are stored in fixed-point precision (1e6 for PRICE_PRECISION).
+
+Perp markets track funding rates, open interest, and AMM liquidity pools. Spot markets track total deposits, borrows, and utilization rates. When you trade, you're interacting with these market accounts, opening positions on perp markets or borrowing/depositing in spot markets. Spot markets on Velocity are collateral/borrow-lend only — spot orders cannot be placed on the DLOB (see [Orders](/developers/velocity-sdk/orders)).
+
+## SDK Usage
+
+These are the most common read-path helpers you'll use to power bots, dashboards, and risk logic.
+
+### Market Accounts
+
+Read a single spot market account by index (e.g., market config, oracle source, and utilization state).
+
+<SDKDoc>
+  <TypeScript name="getSpotMarketAccount" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const spotMarket = velocityClient.getSpotMarketAccount(marketIndex);
+console.log(spotMarket?.marketIndex);
+```
+  </TypeScript>
+</SDKDoc>
+
+Read a single perp market account by index (e.g., AMM params, funding state, and open interest).
+
+<SDKDoc>
+  <TypeScript name="getPerpMarketAccount" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
+console.log(perpMarket?.marketIndex);
+```
+  </TypeScript>
+</SDKDoc>
+
+Get all spot market accounts at once, useful for startup symbol/index mapping and dashboards.
+
+<SDKDoc>
+  <TypeScript name="getSpotMarketAccounts" type="method" owner="VelocityClient">
+```js
+const spotMarkets = velocityClient.getSpotMarketAccounts();
+console.log(spotMarkets.length);
+```
+  </TypeScript>
+</SDKDoc>
+
+Get all perp market accounts at once, useful for scanning market metadata and risk parameters.
+
+<SDKDoc>
+  <TypeScript name="getPerpMarketAccounts" type="method" owner="VelocityClient">
+```js
+const perpMarkets = velocityClient.getPerpMarketAccounts();
+console.log(perpMarkets.length);
+```
+  </TypeScript>
+</SDKDoc>
+
+### Oracle Price
+
+Read the current oracle data for a perp market (price, confidence, and validity flags).
+
+<SDKDoc>
+  <TypeScript name="getOracleDataForPerpMarket" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const oracle = velocityClient.getOracleDataForPerpMarket(marketIndex);
+console.log(oracle.price.toString());
+```
+  </TypeScript>
+</SDKDoc>
+
+Read the current oracle data for a spot market using its market index.
+
+<SDKDoc>
+  <TypeScript name="getOracleDataForSpotMarket" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const oracle = velocityClient.getOracleDataForSpotMarket(marketIndex);
+console.log(oracle.price.toString());
+```
+  </TypeScript>
+</SDKDoc>
+
+Read market-maker-oriented oracle data for perp markets, typically used for DLOB/JIT pricing flows.
+
+<SDKDoc>
+  <TypeScript name="getMMOracleDataForPerpMarket" type="method" owner="VelocityClient">
+```js
+const marketIndex = 0;
+const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+console.log(oracle.price.toString());
+```
+  </TypeScript>
+</SDKDoc>
+
+### Positions and Balances
+
+Get your active subaccount's spot position for a given market index (deposit or borrow state).
+
+<SDKDoc>
+  <TypeScript name="getSpotPosition" type="method" owner="VelocityClient">
+```js
+const spotPosition = velocityClient.getSpotPosition(0);
+console.log(spotPosition);
+```
+  </TypeScript>
+</SDKDoc>
+
+Get your active subaccount's perp position for a given perp market index, via the subaccount's `User`.
+
+<SDKDoc>
+  <TypeScript name="getPerpPosition" type="method" owner="User">
+```js
+const perpPosition = velocityClient.getUser().getPerpPosition(0);
+console.log(perpPosition);
+```
+  </TypeScript>
+</SDKDoc>
+
+### Protocol State
+
+The global state account holds protocol-level configuration including the number of active markets, the tiered admin key set (cold/warm/hot), and fee structures. It is the top-level entry point for querying protocol metadata.
+
+<SDKDoc>
+  <TypeScript name="getStateAccount" type="method" owner="VelocityClient">
+```js
+const state = velocityClient.getStateAccount();
+console.log(state);
+```
+  </TypeScript>
+</SDKDoc>

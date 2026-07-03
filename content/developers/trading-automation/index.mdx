@@ -5,7 +5,7 @@ Trading Automation covers both **trading workflows** (SDK-first integrations) an
 - **Keeper bots**: protocol maintenance (matching, triggers, liquidations).
 - **Trading bots**: profit-seeking strategies (e.g. JIT market making).
 
-The reference implementation for keeper bots lives in [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2), and most examples below follow that repo's config + entrypoint pattern.
+The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the velocity-v1 monorepo, and most examples below follow that app's config + entrypoint pattern.
 
 <Steps>
 ### Pick your path
@@ -37,18 +37,18 @@ All bots require a funded wallet for fees, and some require collateral. Use a bo
 
 ### Configure the bot
 
-`keeper-bots-v2` uses a YAML config (see `example.config.yaml` in the repo). At minimum, set:
+`apps/keeper-bots-v2` uses a YAML config (see `example.config.yaml` in the app directory). At minimum, set:
 
 - `global.endpoint` (RPC URL)
 - `global.keeperPrivateKey` (keypair or env var)
 - `enabledBots` + corresponding `botConfigs`
 
-### Initialize a Drift user (if needed)
+### Initialize a Velocity user (if needed)
 
-Bots that place orders or manage positions require a Drift user account. In `keeper-bots-v2`, you can use the built-in flag:
+Bots that place orders or manage positions require a Velocity user account. From `apps/keeper-bots-v2`, you can use the built-in flag:
 
 ```shell copy
-yarn run dev --init-user
+bun run dev --init-user
 ```
 
 ### Run and monitor
@@ -56,7 +56,7 @@ yarn run dev --init-user
 Start the process with your config:
 
 ```shell copy
-yarn run dev --config-file=example.config.yaml
+bun run dev --config-file=example.config.yaml
 ```
 
 Monitor logs for resubscribe messages and track your RPC latency. Some deployments also expose Prometheus metrics.

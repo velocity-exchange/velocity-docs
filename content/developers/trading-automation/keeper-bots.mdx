@@ -1,6 +1,6 @@
 # Keeper Bots
 
-Keeper bots keep Drift operational by performing automated actions as off-chain agents. Keepers are rewarded depending on the duties they perform.
+Keeper bots keep Velocity operational by performing automated actions as off-chain agents. Keepers are rewarded depending on the duties they perform.
 
 | Bot Type      | Difficulty | Capital Required | Rewards | Link                                                                              |
 | :------------ | :--------- | :--------------- | :------ | --------------------------------------------------------------------------------- |
@@ -11,27 +11,23 @@ Keeper bots keep Drift operational by performing automated actions as off-chain 
 
 _Note: all bots require some SOL for rent and transaction fees._
 
-Reference implementations live in [keeper-bots-v2](https://github.com/velocity-exchange/keeper-bots-v2).
+The reference implementation lives at [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) inside the `velocity-v1` monorepo — unlike Drift's standalone `keeper-bots-v2` repo, there is no separate devnet/mainnet-beta branch split; the app's `ENV` config value selects the cluster.
 
 <Steps>
-### Clone the repo and choose a branch
-
-Pick a branch that matches your cluster. Note: in this repo, `master` tracks **devnet** (not mainnet-beta).
-
-| Branch Name   | Cluster      |
-| ------------ | ------------ |
-| master       | devnet       |
-| mainnet-beta | mainnet-beta |
+### Clone the monorepo and install
 
 ```shell copy
-git clone https://github.com/velocity-exchange/keeper-bots-v2 -b mainnet-beta
+git clone https://github.com/velocity-exchange/velocity-v1.git
+cd velocity-v1
+bun install   # run once, at the repo root — this is a Bun workspace
 ```
 
 ### Configure environment + YAML config
 
-Copy the env template and set required values:
+From `apps/keeper-bots-v2`, copy the env template and set required values:
 
 ```shell copy
+cd apps/keeper-bots-v2
 cp .env.example .env
 ```
 
@@ -41,24 +37,24 @@ Required env vars:
 - `ENDPOINT`: RPC endpoint
 - `ENV`: `devnet` or `mainnet-beta`
 
-The repo uses a YAML config for bot selection and per-bot settings. Start from `example.config.yaml` and set:
+The app uses a YAML config for bot selection and per-bot settings. Start from `example.config.yaml` and set:
 
 - `global.endpoint`
 - `global.keeperPrivateKey` (or env var)
 - `enabledBots` + `botConfigs`
 
-### Initialize a Drift user (if needed)
+### Initialize a Velocity user (if needed)
 
-Bots that place orders or manage positions require a Drift user account. The repo provides a helper flag:
+Bots that place orders or manage positions require a Velocity user account. The app provides a helper flag:
 
 ```shell copy
-yarn run dev --init-user
+bun run dev --init-user
 ```
 
 ```typescript copy
-if (!(await driftClient.getUser().exists())) {
-  logger.info(`Creating DriftClient for ${wallet.publicKey}`);
-  const [txSig] = await driftClient.initializeUserAccount();
+if (!(await velocityClient.getUser().exists())) {
+  logger.info(`Creating User for ${wallet.publicKey}`);
+  const [txSig] = await velocityClient.initializeUserAccount();
   logger.info(`Initialized user account in transaction: ${txSig}`);
 }
 ```
@@ -68,13 +64,13 @@ if (!(await driftClient.getUser().exists())) {
 Required for liquidators and JIT makers that keep open positions:
 
 ```shell copy
-# deposit 10,000 USDC from account
-yarn run dev --force-deposit 10000
+# deposit 10,000 of spot market 0's quote asset (USDC on mainnet-beta; dUSDT on devnet)
+bun run dev --force-deposit 10000
 ```
 
 ### Run the bots
 
 ```shell copy
-yarn run dev --config-file=example.config.yaml
+bun run dev --config-file=example.config.yaml
 ```
 </Steps>

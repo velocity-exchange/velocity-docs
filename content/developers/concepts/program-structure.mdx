@@ -1,10 +1,10 @@
 # Program Structure
 
-This page dives deep into how Drift tracks positions, manages orders, and calculates collateral onchain.
+This page dives deep into how Velocity tracks positions, manages orders, and calculates collateral onchain.
 
 ## Overview
 
-Drift's account model is built around a few key principles:
+Velocity's account model is built around a few key principles:
 
 
 **Key Design Principles**
@@ -31,8 +31,12 @@ Tracks long/short exposure in perpetual futures markets.
 - `openBids` - Notional value locked in buy orders
 - `openAsks` - Notional value locked in sell orders
 
-**Liquidity provision:**
-- `lpShares` - If providing liquidity to the AMM
+**Isolated margin:**
+- `isolatedPositionScaledBalance` - When the `IsolatedPosition` position flag is set, this position is backed by its own ring-fenced collateral instead of drawing on the account's shared cross-margin pool
+
+<Callout type="info">
+Velocity has no vAMM LP shares — `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields from Drift do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
+</Callout>
 
 
 ### SpotPosition
@@ -52,6 +56,10 @@ Represents deposits (positive) or borrows (negative) in spot markets.
 **Order locking:**
 - Tokens locked in open spot orders tracked separately
 
+<Callout type="warning">
+Spot markets exist for collateral and borrow/lend on Velocity, but the spot DLOB is disabled — `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` were removed. You cannot trade spot on the order book; deposit/withdraw/borrow/repay still work normally.
+</Callout>
+
 ## Order mechanics
 
 
@@ -68,6 +76,7 @@ Orders are stored inline in UserAccount (no separate order accounts). Up to **32
 **Oracle orders** - Price moves with oracle: `oraclePrice + oraclePriceOffset`
 - Useful for market makers who want to maintain a spread without constant updates
 - Price automatically adjusts as oracle updates
+- `oraclePriceOffset` is a `BN` (i64) on both `Order` and `OrderParams`
 
 **Trigger orders** - Activate when oracle price crosses trigger price
 - `triggerMarket` - Becomes market order when triggered
@@ -88,6 +97,7 @@ This gives better prices while maintaining MEV resistance. See [JIT Auctions](/d
 - `reduceOnly` - Order can only reduce position size, not increase or flip it
 - `postOnly` - Order must be maker, rejected if would match immediately
 - `immediateOrCancel` - Fill what you can immediately, cancel the rest
+- `bitFlags` (`OrderBitFlag`) also carries `HasBuilder` (order attaches a builder fee) and `IsIsolatedPosition` (order trades against an isolated-margin position)
 
 ## Collateral and margin
 
@@ -122,13 +132,17 @@ Margin Requirement = Σ (position notional x initial margin ratio)
 
 **Initial margin ratio**
 - Determines minimum collateral to open a position
-- Varies by market (e.g., 5% for BTC-PERP = 20x max leverage)
+- Set per market via `PerpMarketAccount.marginRatioInitial` (e.g. 500 = 5% = 20x max leverage)
 - Higher for riskier/less liquid markets
 
 **Maintenance margin ratio**
-- Lower threshold that triggers liquidation
+- Lower threshold that triggers liquidation (`PerpMarketAccount.marginRatioMaintenance`)
 - Typically ~half of initial margin
 - Example: 2.5% maintenance if 5% initial
+
+<Callout type="warning">
+Velocity removed high leverage mode: there is no per-user `marginMode` override or `enableUserHighLeverageMode` instruction. `User.marginMode` was replaced in place by padding, and the `MarginMode` enum no longer exists. Leverage is governed solely by each market's `marginRatioInitial`/`marginRatioMaintenance`.
+</Callout>
 
 ### Account health
 
@@ -158,17 +172,19 @@ All subaccounts under the same wallet **share collateral** for cross-margin bene
 - **Flexible organization** - Separate strategies in different subaccounts
 - **Shared margin pool** - Winning positions support losing ones
 
-**SDK usage (TypeScript example ,  Python and Rust SDKs have equivalent methods):**
+**SDK usage (TypeScript, `@velocity-exchange/sdk`):**
 ```typescript
 // Switch between subaccounts
-await driftClient.switchActiveUser(1); // Switch to subaccount 1
-await driftClient.placePerpOrder(/* order params */); // Order goes to subaccount 1
+await velocityClient.switchActiveUser(1); // Switch to subaccount 1
+await velocityClient.placePerpOrder(/* order params */); // Order goes to subaccount 1
 ```
 
 **Important:**
 - Each subaccount has its own positions and orders
 - But they all share the same collateral/margin pool
 - Liquidation affects all subaccounts if total health drops below 1.0
+
+**Delegated transfers:** an authority can opt a delegate into moving deposits between the authority's own subaccounts by calling `updateUserAllowDelegateTransfer(true)` once; the delegate can then call `transferDepositByDelegate(...)`. This does not grant the delegate any withdrawal rights outside the authority's own subaccounts.
 
 
 ## State transitions
@@ -177,7 +193,7 @@ await driftClient.placePerpOrder(/* order params */); // Order goes to subaccoun
 
 Adds collateral to your account:
 
-1. Transfers tokens from wallet to Drift vault
+1. Transfers tokens from wallet to Velocity vault
 2. Increases spot position `scaledBalance`
 3. Updates cumulative deposit tracking
 4. Improves account health
@@ -216,7 +232,7 @@ When an order matches:
 1. Updates position `baseAssetAmount` and `quoteAssetAmount`
 2. Reduces `openBids` or `openAsks`
 3. Marks order as filled (not removed)
-4. Emits `OrderFillRecord` event
+4. Emits `OrderActionRecord` event
 5. Updates account health
 
 *Filled orders remain for history tracking*
@@ -239,7 +255,7 @@ When health < 1.0, liquidators can:
 
 1. Close perp positions at oracle price
 2. Reduce borrows by seizing collateral
-3. Earn liquidation fee (2-5%)
+3. Earn a liquidator fee (`PerpMarketAccount.liquidatorFee`, plus a separate insurance-fund cut and a protocol cut taken from the liquidatee — see `ifLiquidationFee` / `protocolLiquidationFee`)
 4. Bring account back to health
 5. Remaining positions stay open
 
@@ -247,7 +263,7 @@ When health < 1.0, liquidators can:
 
 ## Account size limits
 
-Drift enforces fixed limits to keep account size manageable and transaction costs predictable:
+Velocity enforces fixed limits to keep account size manageable and transaction costs predictable:
 
 
 **Perp positions**

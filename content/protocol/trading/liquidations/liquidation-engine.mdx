@@ -6,18 +6,22 @@ Every liquidation engine has to make a tradeoff: liquidate quickly enough to pro
 
 In a volatile market, bad oracle data or sudden price wicks can create sudden crises. A DEX that instantly liquidates based on a single bad price tick can wipe out healthy traders. Furthermore, liquidating at extreme temporary price can create bad debt, which can be dangerous for the protocol itself.
 
-By design, **Drift’s liquidation engine** revolves around 3 key areas:
+By design, **Velocity's liquidation engine** revolves around 3 key areas:
 
 <Steps>
 ### Partial liquidation
-To limit risk and reduce the severity of liquidation events, Drift uses **partial liquidation**. Instead of closing an entire position at once, the system liquidates portions over time, throttled across multiple slots. This gives the account a chance to recover as new oracle prices arrive, while ensuring the system remains solvent.
+To limit risk and reduce the severity of liquidation events, Velocity uses **partial liquidation** for cross-margin positions. Instead of closing an entire position at once, the system liquidates portions over time, throttled across multiple slots. This gives the account a chance to recover as new oracle prices arrive, while ensuring the system remains solvent.
 
-The buffer system ensures that users aren’t liquidated right back at maintenance margin. Instead, Drift places liquidated accounts slightly behind a safe margin buffer, far enough to reduce immediate risk but close enough to stay competitive for traders using leverage.
+The buffer system ensures that users aren’t liquidated right back at maintenance margin. Instead, Velocity places liquidated accounts slightly behind a safe margin buffer, far enough to reduce immediate risk but close enough to stay competitive for traders using leverage.
+
+<Callout type="important">
+This gradual, throttled unwind applies to **cross-margin** positions only. [Isolated positions](/protocol/trading/margin) skip the ramp and are liquidated 100% in a single shot — see [Liquidations](/protocol/trading/liquidations#isolated-position-liquidations).
+</Callout>
 
 ### Speed
-Drift’s liquidation engine liquidates progressively, adjusting speed based on how “unhealthy” the user’s account is and how the price evolves after the liquidation starts.
+Velocity's liquidation engine liquidates progressively, adjusting speed based on how “unhealthy” the user’s account is and how the price evolves after the liquidation starts.
 
-When a liquidation begins, Drift records how much margin has already been freed. From that point:
+When a liquidation begins, Velocity records how much margin has already been freed. From that point:
 - If the price keeps moving **against** the user, the system **accelerates** liquidation.
 - If the price moves **in favor** of the user, liquidation **slows down**, since the position is recovering naturally.
 
@@ -26,7 +30,7 @@ When a liquidation begins, Drift records how much margin has already been freed.
 From empirical data, even a few slots of delay can prevent unnecessary liquidations during a temporary wick. The goal isn’t to pause liquidation, but to make it responsive, reacting quickly when needed and backing off when conditions improve.
 
 ### Price
-Liquidations on Drift aren’t triggered directly by the mark price, instead, the engine references the oracle price for liquidation thresholds. The engine compares the current oracle price with the five-minute average oracle price(TWAP) to detect outliers.
+Liquidations on Velocity aren’t triggered directly by the mark price, instead, the engine references the oracle price for liquidation thresholds. The engine compares the current oracle price with the five-minute average oracle price(TWAP) to detect outliers.
 
 If the oracle price deviates 50% or more from the 5min TWAP, liquidations are **temporarily blocked**. This gives time for additional oracle updates to confirm whether the move is real. Once the deviation narrows, normal liquidation resumes, following the same pacing described above.
 
@@ -34,9 +38,9 @@ If the oracle price deviates 50% or more from the 5min TWAP, liquidations are **
 
 ## Insurance Fund as a safety net
 
-Even with all these protections, extreme events can still create negative balances. That’s where Drift’s **Insurance Fund** comes in. It’s the protocol’s first backstop against insolvency.
+Even with all these protections, extreme events can still create negative balances. That’s where Velocity's **Insurance Fund** comes in. It’s the protocol’s first backstop against insolvency.
 
-The Insurance Fund covers trader losses that exceed their account balances. Anyone can stake assets, like USDC, SOL, BTC, or ETH, into the fund and earn a share of Drift’s trading and liquidation fees.
+The Insurance Fund covers trader losses that exceed their account balances. Anyone can stake assets, like USDC, SOL, BTC, or ETH, into the fund and earn a share of Velocity's trading and liquidation fees. Since the [fee redesign](/protocol/trading/trading-fees), the Insurance Fund is **100% staker-owned** — there are no protocol-owned IF shares, so every dollar that settles into it accrues entirely to stakers as share-price appreciation.
 
 ### How It’s Used
 
@@ -49,15 +53,17 @@ Each asset has its own Insurance Fund. For example, the USDC fund backs both per
 
 ## How Perp Bankruptcy Resolution Works
 
-Drift follows a clear hierarchy for resolving perp market insolvency:
+Velocity follows a clear hierarchy for resolving perp market insolvency (`resolve_perp_bankruptcy`), gated by [`State.solvencyStatus`](/protocol/trading/liquidations#bankruptcy-and-solvency-status) rather than the general withdraw-pause flag:
 
 <Steps>
+### In-transit insurance fees
+The market's own not-yet-swept `pending_if_fee` is canceled against the bankrupting loss first — both are just accounting claims on future pnl-pool inflows, so no tokens need to move.
 ### External Insurance Fund
-The external Insurance Fund (USDC) covers the debt up to its per-market limit.
-### Internal Insurance
-If the external fund is insufficient, the vAMM’s lifetime profit for that market (internal insurance) covers remaining losses.
+The Insurance Fund vault covers remaining debt, bounded by the market's insurance-claim caps.
+### AMM fee-provision clawback
+If the Insurance Fund is insufficient, the market claws back its own AMM fee provision — capped at the cumulative amount the AMM has ever received via the [fee split](/protocol/trading/trading-fees) (`amm_protocol_fees_received`), first the not-yet-tokenized portion, then tokens already swept into the AMM's fee pool. The AMM's own trading/spread capital beyond that provision is never touched.
 ### Socialized loss
-If both are exhausted, **socialized loss** applies pro rata across all open positions within that market.
+If all of the above are exhausted, **socialized loss** applies pro rata across all open positions within that market.
 </Steps>
 
 This structure ensures that insolvency events are handled fairly and predictably. The system aims to keep socialized losses as close to zero as possible.

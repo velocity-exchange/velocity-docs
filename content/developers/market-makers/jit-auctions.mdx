@@ -1,6 +1,6 @@
 # JIT Auctions
 
-**JIT** (Just-In-Time) auctions are Drift's price discovery mechanism. When a taker order arrives (market order or aggressive limit crossing the spread), it enters an auction where market makers compete to fill it at better prices before it hits the DLOB or AMM.
+**JIT** (Just-In-Time) auctions are Velocity's price discovery mechanism. When a taker order arrives (market order or aggressive limit crossing the spread), it enters an auction where market makers compete to fill it at better prices before it hits the DLOB or AMM.
 
 ## Why JIT auctions?
 
@@ -11,7 +11,7 @@ Without JIT, taker orders would immediately execute against resting DLOB orders 
 - **Increase competition** among market makers for the same fill
 - **Enable offchain quoting** where makers don't need to rest orders, just respond to auctions
 
-This makes Drift's pricing more efficient than traditional limit order books.
+This makes Velocity's pricing more efficient than traditional limit order books.
 
 ## Auction parameters
 
@@ -73,15 +73,18 @@ A maker offering $100.05 would be eligible to fill starting at slot 5 (when the 
 
 **1. Taker places order**
 <SDKDoc>
-  <TypeScript name="placePerpOrder" type="method" owner="DriftClient">
+  <TypeScript name="placePerpOrder" type="method" owner="VelocityClient">
 ```typescript
-await driftClient.placePerpOrder({
+import { OrderType, PositionDirection } from "@velocity-exchange/sdk";
+
+// oraclePrice and auction prices are BN, PRICE_PRECISION (1e6)
+await velocityClient.placePerpOrder({
   orderType: OrderType.MARKET,
   direction: PositionDirection.LONG,
   baseAssetAmount: size,
-  auctionDuration: 10,                    // 10 slots
-  auctionStartPrice: oraclePrice * 1.001, // oracle + 0.1%
-  auctionEndPrice: oraclePrice,           // oracle
+  auctionDuration: 10,                                          // 10 slots
+  auctionStartPrice: velocityClient.convertToPricePrecision(100.1), // oracle + 0.1%
+  auctionEndPrice: velocityClient.convertToPricePrecision(100),     // oracle
 });
 ```
   </TypeScript>
@@ -92,14 +95,15 @@ await driftClient.placePerpOrder({
 **3. Market makers compete**: makers observe the auction and submit fills at prices within the auction range.
 
 ```typescript
-// Maker observes auction via AuctionSubscriber
-const auction = auctionSubscriber.getAuction(orderId);
-
-// Maker submits fill
-await driftClient.placeAndMakePerpOrder(
-  makerOrderParams,
-  takerInfo  // includes taker's order and user account
-);
+// AuctionSubscriber has no getAuction()/pull-style API -- it's event-driven.
+// It emits 'onAccountUpdate' with the taker's UserAccount whenever an order changes.
+auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pubkey, slot) => {
+  // Inspect takerUserAccount.orders for the specific order in auction, then:
+  await velocityClient.placeAndMakePerpOrder(
+    makerOrderParams,
+    takerInfo // includes taker's order and user account
+  );
+});
 ```
 
 **4. Auction resolves**: best maker(s) fill the taker. If partially filled, remaining size continues through the auction. If unfilled after `auctionDuration` slots, it matches against DLOB, then AMM.
@@ -112,10 +116,10 @@ To participate in JIT auctions, bots typically:
 <SDKDoc>
   <TypeScript name="AuctionSubscriber" type="class">
 ```typescript
-import { AuctionSubscriber } from "@drift-labs/sdk";
+import { AuctionSubscriber } from "@velocity-exchange/sdk";
 
 const auctionSubscriber = new AuctionSubscriber({
-  driftClient,
+  velocityClient,
   opts: { commitment: "processed" }
 });
 
@@ -128,17 +132,23 @@ await auctionSubscriber.subscribe();
 <SDKDoc>
   <TypeScript name="getAuctionPrice" type="function">
 ```typescript
-import { getAuctionPrice, isVariant } from "@drift-labs/sdk";
+import { getAuctionPrice, isVariant } from "@velocity-exchange/sdk";
 
 // AuctionSubscriber emits 'onAccountUpdate' with UserAccount data
 auctionSubscriber.eventEmitter.on("onAccountUpdate", (userAccount, pubkey, slot) => {
   // Find orders in auction (hasAuction flag is set by the memcmp filter)
   for (const order of userAccount.orders) {
-    if (order.status === 0 || order.baseAssetAmount.eq(order.baseAssetAmountFilled)) continue;
+    if (
+      !isVariant(order.status, "open") ||
+      order.baseAssetAmount.eq(order.baseAssetAmountFilled)
+    ) continue;
 
-    // Calculate current auction price at this slot
-    const oracleData = driftClient.getOracleDataForPerpMarket(order.marketIndex);
-    const auctionPrice = getAuctionPrice(order, slot, oracleData.price);
+    // Calculate current auction price at this slot. Pass the market's tick size
+    // (PerpMarketAccount.orderTickSize) so this matches the program's own rounding --
+    // see Orderbook & Matching's tick-size section for why this matters.
+    const perpMarket = velocityClient.getPerpMarketAccount(order.marketIndex);
+    const oracleData = velocityClient.getMMOracleDataForPerpMarket(order.marketIndex);
+    const auctionPrice = getAuctionPrice(order, slot, oracleData.price, perpMarket.orderTickSize);
 
     // Check if your desired fill price is within the current auction range
     const myFillPrice = calculateMyPrice(oracleData, inventory);
@@ -168,15 +178,15 @@ The `placeAndMakePerpOrder` instruction atomically:
 This ensures you're credited as the maker (earning rebates) while filling the taker atomically.
 
 <SDKDoc>
-  <TypeScript name="placeAndMakePerpOrder" type="method" owner="DriftClient">
+  <TypeScript name="placeAndMakePerpOrder" type="method" owner="VelocityClient">
 ```typescript
-import { OrderType, PositionDirection, PostOnlyParams } from "@drift-labs/sdk";
+import { OrderType, PositionDirection, PostOnlyParams } from "@velocity-exchange/sdk";
 
 const makerOrderParams = {
   orderType: OrderType.LIMIT,
   marketIndex: auction.order.marketIndex,
   direction: PositionDirection.SHORT, // opposite of taker's LONG
-  price: driftClient.convertToPricePrecision(myFillPrice),
+  price: velocityClient.convertToPricePrecision(myFillPrice),
   baseAssetAmount: auction.order.baseAssetAmount, // fill entire order
   postOnly: PostOnlyParams.MUST_POST_ONLY,
 };
@@ -188,7 +198,7 @@ const takerInfo = {
   order: takerOrder,                  // the specific Order to fill
 };
 
-await driftClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
+await velocityClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
 ```
   </TypeScript>
 </SDKDoc>
@@ -227,29 +237,43 @@ JIT runs first, DLOB provides backup liquidity if auction doesn't fully fill.
 - You get better prices but not instant fills
 - Use market orders for auction participation (limit orders bypass auction if they don't cross spread)
 
+## AMM as a JIT maker
+
+The AMM isn't only the fallback of last resort (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)) — inside a DLOB match it can also compete as a JIT maker against your resting order for the same fill. Whether it does depends on a set of hard gates checked at fill time:
+
+- `AmmFill` isn't paused for the market (`PerpOperation.AMM_FILL`)
+- the AMM doesn't currently have too much drawdown
+- the oracle (including the MM oracle, when active and recent) is valid and not too volatile vs. the exchange oracle
+
+If any of these gates trips, the AMM is excluded from that DLOB match entirely — you're only competing against other DLOB makers for that fill, not the AMM. This is separate from the auction-timing rules that decide whether the AMM can fill a *fresh* taker order immediately outside of a DLOB match. Practically: don't assume the AMM is always a competing quote inside the auction — during a pause, drawdown, or oracle-stress event it drops out, and DLOB-only makers pick up the full remaining size.
+
 ## JIT Proxy library
 
-The [`@drift-labs/jit-proxy`](https://github.com/velocity-exchange/jit-proxy) package provides higher-level abstractions for auction participation:
+**Not yet published to npm.** `@velocity-exchange/jit-proxy` isn't on the npm registry yet — build it from `packages/jit-proxy` in the [velocity-v1 monorepo](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) until it is. The client is vendored in-repo, ported to Anchor 1.0, and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream.
+
+The package provides higher-level abstractions for auction participation:
 
 - **`JitterSniper`**: waits for the optimal auction slot before submitting a single fill transaction. Best for precise pricing with lower compute costs.
 - **`JitterShotgun`**: submits fill transactions at multiple auction slots simultaneously. Higher fill rate but uses more compute and SOL for fees.
 
-The [`JitMaker`](https://github.com/velocity-exchange/keeper-bots-v2/blob/master/src/bots/jitMaker.ts) bot in keeper-bots-v2 demonstrates both strategies and includes market volatility checks, position sizing, and DLOB-aware pricing.
+The [`JitMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot in keeper-bots-v2 demonstrates both strategies and includes market volatility checks, position sizing, and DLOB-aware pricing.
 
 ```typescript
-import { JitterSniper, JitterShotgun, PriceType } from "@drift-labs/jit-proxy/lib";
+import { JitterSniper, JitterShotgun, PriceType } from "@velocity-exchange/jit-proxy";
 
-// Sniper: one precise fill attempt
+// Sniper: one precise fill attempt.
+// Note: the constructor field is still named `driftClient` even though it's typed
+// as `VelocityClient` -- @velocity-exchange/jit-proxy hasn't renamed the field yet.
 const jitter = new JitterSniper({
   auctionSubscriber,
-  driftClient,
+  driftClient: velocityClient,
   // ...
 });
 
 // Shotgun: multiple fill attempts across auction slots
 const jitter = new JitterShotgun({
   auctionSubscriber,
-  driftClient,
+  driftClient: velocityClient,
   // ...
 });
 ```
@@ -267,4 +291,4 @@ const jitter = new JitterShotgun({
 - [Matching Engine](/protocol/about-v3/matching-engine) - Full liquidity priority flow
 - [JIT-only MM](./jit-only) - Building a JIT market maker bot
 - [SWIFT API](./swift-api) - See taker orders 100-500ms before they hit the auction
-- [@drift-labs/jit-proxy](https://github.com/velocity-exchange/jit-proxy) - JIT proxy SDK
+- [`packages/jit-proxy`](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) - JIT proxy SDK (`@velocity-exchange/jit-proxy`, unpublished — build from source)

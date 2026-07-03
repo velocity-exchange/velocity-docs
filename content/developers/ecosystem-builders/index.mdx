@@ -1,179 +1,64 @@
 # Ecosystem Builders
 
-This section is for teams building apps, analytics, or integrations on top of Drift. The [`drift-common`](https://github.com/velocity-exchange/drift-common) monorepo and the [`drift-ui-template`](https://github.com/velocity-exchange/drift-ui-template) use the same building blocks as the official Drift UI, so you get UI parity without reinventing the wheel.
-
-## Packages
-
-| Package | npm | Purpose |
-|---|---|---|
-| `@drift-labs/react` | `npm i @drift-labs/react` | React providers, hooks, and stores for Drift integration |
-| `@drift-labs/common` | `npm i @drift-labs/common` | TypeScript utilities, market types, number formatting, `AuthorityDrift` client |
-| `@drift-labs/icons` | `npm i @drift-labs/icons` | Market and token icons used across the Drift UI |
+This section is for teams building apps, analytics, or integrations on top of Velocity. Velocity does not currently ship a higher-level UI kit (Drift's `drift-common`/`drift-ui-template`/`@drift-labs/react` ecosystem has no Velocity equivalent yet) — ecosystem apps build directly against `@velocity-exchange/sdk`'s `VelocityClient`, `User`, and `DLOB` classes.
 
 ## Setup
 
-Every app starts by creating an `AuthorityDrift` instance from `@drift-labs/common`, subscribing to on-chain data, and syncing updates into your stores. This is how `drift-ui-template` does it:
+Every app starts by creating a `VelocityClient`, subscribing to on-chain data, and reading from its caches.
 
 ### Initialize and subscribe
 
 ```ts
-import { AuthorityDrift, COMMON_UI_UTILS, MarketId } from "@drift-labs/common";
-import { MarketType } from "@drift-labs/sdk";
+import { Connection } from "@solana/web3.js";
+import { VelocityClient, Wallet, loadKeypair } from "@velocity-exchange/sdk";
 
-const drift = new AuthorityDrift({
-  solanaRpcEndpoint: "https://...",
-  driftEnv: "mainnet-beta",
-  wallet: connectedWallet, // IWallet from @solana/wallet-adapter
-  tradableMarkets: [
-    new MarketId(0, MarketType.SPOT),  // USDC
-    new MarketId(1, MarketType.SPOT),  // SOL
-    new MarketId(0, MarketType.PERP),  // SOL-PERP
-    new MarketId(1, MarketType.PERP),  // BTC-PERP
-  ],
+const connection = new Connection("<RPC_URL>", "confirmed");
+const wallet = new Wallet(loadKeypair("<KEYPAIR_PATH>")); // or a connected wallet-adapter wallet
+
+const velocityClient = new VelocityClient({
+  connection,
+  wallet,
+  env: "mainnet-beta",
 });
 
-await drift.subscribe();
+await velocityClient.subscribe();
 ```
 
-If the wallet hasn't connected yet, pass a placeholder so the client can still subscribe to market data:
+See [SDK Setup](/developers/velocity-sdk/setup) for the full `VelocityClientConfig` reference, including polling vs. websocket subscription modes and market/oracle subsets.
+
+### Read account and market caches
+
+Once subscribed, `VelocityClient` exposes account and market data synchronously from its subscriber caches — no additional RPC round-trip per read:
 
 ```ts
-const placeholderWallet = COMMON_UI_UTILS.createPlaceholderIWallet();
-const drift = new AuthorityDrift({
-  solanaRpcEndpoint: "https://...",
-  driftEnv: "mainnet-beta",
-  wallet: placeholderWallet,
-});
+const state = velocityClient.getStateAccount();
+const perpMarket = velocityClient.getPerpMarketAccount(0); // SOL-PERP
+const user = velocityClient.getUser(); // active subaccount's User wrapper
 
-await drift.subscribe();
-
-// Later, when wallet connects:
-drift.updateAuthority(realWallet);
+const health = user.getHealth();               // 0-100
+const totalCollateral = user.getTotalCollateral();
+const perpPosition = user.getPerpPosition(0);
 ```
 
-### Sync into Zustand stores
+See [Reading Data](/developers/ecosystem-builders/reading-data) for the full set of account/market/orderbook read paths, and [PnL & Risk](/developers/velocity-sdk/pnl-risk) for margin/health calculations.
 
-After subscribing, wire the caches into your app's stores so components re-render on updates:
+### React apps
 
-```ts
-// Oracle prices
-drift.onOraclePricesUpdate((oraclePrices) => {
-  setOraclePriceStore((s) => {
-    s.lookup = { ...s.lookup, ...oraclePrices };
-  });
-});
-
-// Mark prices (bid/ask/mark from DLOB)
-drift.onMarkPricesUpdate((markPrices) => {
-  setMarkPriceStore((s) => {
-    s.lookup = { ...s.lookup, ...markPrices };
-  });
-});
-
-// User account data (positions, orders, balances, margin)
-drift.onUserAccountUpdate((newUserAccount) => {
-  setUserAccountDataStore((s) => {
-    s.lookup[
-      UserAccountCache.getUserAccountKey(
-        newUserAccount.subAccountId,
-        newUserAccount.authority,
-      )
-    ] = newUserAccount;
-  });
-});
-```
-
-### React apps: DriftProvider
-
-If you're using `@drift-labs/react`, wrap your app with `DriftProvider` to handle wallet connection, DriftClient initialization, RPC management, geoblocking, and idle polling:
-
-```tsx
-import { DriftProvider, DEFAULT_BREAKPOINTS } from "@drift-labs/react";
-
-function App() {
-  return (
-    <DriftProvider breakpoints={DEFAULT_BREAKPOINTS}>
-      <YourApp />
-    </DriftProvider>
-  );
-}
-```
-
-Then access state with `useCommonDriftStore`:
-
-```tsx
-import { useCommonDriftStore } from "@drift-labs/react";
-
-const driftClient = useCommonDriftStore((s) => s.driftClient.client);
-const isReady = useCommonDriftStore((s) => s.checkIsDriftClientReady());
-const userAccounts = useCommonDriftStore((s) => s.userAccounts);
-```
-
-Or check readiness with a simpler hook:
-
-```tsx
-import { useDriftClientIsReady } from "@drift-labs/react";
-
-const isReady = useDriftClientIsReady();
-```
-
-## Utility modules
-
-`@drift-labs/common` bundles pre-built helpers that the template uses throughout:
-
-| Module | Common functions | Used for |
-|---|---|---|
-| `TRADING_UTILS` | `getMarketTickSizeDecimals()`, `getMarketTickSize()`, `getMarketStepSizeDecimals()`, `isEntirePositionOrder()` | Price/size formatting, decimal precision per market |
-| `COMMON_UI_UTILS` | `getUIOrderTypeFromSdkOrderType()`, `createPlaceholderIWallet()` | Order type labels, pre-connect wallet placeholder |
-| `ENUM_UTILS` | `match()` | Anchor enum variant matching (direction, order type) |
-| `MARKET_UTILS` | Market name resolution, config lookups | Display formatting, market metadata |
-| `ORDER_COMMON_UTILS` | Order parameter building, auction param derivation | Building order params for SDK calls |
-| `USER_UTILS` | User account formatting, position display helpers | Account labels, subaccount display |
-
-Other common imports:
-
-```ts
-import { UIMarket, MarketId, NumLib } from "@drift-labs/common";
-
-UIMarket.createPerpMarket(0).marketName;              // "SOL-PERP"
-MarketId.createPerpMarket(0).key;                     // unique lookup key
-NumLib.formatNum.toDisplayPrice(rawPriceBN);           // locale-formatted price string
-
-import { USDC_SPOT_MARKET_INDEX, SOL_SPOT_MARKET_INDEX, MAIN_POOL_ID } from "@drift-labs/common";
-```
-
-## drift-ui-template: quickstart
-
-[`drift-ui-template`](https://github.com/velocity-exchange/drift-ui-template) is a Next.js starter that wires together everything above into a working trading UI.
-
-**Stack:** Next.js 15, React 19, TypeScript, Tailwind CSS, Zustand, Solana wallet adapter
-
-**Pre-built pages:** perps trading (orderbook, candle chart, trade form, positions table, open orders), spot trading (balances, deposit/withdraw, swap), market data, user account management.
-
-**Architecture:**
-- `useSetupDrift` hook creates an `AuthorityDrift` instance and syncs its caches into Zustand stores (`useDriftStore`, `useOraclePriceStore`, `useMarkPriceStore`, `useUserAccountDataStore`)
-- Components read from stores and call `AuthorityDrift` methods for actions
-- `UserAccountCache.getUserAccountKey(subAccountId, authority)` maps subaccounts to `EnhancedAccountData` in the lookup
-
-```bash
-git clone https://github.com/velocity-exchange/drift-ui-template.git
-cd drift-ui-template/ui
-yarn install
-yarn dev
-```
-
-The template defaults to devnet. To switch to mainnet, update the environment in the config map inside `useSetupDrift.ts`.
+There is no dedicated `@velocity-exchange/react` package yet. Wrap `VelocityClient` construction and subscription lifecycle in your own hook/provider (e.g. a `useEffect` that constructs the client on wallet connect and calls `subscribe()`/`unsubscribe()`), and store the derived state (positions, orders, margin) in your own state manager (Zustand, Redux, React context, etc). See [Reading Data](/developers/ecosystem-builders/reading-data) for the read APIs to wire up.
 
 ## Next steps
 
-- [Reading data](/developers/ecosystem-builders/reading-data) -- Account data (positions, orders, balances, collateral), market data (oracle/mark prices, orderbook, candles), and Data API REST endpoints
-- [Sending actions](/developers/ecosystem-builders/sending-actions) -- AuthorityDrift methods (orders, cancel, settle PnL, deposit, withdraw, swap) and SDK instruction builders
-- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) -- L2/L3 REST snapshots and real-time DLOB websocket streaming
-- [SDK Setup](/developers/drift-sdk/setup) -- Manual DriftClient initialization for non-React or server-side apps
+- [Reading data](/developers/ecosystem-builders/reading-data) — Account data (positions, orders, balances, collateral), market data (oracle/mark prices, orderbook, candles), and Data API REST endpoints
+- [Sending actions](/developers/ecosystem-builders/sending-actions) — `VelocityClient` methods (orders, cancel, settle PnL, deposit, withdraw) and stateless `VelocityCore` instruction builders
+- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) — L2/L3 REST snapshots and real-time DLOB websocket streaming
+- [SDK Setup](/developers/velocity-sdk/setup) — Full `VelocityClient` initialization reference
 
 ## Staying up to date
 
-- [GitHub: protocol-v2](https://github.com/velocity-exchange/protocol-v2) -- watch releases for SDK breaking changes
-- [GitHub: drift-common](https://github.com/velocity-exchange/drift-common) -- shared UI packages
-- [GitHub: drift-ui-template](https://github.com/velocity-exchange/drift-ui-template) -- starter trading UI
+- [GitHub: velocity-v1](https://github.com/velocity-exchange/velocity-v1) — the monorepo containing the program, SDK, vaults, and keeper bots; watch releases for SDK breaking changes
+- [Migration guide](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) — full list of differences from Drift Protocol v2, if you're porting an existing Drift integration
 - [Data API playground](/developers/data-api)
+
+<Callout type="warning">
+Open question for this guide: Velocity currently has no announced equivalent to Drift's `drift-common` shared UI package or `drift-ui-template` starter kit. If/when one ships, this page should link to it instead of the raw SDK setup above.
+</Callout>
