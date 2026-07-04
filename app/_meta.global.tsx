@@ -16,25 +16,9 @@ const META = {
     "type": "page",
     "items": {
       "index": "Velocity Overview",
-      "about-v3": {
-        "title": "About Velocity",
-        "items": {
-          "index": "Understanding Velocity",
-          "drift-amm": "",
-          "decentralized-orderbook": "",
-          "keepers": {
-            "title": "Keepers",
-            "items": {
-              "index": "",
-              "keepers-dlob-faq": "",
-              "keeper-incentives": "",
-            },
-          },
-          "matching-engine": "",
-          "jit-faq": "",
-          "revenue-pool": "",
-          "optimizations": "",
-        }
+      "--- using": {
+        "title": "USING VELOCITY",
+        "type": "separator"
       },
       "getting-started": {
         "title": "Getting Started",
@@ -46,7 +30,6 @@ const META = {
               "phantom-wallet": "",
               "metamask": "",
               "passwordless-login": "",
-              "bot-wallet": "",
             },
           },
           "cross-collateral-deposits": "",
@@ -84,7 +67,6 @@ const META = {
               "index": "",
               "accounting-settlement": "",
               "unsettled-profit-loss": "",
-              "profit-loss-pool": ""
             }
           },
           "order-types": {
@@ -99,29 +81,22 @@ const META = {
             "title": "Liquidations",
             "items": {
               "index": "",
-              "liquidation-engine": "",
-              "liquidators": ""
             }
           },
           "trading-fees": {
             "title": "Trading Fees",
             "items": {
               "index": "",
-              "fee-pool": "",
               "other-trading-fees": "",
             }
           },
           "versioned-transactions": "",
-          "oracles": "",
-          "block-conditions": "",
         }
       },
       "borrow-lend": {
         "title": "Borrow & Lend",
         "items": {
           "index": "",
-          "borrow-interest-rate": "",
-          "isolated-pools": "",
           "borrow-lend-faq": "",
           "borrow-lend-apy": "",
           "amplify": {
@@ -136,12 +111,45 @@ const META = {
           },
         }
       },
-      "market-makers": {
-        "title": "Market Makers",
+      "rewards": {
+        "title": "Rewards",
         "items": {
           "index": "",
-          "market-maker-participation": "",
-          "maker-fee-rebate": "",
+          "referral-links": "",
+        },
+      },
+      "glossary": "",
+      "--- how-it-works": {
+        "title": "HOW VELOCITY WORKS",
+        "type": "separator"
+      },
+      "how-it-works": {
+        "title": "How Velocity Works",
+        "items": {
+          "index": "Understanding Velocity",
+          "matching-engine": "",
+          "velocity-amm": "",
+          "decentralized-orderbook": "",
+          "jit-faq": "",
+          "keepers": {
+            "title": "Keepers",
+            "items": {
+              "index": "",
+              "keepers-dlob-faq": "",
+              "keeper-incentives": "",
+            },
+          },
+          "oracles": "",
+          "liquidation-engine": "",
+          "liquidators": "",
+          "revenue-pool": "",
+          "fee-pool": "",
+          "profit-loss-pool": "",
+          "borrow-interest-rate": "",
+          "isolated-pools": "",
+          "block-conditions": "",
+          "optimizations": "",
+          "program-vault-addresses": "",
         }
       },
       "insurance-fund": {
@@ -151,12 +159,17 @@ const META = {
           "insurance-fund-staking": ""
         }
       },
-      "rewards": {
-        "title": "Rewards",
+      "market-makers": {
+        "title": "Market Makers",
         "items": {
           "index": "",
-          "referral-links": "",
-        },
+          "market-maker-participation": "",
+          "maker-fee-rebate": "",
+        }
+      },
+      "--- risk": {
+        "title": "RISK & SAFETY",
+        "type": "separator"
       },
       "risk-and-safety": {
         "title": "Risk and Safety",
@@ -171,7 +184,6 @@ const META = {
           "risks": "",
         }
       },
-      "glossary": "",
       "--- Legal": {
         "title": "LEGAL",
         "type": "separator"
@@ -255,6 +267,7 @@ const META = {
         "title": "Trading Automation",
         "items": {
           "index": "",
+          "bot-wallet": "",
           "trading-workflows": "",
           "keeper-bots": {
             "title": "Keeper Bots",
