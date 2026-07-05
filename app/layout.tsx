@@ -74,7 +74,7 @@ export default async function RootLayout({
             defaultMenuCollapseLevel: 1,
             toggleButton: true,
           }}
-          docsRepositoryBase="https://github.com/velocity-exchange/drift-protocol-v2-docs/tree/master"
+          docsRepositoryBase="https://github.com/velocity-exchange/velocity-docs/tree/master"
           footer={
             <Footer>
               <a

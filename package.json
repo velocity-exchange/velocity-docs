@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/velocity-exchange/drift-protocol-v2-docs"
+    "url": "https://github.com/velocity-exchange/velocity-docs"
   },
   "author": "Drift Labs",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/velocity-exchange/drift-protocol-v2-docs/issues"
+    "url": "https://github.com/velocity-exchange/velocity-docs/issues"
   },
-  "homepage": "https://github.com/velocity-exchange/drift-protocol-v2-docs",
+  "homepage": "https://github.com/velocity-exchange/velocity-docs",
   "dependencies": {
     "@coral-xyz/anchor": "npm:@anchor-lang/core@1.0.1",
     "@velocity-exchange/sdk": "0.4.0",

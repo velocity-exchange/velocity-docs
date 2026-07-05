@@ -1,6 +1,6 @@
-# 👾 Drift Protocol Documentation
+# 👾 Velocity Exchange Documentation
 
-[Drift Protocol](https://www.drift.trade/) brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.
+[Velocity Exchange](https://www.velocity.exchange/) brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.
 
 ## Local Development
 
