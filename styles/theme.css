@@ -1,39 +1,71 @@
 :root {
   /* Light theme tokens */
-  --nextra-bg: 241 243 252;
+  --nextra-bg: 242 246 243;
   --nextra-primary-hue: 145;
   --nextra-primary-saturation: 85%;
   --nextra-primary-lightness: 38%;
 
-  --x-color-gray-50: #f8f6fb;
-  --x-color-gray-100: #f1edf8;
-  --x-color-gray-200: #e6def2;
-  --x-color-gray-300: #d1c6e4;
-  --x-color-gray-400: #9f90b6;
-  --x-color-gray-600: #5b4c73;
-  --x-color-gray-700: #534467;
-  --x-color-gray-800: #2f2340;
-  --x-color-gray-900: #1c132a;
+  /* Neutrals: tinted a whisper toward the Velocity brand green (hue 150),
+     not the legacy Drift violet. Chroma kept low so they still read neutral. */
+  --x-color-gray-50: oklch(0.972 0.006 150);
+  --x-color-gray-100: oklch(0.955 0.008 150);
+  --x-color-gray-200: oklch(0.918 0.010 150);
+  --x-color-gray-300: oklch(0.835 0.013 150);
+  --x-color-gray-400: oklch(0.660 0.016 150);
+  --x-color-gray-600: oklch(0.420 0.018 150);
+  --x-color-gray-700: oklch(0.380 0.017 150);
+  --x-color-gray-800: oklch(0.260 0.015 150);
+  --x-color-gray-900: oklch(0.180 0.013 150);
+
+  /* Semantic callout system. Accent = border + icon (the signal);
+     body copy uses ink for readability instead of a full-hue wash. */
+  --vlc-brand: oklch(0.560 0.170 148);   /* "important" -> logo green #08AA18, tuned for AA */
+  --vlc-info: oklch(0.520 0.170 252);    /* info  -> blue  */
+  --vlc-warn: oklch(0.585 0.135 68);     /* warning -> amber */
+  --vlc-danger: oklch(0.540 0.200 27);   /* error -> red   */
+  --vlc-callout-ink: oklch(0.300 0.020 150);
+  --vlc-tint: 12%;
+
+  /* Action + link greens. The site's --x-color-primary-600 only reaches
+     ~2.5:1 on the light surface, so it can't carry white-text buttons or
+     body-sized links here. These are the AA-safe brand greens:
+     --vlc-action holds white text at 5.5:1 in both themes; --vlc-link
+     clears 5:1 on the light surface. */
+  --vlc-action: oklch(0.5 0.15 150);
+  --vlc-action-hover: oklch(0.44 0.145 150);
+  --vlc-link: oklch(0.5 0.15 150);
 
   --nextra-navbar-height: 100px;
 }
 
 .dark {
   /* Dark theme tokens */
-  --nextra-bg: 5 6 12;
+  --nextra-bg: 6 9 7;
   --nextra-primary-hue: 145;
   --nextra-primary-saturation: 75%;
   --nextra-primary-lightness: 62%;
 
-  --x-color-gray-50: #837b90;
-  --x-color-gray-100: #7b6f95;
-  --x-color-gray-200: #a89dc0;
-  --x-color-gray-300: #c3b9d7;
-  --x-color-gray-400: #e0d9ee;
-  --x-color-gray-600: #f1edf7;
-  --x-color-gray-700: #f6f3fc;
-  --x-color-gray-800: #faf8fe;
-  --x-color-gray-900: #ffffff;
+  --x-color-gray-50: oklch(0.560 0.014 150);
+  --x-color-gray-100: oklch(0.530 0.015 150);
+  --x-color-gray-200: oklch(0.680 0.012 150);
+  --x-color-gray-300: oklch(0.780 0.010 150);
+  --x-color-gray-400: oklch(0.890 0.008 150);
+  --x-color-gray-600: oklch(0.955 0.006 150);
+  --x-color-gray-700: oklch(0.970 0.005 150);
+  --x-color-gray-800: oklch(0.985 0.003 150);
+  --x-color-gray-900: oklch(1 0 150);
+
+  /* Brighter accents so they carry on the near-black surface */
+  --vlc-brand: oklch(0.740 0.170 146);
+  --vlc-info: oklch(0.740 0.140 252);
+  --vlc-warn: oklch(0.800 0.130 78);
+  --vlc-danger: oklch(0.700 0.180 27);
+  --vlc-callout-ink: oklch(0.920 0.012 150);
+  --vlc-tint: 20%;
+
+  /* --vlc-action stays fixed (white text on it clears AA on either bg).
+     On the dark surface the site green already reaches ~12:1, so links use it. */
+  --vlc-link: var(--x-color-primary-600);
 }
 
 html,
@@ -48,6 +80,39 @@ footer {
 
 .dark .velocity-logo {
   color: #ffffff;
+}
+
+/* ── Semantic callouts ───────────────────────────────────────────────
+   Nextra tags each callout type with Tailwind color utilities on
+   .nextra-callout (purple = important, blue = info, yellow = warning,
+   red = error). We re-map those to a brand-coherent semantic set:
+   the accent carries the border + icon, the body copy stays ink so it
+   always clears WCAG AA. "important" (the most-used type) becomes the
+   Velocity green, tying the docs' most frequent accent to the logo. */
+.nextra-callout[class*="purple-"] { --vlc-accent: var(--vlc-brand); }
+.nextra-callout[class*="blue-"]   { --vlc-accent: var(--vlc-info); }
+.nextra-callout[class*="yellow-"] { --vlc-accent: var(--vlc-warn); }
+.nextra-callout[class*="red-"]    { --vlc-accent: var(--vlc-danger); }
+
+.nextra-callout {
+  background-color: color-mix(in oklab, var(--vlc-accent) var(--vlc-tint), rgb(var(--nextra-bg))) !important;
+  border-color: color-mix(in oklab, var(--vlc-accent) 60%, transparent) !important;
+  color: var(--vlc-callout-ink) !important;
+}
+
+/* the leading icon keeps the full accent hue — it is the color signal */
+.nextra-callout > div:first-child {
+  color: var(--vlc-accent) !important;
+}
+
+/* links and inline code stay legible against the ink body copy */
+.nextra-callout a {
+  color: var(--vlc-accent) !important;
+  text-decoration-color: color-mix(in oklab, var(--vlc-accent) 45%, transparent);
+}
+
+.nextra-callout code {
+  color: var(--vlc-callout-ink) !important;
 }
 
 

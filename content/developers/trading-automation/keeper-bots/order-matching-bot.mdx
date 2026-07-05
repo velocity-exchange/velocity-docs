@@ -10,7 +10,7 @@ Order Matching Bots (Matching Bots) are responsible for matching two orders that
 
 Matching Bots receive a small compensation for each order that they successfully fill.
 
-See [Keepers & Decentralised Orderbook](/protocol/about-v3/decentralized-orderbook) for a technical explanation of how the decentralised orderbook (DLOB) and matching incentives work.
+See [Keepers & Decentralised Orderbook](/protocol/how-it-works/decentralized-orderbook) for a technical explanation of how the decentralised orderbook (DLOB) and matching incentives work.
 
 Matching Bots are similar to [Tutorial: Order Trigger Bot](/developers/trading-automation/keeper-bots/order-trigger-bot) in that they:
 
@@ -39,7 +39,7 @@ The matching bot runs a continuous loop: fetch fillable orders from the DLOB, fi
 <Steps>
 ### Get nodes from the DLOB that are ready to be filled
 
-Market orders first go through [JIT Auctions](/protocol/about-v3/matching-engine). After the auction period ends, they become available for matching bots to fill. The DLOB exposes a `findNodesToFill` method that returns these eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
+Market orders first go through [JIT Auctions](/protocol/how-it-works/matching-engine). After the auction period ends, they become available for matching bots to fill. The DLOB exposes a `findNodesToFill` method that returns these eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
 
 ```typescript copy
 const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;

@@ -1,83 +1,18 @@
 # Spot Trading
 
-Spot Trading is the direct purchase or sale of an asset. The delivery of the assets is immediate and the transaction settles on-chain. Once the spot trade has been confirmed, the settlement will be instantaneous, and you will be able to see the increase or decrease in the asset immediately in your account balances.
-
-Spot trading on Velocity uses liquidity from OpenBook DEX as well as our own DLOB. By default, margin trading is not enabled. Learn how to enable it in the next section.
-
-<Steps>
-### Navigate to spot trading
-Select "Trade" then "Spot" from the top navigation.
-<img src="/assets/spot-trading-1.png" alt="" width="800" height="auto"></img>
-
-### Select the market
-Select a market in the top bar or the market's dropdown menu
-<img src="/assets/spot-trading-2.png" alt="" width="800" height="auto"></img>
-
-### Choose direction and order type
-Select your direction (e.g. Buy or Sell) and order type (e.g. Market, Limit)
-
-### Enter asset amount or notional value
-Input the asset amount you'd like to trade or the notional value
-
-<img src="/assets/spot-trading-3.png" alt="" width="800" height="auto"></img>
-
-### Confirm and fill
-Once you've confirmed your order and it has been filled, your Balances tab will update to reflect your balance changes
-</Steps>
-
-## Enable Spot Margin Trading
-
-Margin trading allows you to leverage your assets as collateral to borrow funds for the trade. The leverage a trader can take in each spot market is determined by the protocol's risk engine.
-Margin needs to be enabled per subaccount. Here's how you can enable margin:
-
-<Steps>
-### Open Settings
-Open Settings in the app.
-<img src="/assets/spot-trading-4.png" alt="" width="800" height="auto"></img>
-
-### Go to Margin Trading
-Go to Margin Trading in the left navigation
-<img src="/assets/spot-trading-5.png" alt="" width="800" height="auto"></img>
-
-### Toggle to enable
-Click the toggle to enable it for the subaccount you want
-
-### Sign transaction
-Sign the wallet transaction to confirm
-</Steps>
-
-Once margin is enabled, you should see the leverage bar appear in the trade form.
-
-
-<Callout type="important">
-
-**Spot margin trading example:**
-
-1.  Select the SOL / USDC spot market
-
-2.  Select the BUY side in the trade form and your order type
-
-3.  Enter the amount you'd like to purchase or use the leverage slider
-
-4.  Click "BUY SOL"
-
-5.  Once the order is filled, your balances tab will update with the asset amounts you've purchased and the amount you've borrowed (if applicable)
-
+<Callout type="warning">
+**Spot trading has been removed from the Velocity program.** There is no spot order book on Velocity — spot orders cannot be placed, and margin spot trading is not available. Spot markets still exist, but only as the venue for collateral and [Borrow & Lend](/protocol/borrow-lend).
 </Callout>
 
-## FAQ
+## What you can still do with spot assets
 
-### Why is Velocity's spot market better for takers (versus alternatives)?
-Takers enter a JIT auction, which can offer price improvement, and otherwise can fill via an external program. (e.g. Serum).
+- **Swap tokens** — spot swaps remain fully available. You can exchange any supported pair directly at [app.velocity.exchange/swap](https://app.velocity.exchange/swap), with up to 5x leverage.
+- **Deposit as collateral** — every supported spot asset you deposit can act as cross-collateral for perpetuals trading. See [Cross Collateral Deposits](/protocol/getting-started/cross-collateral-deposits).
+- **Earn and borrow** — deposits automatically earn lending yield, and you can borrow against them. See [Borrow & Lend](/protocol/borrow-lend).
 
-Takers can also utilise special order types such as oracle-offset limit orders, which appropriately can cap fills using slippage tolerance versus the oracle provider's fair value. This allows ordinary takers on a UI to control swapping at the fairest price, even without access to advanced infrastructure / bots.
+## What was removed
 
-### Better for makers (versus alternatives)?
+- The spot order book (spot DLOB) and all spot order placement, including spot maker/resting orders.
+- Margin spot trading (the per-subaccount spot margin toggle).
 
-Market makers can provide liquidity to an ongoing JIT auction, removing latency-based adverse selection.
-
-Additionally, as an active market maker, all resting orders earn interest within the protocol's borrow / lend.
-
-<Callout type="info">
-Example: on a USDT-USDC spot market one can offer deep liquidity without compromising on lending interest
-</Callout>
+If you're looking for leveraged directional exposure, use [Perpetuals Trading](/protocol/trading/perpetuals-trading) instead.

@@ -43,7 +43,7 @@ To implicitly utilise a dynamic fee, Velocity's AMM quotes different prices for 
 
 To do so, there will be 3 points tracked on the constant product curve: the bid price and ask price, and a point between the reservation price.
 
-![Velocity AMM Bid-Ask Spreads](/assets/drift-amm.png)
+![Velocity AMM Bid-Ask Spreads](/assets/velocity-amm.png)
 
 Base long spread and short spread are currently set as:
 
@@ -74,7 +74,7 @@ The mark price is updated each time the oracle updates its price and when the co
 
 ### Oracle Live Pricing Sequence
 
-Every time a trader wants to fill against the AMM, the AMM will be updated in the same slot with a valid oracle price (see [Oracles](file:///trading/oracles)).
+Every time a trader wants to fill against the AMM, the AMM will be updated in the same slot with a valid oracle price (see [Oracles](/protocol/how-it-works/oracles)).
 
 <Steps>
 ### Step: Check the oracle price

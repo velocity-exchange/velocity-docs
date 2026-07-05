@@ -59,7 +59,7 @@ All perp market orders placed on Velocity are routed through a short-term auctio
 
 Auctions are run via a Dutch Auction (where the auction price starts at the better price and linearly moves toward a set worse end price) and market makers compete amongst themselves in speed to fulfil user orders.
 
-_For a more technical breakdown, check out:_ [Matching Engine](/protocol/about-v3/matching-engine)
+_For a more technical breakdown, check out:_ [Matching Engine](/protocol/how-it-works/matching-engine)
 
 ### Constant Liquidity (AMM)
 
@@ -74,7 +74,7 @@ This also means that, even without external makers, Velocity can support new mar
 
 Many prudent measures in the protocol's design are in place (capped exposure, effective market making, revenue pool utilization, insurance fund rules, etc) to mitigate and isolate the risks of a single market. The AMM needs a reliable oracle of the perpetual market's spot reference asset. For instance, Velocity's SOL-PERP market would refer to a SOL/USD spot oracle for a spot reference. Velocity currently uses [Pyth](https://pyth.network/) (push and Pyth Lazer) for its oracles and can arbitrarily support other sources per market.
 
-_For a more technical breakdown, check out:_ [Velocity AMM](/protocol/about-v3/drift-amm)
+_For a more technical breakdown, check out:_ [Velocity AMM](/protocol/how-it-works/velocity-amm)
 
 ### Limit Orderbook Liquidity (DLOB)
 
@@ -82,7 +82,7 @@ Velocity's decentralised orderbook (DLOB) acts as its third source of liquidity,
 
 Limit orders are orders that trigger and execute on a particular condition. For a full breakdown of what limit orders are, visit: [Order Types](/protocol/trading/order-types)
 
-Limit orders are placed by users on-chain. A network of Keeper Bots ([Keeper Bots](/protocol/about-v3/keepers)) then sorts the on-chain limit orders into an off-chain orderbook and categorises limit orders from oldest to newest, and largest to smallest.
+Limit orders are placed by users on-chain. A network of Keeper Bots ([Keeper Bots](/protocol/how-it-works/keepers)) then sorts the on-chain limit orders into an off-chain orderbook and categorises limit orders from oldest to newest, and largest to smallest.
 
 Each Keeper maintains its own view of the orderbook (hence the 'decentralised' aspect) and tracks new orders, AMM availability, and the oracle price. If the trigger condition of a limit order is met, the Keeper will submit the limit order and fill it against the AMM. Keepers will also match taker orders with resting limit orders if the conditions are the same.
 
@@ -90,6 +90,6 @@ Keepers are also incentivised to fill the oldest and largest order first. For th
 
 The decentralised orderbook acts as a source of 'resting' liquidity as it rests on the orderbook until either a taker takes it, or the requisite market conditions are met and it's filled against the AMM.
 
-_For a more technical breakdown, check out:_ [Decentralised Orderbook FAQ](/protocol/about-v3/decentralized-orderbook)
+_For a more technical breakdown, check out:_ [Decentralised Orderbook FAQ](/protocol/how-it-works/decentralized-orderbook)
 
 </Steps>

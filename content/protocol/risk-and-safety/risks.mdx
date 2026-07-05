@@ -2,11 +2,13 @@
 
 All DeFi protocols, including Velocity, come with risks, which are important to understand before depositing significant amounts of crypto. Some of the main risks involved in using Velocity are outlined here.
 
-Further risk parameters are also set out in  and [Risk Parameters](/protocol/risk-and-safety/risk-parameters).
+Further risk parameters are also set out in [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails) and [Risk Parameters](/protocol/risk-and-safety/risk-parameters).
 
 **Smart Contract and UI Risk**
 
 There is a risk that the smart contract or UI has a bug or exploit for unexpected behaviour resulting in loss of funds. This risk is inherent to all smart contracts and relies upon the discipline of the development community, core contributors, and auditors.
+
+Velocity is a fork of Drift Protocol v2. The existing [audit reports](/protocol/risk-and-safety/audits) were performed on the pre-fork codebase, not on Velocity's own deployment or the functionality added since the fork. A post-fork audit of Velocity's program is currently being conducted by OtterSec and is expected to be completed in the coming weeks.
 
 **Blockchain Risk**
 
@@ -28,7 +30,7 @@ Velocity offers both leveraged perpetual swaps and borrow/lend. For perpetual sw
 
 Velocity's AMM is the counterparty to all trades taken against the AMM. This means that the AMM itself has delta risk, and this risk is magnified when market conditions skew on either side and the imbalance between longs and shorts increases.
 
-The AMM has protections in place to prevent the long short imbalance from skewing too heavily to either side. More information on that is here at: [Velocity AMM](/protocol/about-v3/drift-amm). Despite these protections, there is still a risk that the AMM will be exposed to delta risk in periods of significant volatility.
+The AMM has protections in place to prevent the long short imbalance from skewing too heavily to either side. More information on that is here at: [Velocity AMM](/protocol/how-it-works/velocity-amm). Despite these protections, there is still a risk that the AMM will be exposed to delta risk in periods of significant volatility.
 
 **No Off-Setting Loss Risk**
 

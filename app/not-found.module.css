@@ -1,0 +1,178 @@
+/* 404 — dead-end recovery, rendered inside the Nextra docs shell.
+   Tokens (--x-color-gray-*, --nextra-bg, --x-color-primary-*) come from
+   styles/theme.css and flip with the active theme, so this page tracks
+   light/dark automatically. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0;
+  max-width: 34rem;
+  margin-inline: auto;
+  min-height: min(72vh, 620px);
+  padding: clamp(2.5rem, 6vh, 4.5rem) 1.5rem 3rem;
+}
+
+.mark {
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 6px 20px color-mix(in oklab, #08aa18 35%, transparent));
+}
+
+.code {
+  margin-top: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  /* gray-600 (not -400) so the caption still clears AA on the light surface */
+  color: var(--x-color-gray-600);
+}
+
+.title {
+  margin-top: 0.5rem;
+  /* scales down on narrow screens so the copy never overflows its column */
+  font-size: clamp(1.5rem, 7vw, 2rem);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--x-color-gray-900);
+}
+
+.desc {
+  margin-top: 0.875rem;
+  max-width: 30rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+  color: var(--x-color-gray-600);
+}
+
+.search {
+  margin-top: 2rem;
+  width: 100%;
+}
+
+/* Nextra's Search is width-auto by default; make it fill the recovery column
+   so it reads as the primary way forward, not a navbar afterthought. */
+.search :global(.nextra-search) {
+  width: 100%;
+}
+.search :global(.nextra-search input) {
+  width: 100%;
+  height: 2.875rem;
+  font-size: 1rem;
+}
+
+.actions {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.875rem;
+  padding-inline: 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  /* AA-safe brand green (white text clears 5.5:1 in both themes) */
+  background: var(--vlc-action);
+  color: #fff;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.button:hover {
+  background: var(--vlc-action-hover);
+}
+.button:active {
+  transform: translateY(1px);
+}
+.button:focus-visible {
+  outline: 2px solid var(--vlc-action);
+  outline-offset: 2px;
+}
+.arrow {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.button:hover .arrow {
+  transform: translateX(-3px);
+}
+
+.links {
+  margin-top: 2.25rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 0.875rem;
+  font-size: 0.9375rem;
+  color: var(--x-color-gray-400);
+}
+.links span {
+  font-weight: 500;
+  color: var(--x-color-gray-600);
+}
+.links a {
+  color: var(--vlc-link);
+  font-weight: 500;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  border-radius: 3px;
+}
+.links a:hover {
+  text-decoration: underline;
+}
+.links a:focus-visible {
+  outline: 2px solid var(--vlc-link);
+  outline-offset: 3px;
+}
+.dot {
+  color: var(--x-color-gray-300);
+  user-select: none;
+}
+
+/* Motion enhances an already-visible page: default state is fully visible,
+   the entrance only applies when motion is welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .root > * {
+    animation: nf-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .code {
+    animation-delay: 0.06s;
+  }
+  .title {
+    animation-delay: 0.1s;
+  }
+  .desc {
+    animation-delay: 0.16s;
+  }
+  .search {
+    animation-delay: 0.22s;
+  }
+  .actions {
+    animation-delay: 0.28s;
+  }
+  .links {
+    animation-delay: 0.34s;
+  }
+}
+
+@keyframes nf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

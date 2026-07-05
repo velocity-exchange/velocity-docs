@@ -60,7 +60,7 @@ At that point your total collateral is less than your margin requirement and liq
 
 ## Isolated Position Liquidations
 
-Cross-margin liquidations unwind gradually — a throttled percentage per slot window that accelerates or slows based on how the price moves after liquidation begins (see [Liquidation Engine](/protocol/trading/liquidations/liquidation-engine)). **Isolated positions skip this ramp entirely: once an isolated position is under-margined, it is liquidated 100% in one shot**, since its collateral and risk can't spill over into the rest of the account the way a cross-margined position's can.
+Cross-margin liquidations unwind gradually — a throttled percentage per slot window that accelerates or slows based on how the price moves after liquidation begins (see [Liquidation Engine](/protocol/how-it-works/liquidation-engine)). **Isolated positions skip this ramp entirely: once an isolated position is under-margined, it is liquidated 100% in one shot**, since its collateral and risk can't spill over into the rest of the account the way a cross-margined position's can.
 
 ## Liquidation Fees
 
@@ -78,5 +78,5 @@ If a liquidation leaves a user with an outstanding liability and no further asse
 
 ## Being a Liquidator
 
-Read [Liquidators](/protocol/trading/liquidations/liquidators) if you want to learn more about being a liquidator on the platform. Liquidators earn a fee for their services.  
+Read [Liquidators](/protocol/how-it-works/liquidators) if you want to learn more about being a liquidator on the platform. Liquidators earn a fee for their services.  
 

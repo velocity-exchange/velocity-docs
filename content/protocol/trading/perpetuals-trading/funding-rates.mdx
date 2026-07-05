@@ -23,7 +23,7 @@ On top of the floor, each market has a **continuous dead zone** around zero dive
 Both are per-market and admin-configurable (`update_perp_market_funding_dead_zone`).
 
 <Callout type="important">
-Note: this dead zone can also be delayed at large oracle divergences (see [Oracles](/protocol/trading/oracles)). Individual Market TWAP updates utilize the side of the book for trade executions, Bid and Ask TWAPs in the market are calculated and/or estimated on every trade.
+Note: this dead zone can also be delayed at large oracle divergences (see [Oracles](/protocol/how-it-works/oracles)). Individual Market TWAP updates utilize the side of the book for trade executions, Bid and Ask TWAPs in the market are calculated and/or estimated on every trade.
 </Callout>
 
 ## Funding Bias Spread Widening
@@ -68,7 +68,7 @@ For SOL-PERP you can check the recent history to get a better idea of what short
 
 Velocity's on-chain calculation of a market's oracle TWAP is updated only on trades which incorporates the oracle's confidence interval and a few interpolations to provide the most accurate and resilient value.
 
-Read more about protective checks in [Oracles](/protocol/trading/oracles).
+Read more about protective checks in [Oracles](/protocol/how-it-works/oracles).
 
 ### APR calculation
 
