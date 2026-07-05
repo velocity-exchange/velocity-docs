@@ -2,8 +2,8 @@ import React from "react";
 import { Callout } from "nextra/components";
 import type { SDKTab } from "../SDKDocTabs";
 import type { SDKBlockProps } from "./types";
-import rustdoc from "../../types/sdks/drift_rs.slim.json";
-import rustMethods from "../../types/sdks/drift_rs.methods.json";
+import rustdoc from "../../types/sdks/velocity_rs.slim.json";
+import rustMethods from "../../types/sdks/velocity_rs.methods.json";
 
 type RustDoc = {
   root: number | string;
@@ -33,16 +33,16 @@ const rustMethodDocs = rustMethods as Record<
     is_async?: boolean;
   }
 >;
-const RUSTDOC_BASE_URL = "https://docs.rs/drift-rs/latest";
+const RUSTDOC_BASE_URL = "https://docs.rs/velocity-rs/latest";
 
 
 function normalizePath(name: string) {
   const trimmed = name.trim();
   if (trimmed.includes("::")) {
-    if (trimmed.startsWith("drift_rs::")) {
+    if (trimmed.startsWith("velocity_rs::")) {
       return trimmed;
     }
-    return `drift_rs::${trimmed}`;
+    return `velocity_rs::${trimmed}`;
   }
   return trimmed;
 }
@@ -59,7 +59,7 @@ function findRustItemId(name: string) {
   const matches: Array<{ id: string; path: string[] }> = [];
   for (const [id, p] of Object.entries(rustData.paths)) {
     const last = p.path?.[p.path.length - 1];
-    if (last === name && p.path?.[0] === "drift_rs") {
+    if (last === name && p.path?.[0] === "velocity_rs") {
       matches.push({ id, path: p.path });
     }
   }
@@ -233,20 +233,20 @@ function getRustDocLink({
   ownerPath?: string;
 }) {
   const parts = path.split("::");
-  if (!parts.length || parts[0] !== "drift_rs") return undefined;
+  if (!parts.length || parts[0] !== "velocity_rs") return undefined;
 
   const modulePath = parts.slice(1);
   const name = modulePath[modulePath.length - 1];
-  const moduleBase = `${RUSTDOC_BASE_URL}/drift_rs/${modulePath
+  const moduleBase = `${RUSTDOC_BASE_URL}/velocity_rs/${modulePath
     .slice(0, -1)
     .join("/")}`;
 
   if (kind === "Method" && methodName) {
     const ownerParts = ownerPath?.split("::") ?? parts.slice(0, -1);
-    if (!ownerParts.length || ownerParts[0] !== "drift_rs") return undefined;
+    if (!ownerParts.length || ownerParts[0] !== "velocity_rs") return undefined;
     const ownerModulePath = ownerParts.slice(1);
     const ownerName = ownerModulePath[ownerModulePath.length - 1];
-    const ownerModuleBase = `${RUSTDOC_BASE_URL}/drift_rs/${ownerModulePath
+    const ownerModuleBase = `${RUSTDOC_BASE_URL}/velocity_rs/${ownerModulePath
       .slice(0, -1)
       .join("/")}`;
     return `${ownerModuleBase}/struct.${ownerName}.html#method.${methodName}`;
@@ -254,7 +254,7 @@ function getRustDocLink({
 
   switch (kind) {
     case "Module":
-      return `${RUSTDOC_BASE_URL}/drift_rs/${modulePath.join("/")}/index.html`;
+      return `${RUSTDOC_BASE_URL}/velocity_rs/${modulePath.join("/")}/index.html`;
     case "Struct":
       return `${moduleBase}/struct.${name}.html`;
     case "Enum":
@@ -270,7 +270,7 @@ function getRustDocLink({
     case "Static":
       return `${moduleBase}/static.${name}.html`;
     default:
-      return `${RUSTDOC_BASE_URL}/drift_rs/${modulePath.join("/")}/index.html`;
+      return `${RUSTDOC_BASE_URL}/velocity_rs/${modulePath.join("/")}/index.html`;
   }
 }
 

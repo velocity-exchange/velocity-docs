@@ -2,7 +2,6 @@ import React from "react";
 import { SDKDocTabs, SDKTab } from "./SDKDocTabs";
 import { buildTypeScriptTab } from "./sdkdoc/typescript";
 import { buildRustTab } from "./sdkdoc/rust";
-import { buildPythonTab } from "./sdkdoc/python";
 import type { SDKBlockProps } from "./sdkdoc/types";
 
 type SDKDocProps = {
@@ -10,10 +9,6 @@ type SDKDocProps = {
 };
 
 export function TypeScript(_props: SDKBlockProps) {
-  return null;
-}
-
-export function Python(_props: SDKBlockProps) {
   return null;
 }
 
@@ -32,9 +27,6 @@ export function SDKDoc({ children }: SDKDocProps) {
   const childTs = childArray.find(
     (child) => React.isValidElement(child) && child.type === TypeScript,
   );
-  const childPy = childArray.find(
-    (child) => React.isValidElement(child) && child.type === Python,
-  );
   const childRust = childArray.find(
     (child) => React.isValidElement(child) && child.type === Rust,
   );
@@ -45,11 +37,6 @@ export function SDKDoc({ children }: SDKDocProps) {
   if (childTs && React.isValidElement(childTs)) {
     const props = childTs.props as SDKBlockProps;
     tabs.push(buildTypeScriptTab(props));
-  }
-
-  if (childPy && React.isValidElement(childPy)) {
-    const props = childPy.props as SDKBlockProps;
-    tabs.push(buildPythonTab(props));
   }
 
   if (childRust && React.isValidElement(childRust)) {

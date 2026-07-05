@@ -2,8 +2,8 @@ import fs from "fs";
 
 const rawArgs = process.argv.slice(2);
 const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
-const input = args[0] ?? "types/sdks/drift_rs.json";
-const output = args[1] ?? "types/sdks/drift_rs.slim.json";
+const input = args[0] ?? "types/sdks/velocity_rs.json";
+const output = args[1] ?? "types/sdks/velocity_rs.slim.json";
 
 const data = JSON.parse(fs.readFileSync(input, "utf8"));
 const rootItem = data.index?.[String(data.root)];
@@ -148,7 +148,7 @@ const slim = {
 };
 
 fs.writeFileSync(output, JSON.stringify(slim));
-const methodsOutput = args[2] ?? output.replace(/\\.json$/, ".methods.json");
+const methodsOutput = args[2] ?? output.replace(/\.slim\.json$/, ".methods.json");
 fs.writeFileSync(methodsOutput, JSON.stringify(methodDocs));
 
 console.log(`Wrote ${output} with ${keepIds.length} items`);

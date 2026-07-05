@@ -18,7 +18,7 @@ Definitions are pulled directly from the SDK's npm package which is installed in
 
 ### Rust
 
-`rustup` has the ability to generate definitions and output them as JSON. This can be done locally by cloning drift-rs and running the cargo doc command. You will need the nightly build as the JSON output is not yet available in the stable release.
+`rustup` has the ability to generate definitions and output them as JSON. This can be done locally by cloning [velocity-rs](https://github.com/velocity-exchange/velocity-v1/tree/master/rust/velocity-rs) and running the cargo doc command. You will need the nightly build as the JSON output is not yet available in the stable release.
 
 ```
 rustup default nightly
@@ -26,7 +26,7 @@ RUSTDOCFLAGS="-Z unstable-options --output-format json" \
   cargo doc --no-deps
 ```
 
-This will output the definitions to `target/doc/drift_rs.json` which needs to be copied into `types/drift_rs.json`
+This will output the definitions to `target/doc/velocity_rs.json` which needs to be copied into `types/sdks/velocity_rs.json`
 
 There is currently no option to exclude external creates and the file is too large to be parsed efficiently. We then need to run post processing to remove external crate definitions:
 
@@ -34,16 +34,7 @@ There is currently no option to exclude external creates and the file is too lar
 pnpm run rust-docs
 ```
 
-This reduces drift_rs.json from 44mb to about 1mb.
-
-### Python
-
-In driftpy run the command:
-```
-/usr/bin/python3 scripts/export_api_docs.py
-```
-
-This will output `docs/generated/api_reference.json` which you can copy to `types/sdks/driftpy.json`
+This reduces velocity_rs.json from 44mb to about 1mb.
 
 ## License
 
