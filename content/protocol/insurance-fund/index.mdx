@@ -77,3 +77,24 @@ The Isolated Insurance Fund for a particular market will be used to:
 *   pay off liabilities when an account is bankrupt.
 
 All losses beyond the Isolated Insurance Fund for that market will be covered by a socialised loss mechanism.
+
+<Callout type="info">
+Don't confuse an **Isolated Insurance Fund** (above) with [Isolated Pools](/protocol/how-it-works/isolated-pools) or [isolated positions](/protocol/trading/margin) — those confine collateral/margin to a single pool or position, while an Isolated Insurance Fund is a per-market backstop that's walled off from the standard Insurance Fund.
+</Callout>
+
+## How Perp Bankruptcy Resolution Works
+
+Velocity follows a clear hierarchy for resolving perp market insolvency (`resolve_perp_bankruptcy`), gated by [`State.solvencyStatus`](/protocol/trading/liquidations#bankruptcy-and-solvency-status) rather than the general withdraw-pause flag:
+
+<Steps>
+### In-transit insurance fees
+The market's own not-yet-swept `pending_if_fee` is canceled against the bankrupting loss first — both are just accounting claims on future pnl-pool inflows, so no tokens need to move.
+### External Insurance Fund
+The Insurance Fund vault covers remaining debt, bounded by the market's insurance-claim caps.
+### AMM fee-provision clawback
+If the Insurance Fund is insufficient, the market claws back its own AMM fee provision — capped at the cumulative amount the AMM has ever received via the [fee split](/protocol/trading/trading-fees) (`amm_protocol_fees_received`), first the not-yet-tokenized portion, then tokens already swept into the AMM's fee pool. The AMM's own trading/spread capital beyond that provision is never touched.
+### Socialized loss
+If all of the above are exhausted, **socialized loss** applies pro rata across all open positions within that market.
+</Steps>
+
+This structure ensures that insolvency events are handled fairly and predictably. The system aims to keep socialized losses as close to zero as possible. For the engine mechanics that determine *when* a position gets liquidated in the first place, see [Liquidation Engine](/protocol/how-it-works/liquidation-engine).

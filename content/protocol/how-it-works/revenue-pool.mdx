@@ -36,28 +36,11 @@ If the Insurance Fund has users staked, each individual settlement is capped to 
 
 ## Protocol Fee Custody and Withdrawal
 
-The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all. Each market (perp and spot) has its own withdrawable `protocol_fee_pool`, funded by:
-
-- **Trading fees:** the residual of the per-fill fee split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator` — the protocol gets whatever's left).
-- **Liquidations:** `protocol_liquidation_fee`, split IF-first against the existing insurance-fee budget (see [Liquidations](/protocol/trading/liquidations#liquidation-fees)).
-- **Lending:** `SpotMarket.protocolFeeFactor` on deposit-interest gains.
-
-It exits only via `withdraw_protocol_fees_perp` / `withdraw_protocol_fees_spot`, gated by the `FeeWithdraw` hot key and recipient-locked to `State.protocolFeeRecipientPerp` / `protocolFeeRecipientSpot` (each settable only by `cold_admin`). A withdrawal is always capped to the pool's own balance and can never dip into user deposits.
+The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all — it goes straight to each market's separate, directly-withdrawable `protocol_fee_pool` instead. See [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for how that pool is funded and withdrawn.
 
 ## Spot Markets
 
-Spot Markets allow for swaps between tokens and interest payments between depositors and borrowers (there is no spot order book — see [Order Types](/protocol/trading/order-types)). These flows are parameterised to split fee collection between the revenue pool (insurance) and the protocol's own withdrawable pool.
-
-Within the program, its parameterised by the following **in bold**:
-
-| Field                       | Description                                                                                                             |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `InsuranceFund.if_fee_factor` | fraction of borrow interest reserved for the revenue pool (100% staker-owned)                                           |
-| `SpotMarket.protocol_fee_factor` | fraction of borrow interest reserved for the protocol's withdrawable `protocol_fee_pool`                            |
-| `if_liquidation_fee`        | the insurance-fund cut of a spot liquidation, credited to the revenue pool directly                                     |
-| `protocol_liquidation_fee`  | the protocol cut of a spot liquidation, credited to `protocol_fee_pool` directly                                        |
-
-Lenders receive the remainder after both `if_fee_factor` and `protocol_fee_factor` are taken — set both via `update_spot_market_if_factor`.
+Spot Markets allow for swaps between tokens and interest payments between depositors and borrowers (there is no spot order book — see [Order Types](/protocol/trading/order-types)). These flows are parameterised to split fee collection between the revenue pool (insurance) and the protocol's own withdrawable pool — see [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees) for the `if_fee_factor` / `protocol_fee_factor` / `if_liquidation_fee` / `protocol_liquidation_fee` definitions that drive this split. Lenders receive the remainder after both `if_fee_factor` and `protocol_fee_factor` are taken — set both via `update_spot_market_if_factor`.
 
 The following instructions interact w/ the insurance fund:
 

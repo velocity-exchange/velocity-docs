@@ -1,76 +1,10 @@
 # Keeper Bots
 
-Keeper bots keep Velocity operational by performing automated actions as off-chain agents. Keepers are rewarded depending on the duties they perform.
+Keeper bots keep Velocity operational by performing automated actions as off-chain agents — matching orders, triggering conditional orders, and liquidating unhealthy positions. All four reference bots ship from [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the `velocity-v1` monorepo; see [Trading Automation](/developers/trading-automation) for shared setup (wallet, RPC provider, config, and running the app).
 
-| Bot Type      | Difficulty | Capital Required | Rewards | Link                                                                              |
-| :------------ | :--------- | :--------------- | :------ | --------------------------------------------------------------------------------- |
-| Matching Bot  | Basic      | No               | TBD     | [Tutorial: Order Matching Bot](/developers/trading-automation/keeper-bots/order-matching-bot)  |
-| Order Trigger | Basic      | No               | TBD     | [Tutorial: Order Trigger Bot](/developers/trading-automation/keeper-bots/order-trigger-bot)    |
-| Liquidator    | Advanced   | Yes              | TBD     | [Tutorial: Liquidation Bot](/developers/trading-automation/keeper-bots/liquidation-bot)        |
-| JIT Maker Bot | Advanced   | Yes              | TBD     | [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)            |
-
-_Note: all bots require some SOL for rent and transaction fees._
-
-The reference implementation lives at [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) inside the `velocity-v1` monorepo — unlike Drift's standalone `keeper-bots-v2` repo, there is no separate devnet/mainnet-beta branch split; the app's `ENV` config value selects the cluster.
-
-<Steps>
-### Clone the monorepo and install
-
-```shell copy
-git clone https://github.com/velocity-exchange/velocity-v1.git
-cd velocity-v1
-bun install   # run once, at the repo root — this is a Bun workspace
-```
-
-### Configure environment + YAML config
-
-From `apps/keeper-bots-v2`, copy the env template and set required values:
-
-```shell copy
-cd apps/keeper-bots-v2
-cp .env.example .env
-```
-
-Required env vars:
-
-- `KEEPER_PRIVATE_KEY`: keypair array or path to `keypair.json`
-- `ENDPOINT`: RPC endpoint
-- `ENV`: `devnet` or `mainnet-beta`
-
-The app uses a YAML config for bot selection and per-bot settings. Start from `example.config.yaml` and set:
-
-- `global.endpoint`
-- `global.keeperPrivateKey` (or env var)
-- `enabledBots` + `botConfigs`
-
-### Initialize a Velocity user (if needed)
-
-Bots that place orders or manage positions require a Velocity user account. The app provides a helper flag:
-
-```shell copy
-bun run dev --init-user
-```
-
-```typescript copy
-if (!(await velocityClient.getUser().exists())) {
-  logger.info(`Creating User for ${wallet.publicKey}`);
-  const [txSig] = await velocityClient.initializeUserAccount();
-  logger.info(`Initialized user account in transaction: ${txSig}`);
-}
-```
-
-### Deposit collateral (if needed)
-
-Required for liquidators and JIT makers that keep open positions:
-
-```shell copy
-# deposit 10,000 of spot market 0's quote asset (USDC on mainnet-beta; dUSDT on devnet)
-bun run dev --force-deposit 10000
-```
-
-### Run the bots
-
-```shell copy
-bun run dev --config-file=example.config.yaml
-```
-</Steps>
+<Cards>
+  <Cards.Card title="Order Matching Bot" href="/developers/trading-automation/keeper-bots/order-matching-bot" />
+  <Cards.Card title="Order Trigger Bot" href="/developers/trading-automation/keeper-bots/order-trigger-bot" />
+  <Cards.Card title="Liquidation Bot" href="/developers/trading-automation/keeper-bots/liquidation-bot" />
+  <Cards.Card title="JIT Maker Bot" href="/developers/trading-automation/keeper-bots/jit-maker-bot" />
+</Cards>

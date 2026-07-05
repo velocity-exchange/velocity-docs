@@ -23,20 +23,43 @@ Query parameters:
 - `includeIndicative` ,  Include indicative (non-firm) quotes (`true`/`false`)
 - `grouping` ,  Price grouping in ticks (e.g. `10` for 0.01 increments)
 
-Response shape:
+Response shape (from a live response, trimmed):
 ```json
 {
   "bids": [
-    { "price": "123.45", "size": "100.5" },
-    { "price": "123.40", "size": "250.0" }
+    { "price": "81114210", "size": "1000000000", "sources": { "indicative": "1000000000" } },
+    { "price": "80260400", "size": "406202100000", "sources": { "dlob": "406202100000" } }
   ],
   "asks": [
-    { "price": "123.50", "size": "80.2" },
-    { "price": "123.55", "size": "150.0" }
+    { "price": "81130450", "size": "1000000000", "sources": { "indicative": "1000000000" } },
+    { "price": "86603580", "size": "61635300000", "sources": { "vamm": "61635300000" } }
   ],
-  "slot": 250000000
+  "marketName": "SOL-PERP",
+  "marketType": "perp",
+  "marketIndex": 0,
+  "ts": 1783268433645,
+  "slot": 474184487,
+  "markPrice": "81122330",
+  "bestBidPrice": "81114210",
+  "bestAskPrice": "81130450",
+  "spreadPct": "20019",
+  "spreadQuote": "16240",
+  "oracle": 81122330,
+  "oracleData": {
+    "price": "81122330",
+    "slot": "474184460",
+    "confidence": "4184",
+    "hasSufficientNumberOfDataPoints": true,
+    "twap": "81122330",
+    "twapConfidence": "81122330"
+  },
+  "marketSlot": 474184461
 }
 ```
+
+<Callout type="warning">
+Prices and sizes are **raw fixed-precision integer strings**, not decimals: prices are in `PRICE_PRECISION` (1e6, so `"81114210"` = $81.11) and sizes in `BASE_PRECISION` (1e9). Each level's `sources` object splits the size by origin (`dlob`, `vamm`, `indicative`) — it is an object, not a string. See [Precision & Types](/developers/velocity-sdk/precision-and-types) for conversions.
+</Callout>
 
 ### L3 orderbook (individual orders)
 

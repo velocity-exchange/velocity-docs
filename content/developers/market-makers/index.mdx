@@ -145,12 +145,12 @@ Signal intent to provide liquidity at certain prices without committing onchain 
 
 ## Reference Implementations
 
-Velocity maintains open-source reference bots in [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/protocol-v2/tree/master/apps/keeper-bots-v2), part of the [velocity-v1 monorepo](https://github.com/velocity-exchange/protocol-v2):
+Velocity maintains open-source reference bots in [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2), part of the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1):
 
 | Bot | Source | Strategy |
 |---|---|---|
-| **FloatingPerpMaker** | [`src/bots/floatingMaker.ts`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
-| **JitMaker** | [`src/bots/jitMaker.ts`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) | JIT auction fills using `JitterSniper`/`JitterShotgun` |
+| **FloatingPerpMaker** | [`src/bots/floatingMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
+| **JitMaker** | [`src/bots/jitMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) | JIT auction fills using `JitterSniper`/`JitterShotgun` |
 
 > **Tip:** The `FloatingPerpMaker` is the best starting point for understanding oracle offset orders in production. The `JitMaker` shows how to use `@velocity-exchange/jit-proxy` for auction participation. That package isn't published to npm yet — build it from `packages/jit-proxy` in the monorepo (see [JIT Auctions](/developers/market-makers/jit-auctions#jit-proxy-library)).
 
@@ -158,5 +158,5 @@ Velocity maintains open-source reference bots in [`apps/keeper-bots-v2`](https:/
 
 - [Velocity SDK](/developers/velocity-sdk/setup) - SDK reference for orders and positions
 - [Protocol Concepts](/developers/concepts) - Understanding accounts and onchain data
-- [Keeper Bots](https://github.com/velocity-exchange/protocol-v2/tree/master/apps/keeper-bots-v2) - Open source keeper bot infrastructure, part of the velocity-v1 monorepo
+- [Keeper Bots](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) - Open source keeper bot infrastructure, part of the velocity-v1 monorepo
 - `@velocity-exchange/jit-proxy` - JIT proxy SDK with `JitterSniper` and `JitterShotgun`; unpublished — build from `packages/jit-proxy` in the monorepo

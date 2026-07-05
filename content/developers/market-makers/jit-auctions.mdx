@@ -249,14 +249,14 @@ If any of these gates trips, the AMM is excluded from that DLOB match entirely �
 
 ## JIT Proxy library
 
-**Not yet published to npm.** `@velocity-exchange/jit-proxy` isn't on the npm registry yet — build it from `packages/jit-proxy` in the [velocity-v1 monorepo](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) until it is. The client is vendored in-repo, ported to Anchor 1.0, and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream.
+**Not yet published to npm.** `@velocity-exchange/jit-proxy` isn't on the npm registry yet — build it from `packages/jit-proxy` in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) until it is. The client is vendored in-repo, ported to Anchor 1.0, and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream.
 
 The package provides higher-level abstractions for auction participation:
 
 - **`JitterSniper`**: waits for the optimal auction slot before submitting a single fill transaction. Best for precise pricing with lower compute costs.
 - **`JitterShotgun`**: submits fill transactions at multiple auction slots simultaneously. Higher fill rate but uses more compute and SOL for fees.
 
-The [`JitMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot in keeper-bots-v2 demonstrates both strategies and includes market volatility checks, position sizing, and DLOB-aware pricing.
+The [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot in keeper-bots-v2 demonstrates both strategies and includes market volatility checks, position sizing, and DLOB-aware pricing.
 
 ```typescript
 import { JitterSniper, JitterShotgun, PriceType } from "@velocity-exchange/jit-proxy";
@@ -291,4 +291,4 @@ const jitter = new JitterShotgun({
 - [Matching Engine](/protocol/how-it-works/matching-engine) - Full liquidity priority flow
 - [JIT-only MM](./jit-only) - Building a JIT market maker bot
 - [SWIFT API](./swift-api) - See taker orders 100-500ms before they hit the auction
-- [`packages/jit-proxy`](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) - JIT proxy SDK (`@velocity-exchange/jit-proxy`, unpublished — build from source)
+- [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) - JIT proxy SDK (`@velocity-exchange/jit-proxy`, unpublished — build from source)

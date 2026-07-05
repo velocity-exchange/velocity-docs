@@ -1,0 +1,48 @@
+# Trusted Vaults
+
+Trusted vaults extend the base vault (see [Vault Managers](/developers/vault-managers)) with **manager borrowing** and (when enabled) margin trading. They are created like a normal vault — see [Quickstart](/developers/vault-managers/quickstart) — and an admin must then update the vault class to Trusted. Once upgraded, the manager can borrow assets from the vault and repay or mark-to-market the borrow.
+
+<Callout type="warning" title="Approval required">
+Trusted vaults must be approved by the Velocity team before they can be used in production.
+</Callout>
+
+<Callout type="warning" title="Trust and risk">
+Vault depositors in Trusted vaults place significant trust in the manager. Borrowing and margin increase the manager's ability to move or risk vault capital. Depositors should only use Trusted vaults when they accept this additional trust assumption.
+</Callout>
+
+**Borrow:** Move vault assets out (e.g. USDC) up to the vault's capacity. Vault equity for share accounting includes the manager's borrowed value so depositor share price reflects the full claim on the vault.
+
+```bash
+bun run cli -- manager-borrow \
+  --vault-address <VAULT_ADDRESS> \
+  --borrow-spot-market-index 0 \
+  --borrow-amount <AMOUNT>
+```
+
+**Repay:** Send tokens back into the vault and reduce the outstanding borrow. You can repay in the same asset or another spot market and specify the value to deduct from `manager_borrowed_value`; omit amount to repay the full borrow.
+
+```bash
+bun run cli -- manager-repay \
+  --vault-address <VAULT_ADDRESS> \
+  --repay-spot-market-index <INDEX> \
+  --repay-amount <AMOUNT> \
+  --repay-value <VALUE_IN_DEPOSIT_ASSET>
+```
+
+**Update borrow value:** If borrowed funds have been used elsewhere and their mark-to-deposit-asset value has changed, you can set the tracked borrow value to the current mark:
+
+```bash
+bun run cli -- manager-update-borrow \
+  --vault-address <VAULT_ADDRESS> \
+  --new-borrow-value <VALUE>
+```
+
+Update the vault's class to Trusted with the admin command:
+
+```bash
+bun run cli -- admin-update-vault-class \
+  --vault-address <VAULT_ADDRESS> \
+  --vault-class trusted
+```
+
+Trusted vaults typically use margin trading; enable it with `manager-update-margin-trading-enabled` as described in [Quickstart](/developers/vault-managers/quickstart).

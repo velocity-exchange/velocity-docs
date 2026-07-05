@@ -33,16 +33,16 @@ const META = {
             },
           },
           "cross-collateral-deposits": "",
+          "place-your-first-trade": "",
           "managing-subaccounts": "",
           "delegated-accounts": "",
+          "versioned-transactions": "",
           "withdraw-and-close-account": ""
         }
       },
       "trading": {
         "title": "Trading",
         "items": {
-          "market-specs": "",
-          "prelaunch-markets": "",
           "perpetuals-trading": {
             "title": "Perpetuals Trading",
             "items": {
@@ -90,7 +90,8 @@ const META = {
               "other-trading-fees": "",
             }
           },
-          "versioned-transactions": "",
+          "market-specs": "",
+          "prelaunch-markets": "",
         }
       },
       "borrow-lend": {
@@ -104,8 +105,7 @@ const META = {
             "items": {
               "index": "",
               "opening-a-position": "",
-              "monitoring-a-position": "",
-              "closing-a-position": "",
+              "managing-a-position": "",
               "risk": ""
             }
           },
@@ -123,8 +123,6 @@ const META = {
           "index": "Understanding Velocity",
           "matching-engine": "",
           "velocity-amm": "",
-          "decentralized-orderbook": "",
-          "jit-faq": "",
           "keepers": {
             "title": "Keepers",
             "items": {
@@ -133,17 +131,15 @@ const META = {
               "keeper-incentives": "",
             },
           },
+          "decentralized-orderbook": "",
+          "jit-faq": "",
           "oracles": "",
           "liquidation-engine": "",
-          "liquidators": "",
           "revenue-pool": "",
           "fee-pool": "",
           "profit-loss-pool": "",
           "borrow-interest-rate": "",
           "isolated-pools": "",
-          "block-conditions": "",
-          "optimizations": "",
-          "program-vault-addresses": "",
         }
       },
       "insurance-fund": {
@@ -202,12 +198,16 @@ const META = {
         "items": {
           "index": "",
           "program-structure": "",
-          "account-model": ""
+          "account-model": "",
+          "block-conditions": "",
+          "optimizations": "",
+          "program-vault-addresses": ""
         }
       },
       "velocity-sdk": {
         "title": "Velocity SDK",
         "items": {
+          "index": "",
           "setup": "",
           "precision-and-types": "",
           "deposits-withdrawals": "",
@@ -243,11 +243,11 @@ const META = {
         "items": {
           "index": "",
           "quickstart": "",
+          "orderbook-and-matching": "",
+          "jit-auctions": "",
           "dlob-mm": "DLOB MM",
           "jit-only": "",
           "bot-architecture": "",
-          "orderbook-and-matching": "",
-          "jit-auctions": "",
           "swift-api": "",
           "indicative-quotes": ""
         }
@@ -255,14 +255,16 @@ const META = {
       "vault-managers": {
         "title": "Vault Managers",
         "items": {
-          "index": ""
+          "index": "",
+          "quickstart": "",
+          "trusted-vaults": "",
+          "multisig-ops": "Multisig Ops"
         }
       },
       "trading-automation": {
         "title": "Trading Automation",
         "items": {
           "index": "",
-          "bot-wallet": "",
           "trading-workflows": "",
           "keeper-bots": {
             "title": "Keeper Bots",
@@ -273,7 +275,6 @@ const META = {
               "jit-maker-bot": ""
             }
           },
-          "rpc-providers": "",
           "troubleshooting": ""
         }
       },

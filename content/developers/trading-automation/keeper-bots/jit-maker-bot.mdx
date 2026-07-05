@@ -21,13 +21,13 @@ cd apps/keeper-bots-v2
 
 ### 2. Prepare a keypair and Velocity account.
 
-Refer to the [bot wallet setup](/developers/trading-automation/bot-wallet) tutorial for how to set up a bot wallet.
+Refer to the [bot wallet setup](/developers/trading-automation#bot-wallet) section for how to set up a bot wallet.
 
 ### 3. Prepare the config file.
 
 The [`jit-maker-config.yaml`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/jit-maker-config.yaml) file is a good starting point. You will need to fill in the following values:
 
-* `global.endpoint`: set this to your RPC endpoint (see [RPC Providers](/developers/trading-automation/rpc-providers))
+* `global.endpoint`: set this to your RPC endpoint (see [RPC Providers](/developers/trading-automation#rpc-providers))
 * `global.keeperPrivateKey`: set this to your bot private key (alternatively you can leave it blank and set the `KEEPER_PRIVATE_KEY` environment variable)
 * `botConfigs.jitMaker.aggressivenessBps`: this is how aggressive you want your jit maker to be. If set to 30, the bot will attempt to buy 30 bps above the best bid, and sell 30 bps below the best ask.
 * `botConfigs.jitMaker.marketType` (`perp` or `spot`): this is the type of market we want to jit make
@@ -60,7 +60,7 @@ bun run dev --config-file=jit-maker-config.yaml
 
 ### Strategy overview
 
-This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) — build it from source, as `@velocity-exchange/jit-proxy` is not yet published to npm) to try to fill jit maker fills.
+This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) — build it from source, as `@velocity-exchange/jit-proxy` is not yet published to npm) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism.
 
 The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is the same program deployed under Drift (`J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP`) — the client is now ported to Anchor 1.0 and built against `@velocity-exchange/sdk`/`VelocityClient` instead of `@drift-labs/sdk`/`DriftClient`.
 

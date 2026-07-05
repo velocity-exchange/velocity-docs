@@ -28,31 +28,31 @@ This gives you Binance-style orderbook depth without onchain sorting costs.
 
 ## How matching works
 
-When a taker order arrives, it's matched in this **liquidity priority order**:
+Taker fills follow **price-priority interleaving** — there is no fixed JIT → DLOB → AMM waterfall. The fill plan is built by `determine_perp_fulfillment_methods` (`programs/velocity/src/math/fulfillment.rs`):
 
 <Steps>
-### JIT Auction (first ~10 slots / ~5 seconds)
+### Walk the price-sorted DLOB maker list
 
-The taker order enters an auction where market makers compete to fill at the best price. This is the highest-priority liquidity source because it produces the best price discovery, and makers actively compete in realtime. The auction price interpolates from the start price toward the end price over the auction duration, creating a Dutch auction dynamic.
+Resting limit orders are sorted by **price-time priority**: best price wins, and among tied prices, the earliest order fills first. DLOB liquidity is "committed": the orders are onchain and can't be pulled during matching. At each maker level, the engine compares the AMM's quote against that maker's price:
+- If the AMM is better, it inserts an AMM fill ahead of the maker — **capped exactly at that maker's price level** — and the maker fills after.
+- Otherwise the maker fills first.
 
-**Why JIT first?** It gives takers better prices than stale resting orders. Makers can price based on the latest oracle, inventory, and market conditions rather than prices set minutes ago.
+The AMM never jumps ahead of the whole book at once; it only jumps ahead of the specific price levels it beats.
 
-See [JIT Auctions](./jit-auctions) for the full auction lifecycle and pricing math.
+### JIT competes inside the match, by price
 
-### DLOB (Decentralized Limit Order Book)
+JIT is not a separate earlier stage. When a DLOB match step executes (`matching.rs`), JIT maker quotes — and, gates permitting, an AMM-JIT quoter — are spun up alongside the resting maker, and all compete for that same fill purely on price (ties broken by a priority flag). The taker's auction window (~first 10 slots / ~5 seconds) bounds acceptable fill prices: the auction price interpolates from the start price toward the end price, creating a Dutch auction dynamic that lets makers price off the latest oracle and inventory rather than stale resting quotes. See [JIT Auctions](./jit-auctions) for the full auction lifecycle and pricing math.
 
-After the JIT auction, any unfilled portion matches against resting limit orders. These are sorted by **price-time priority**: best price wins, and among tied prices, the earliest order fills first. DLOB liquidity is "committed": the orders are onchain and can't be pulled during matching.
+### Residual AMM catch-all
 
-### AMM (Automated Market Maker)
-
-If DLOB doesn't fully fill the order, the remainder executes against Velocity's AMM. The AMM uses a constant product curve adjusted by the oracle price, so it always provides liquidity but at worse prices (higher fees + price impact). Think of the AMM as the liquidity of last resort: it guarantees fills, but at a cost.
-
-The AMM can also step in earlier, as a **JIT maker inside a DLOB match** (competing alongside resting DLOB orders for the same fill) rather than only as the final fallback. This only happens when a set of hard gates are all clear: `AmmFill` isn't paused for the market, the AMM doesn't have too much drawdown, and the oracle (including the MM oracle, when active) is valid and not too volatile. If any of these gates trips, the AMM sits out of that DLOB match entirely — the fill matches against DLOB-resting orders only, with no AMM JIT competition. This is a hard, all-or-nothing gate distinct from the auction-timing rules that govern whether the AMM fills a *fresh* taker order immediately (see [JIT Auctions](./jit-auctions#amm-as-a-jit-maker)).
+After the maker list is exhausted, any remaining AMM liquidity that still crosses the taker's limit price executes in one final AMM fill against the constant product curve (with its spread and price impact). This is the only sense in which the AMM comes "last" — by that point it's simply the only liquidity still crossing.
 </Steps>
 
-Spot markets have no order-book matching at all: `place_spot_order` / `place_and_make_spot_order` / `fill_spot_order` don't exist on-chain, and there's no external-DEX (Serum/Phoenix/OpenBook) fulfillment path either — both were removed. Spot markets exist only for collateral and borrow-lend; the liquidity-priority waterfall above applies to perp markets only.
+Whether the AMM may participate as a **JIT maker inside a DLOB match** is subject to hard gates: `AmmFill` isn't paused for the market, the AMM doesn't have too much drawdown, and the oracle (including the MM oracle, when active) is valid and not too volatile. If any of these gates trips, the AMM sits out of that DLOB match entirely — the fill matches against DLOB-resting orders only, with no AMM JIT competition. This is a hard, all-or-nothing gate distinct from the auction-timing rules that govern whether the AMM fills a *fresh* taker order immediately (see [JIT Auctions](./jit-auctions#amm-as-a-jit-maker)).
 
-**The waterfall in practice:**
+Spot markets have no order-book matching at all: `place_spot_order` / `place_and_make_spot_order` / `fill_spot_order` don't exist on-chain, and there's no external-DEX (Serum/Phoenix/OpenBook) fulfillment path either — both were removed. Spot markets exist only for collateral and borrow-lend; the matching logic above applies to perp markets only.
+
+**Interleaving in practice:**
 
 A 10 SOL market buy might fill like this:
 - 4 SOL via JIT at oracle + 0.02% (maker competed for this)

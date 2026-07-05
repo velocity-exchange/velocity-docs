@@ -1,10 +1,23 @@
 # Vault Managers
 
-Vaults are delegated trading pools where **depositors** provide capital and a **manager** (delegate) trades with it under strict withdrawal rules. Unlike Drift, where `drift-vaults` is a separate repo/program, Velocity Vaults are **first-party**: the `vaults` program (`programs/vaults/`, program ID `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` — unchanged from Drift) and its TypeScript client, [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk), live directly in the `velocity-v1` monorepo. This guide covers the lifecycle and operations you need as a vault manager. You can manage vaults via the CLI (recommended, `packages/vaults-sdk/cli`) or programmatically with the SDK's `VaultClient`.
+Vaults are delegated trading pools where **depositors** provide capital and a **manager** (delegate) trades with it under strict withdrawal rules. Unlike Drift, where `drift-vaults` is a separate repo/program, Velocity Vaults are **first-party**: the `vaults` program (`programs/vaults/`, program ID `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` — unchanged from Drift) and its TypeScript client, [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk), live directly in the `velocity-v1` monorepo. This section covers the lifecycle and operations you need as a vault manager. You can manage vaults via the CLI (recommended, `packages/vaults-sdk/cli`) or programmatically with the SDK's `VaultClient`.
 
 ## How it works
 
 Each vault has its own Velocity user account that the manager trades with. The manager has **delegate authority** over this account: they can place and cancel orders and manage positions. Depositors' funds are pooled in this single account; PnL affects all share holders proportionally. Vaults use **share-based accounting**: depositors receive shares when they deposit and redeem them after a cooldown (**redeem period**).
+
+## Roles and lifecycle
+
+- **Manager/delegate**: trades for the vault, updates allowed parameters, collects fees.
+- **Depositor**: deposits, requests withdrawals, and completes withdrawals after the redeem period.
+
+Lifecycle: **create → deposit → trade → request withdraw → wait (redeem period) → withdraw**.
+
+<Callout type="warning" title="Get your vault listed">
+Velocity's UI/listing process is not yet finalized as public documentation — check the [velocity-v1 repo](https://github.com/velocity-exchange/velocity-v1) or ask in the community Discord for the current process.
+</Callout>
+
+## Parameters and fee constraints
 
 **Parameters you set at initialization** (and how they can change later):
 
@@ -20,184 +33,10 @@ Each vault has its own Velocity user account that the manager trades with. The m
 
 **Fees:** Fee parameters use percentage precision (e.g. 1e6 scale) and are annualized. Management fees apply only when there are non-manager deposits and are charged across the vault; they compound on actions, so more frequent depositor activity slightly reduces the effective annualized fee. Performance fees are calculated per depositor with **watermarks** so drawdowns don't cause double-charging; once charged, this fee is not reclaimed.
 
-## Managing vaults
-
-<Callout type="warning" title="Get your vault listed">
-Velocity's UI/listing process is not yet finalized as public documentation — check the [velocity-v1 repo](https://github.com/velocity-exchange/velocity-v1) or ask in the community Discord for the current process.
-</Callout>
-
-### Step 1: Understand roles and lifecycle
-
-- **Manager/delegate**: trades for the vault, updates allowed parameters, collects fees.
-- **Depositor**: deposits, requests withdrawals, and completes withdrawals after the redeem period.
-
-Lifecycle: **create → deposit → trade → request withdraw → wait (redeem period) → withdraw**.
-
-### Step 2: Decide vault parameters
-
-| Parameter | Description |
-| --------- | ----------- |
-| **`market-index`** / **`spotMarketIndex`** | Deposit token (e.g. 0 = USDC on mainnet-beta, dUSDT on devnet). |
-| **`redeem-period`** | Withdrawal cooldown in seconds (often 3–7 days). |
-| **`max-tokens`** | Capacity / risk control. |
-| **`management-fee`** | Annualized management fee. |
-| **`profit-share`** | Performance fee on realized gains. |
-| **`permissioned`** + **`min-deposit-amount`** | Optional onboarding controls. |
-
-### Step 3: Initialize the vault
-
-Vault initialization is permissionless. From the `@velocity-exchange/vaults-sdk` CLI (`packages/vaults-sdk` in the `velocity-v1` monorepo):
-
-```bash
-git clone https://github.com/velocity-exchange/velocity-v1.git
-cd velocity-v1
-bun install                       # once, at the repo root
-cd packages/vaults-sdk
-
-bun run cli -- init-vault \
-  --name "MyVault" \
-  --market-index 0 \
-  --redeem-period 604800 \
-  --max-tokens 0 \
-  --management-fee 2 \
-  --profit-share 20
-```
-
-`--management-fee`/`--profit-share` take a plain percentage number (`2` = 2%, not basis points) — the CLI scales it against the on-chain `PERCENTAGE_PRECISION` (1e6 = 100%), and `initialize_vault` rejects any value ≥ 100%.
-
-The CLI reads `-u/--url` (or `RPC_URL`) and `-k/--keypair` (or `KEYPAIR_PATH`) for the RPC endpoint and signer; `--env` selects `devnet` or `mainnet-beta` (default `mainnet-beta`).
-
-Add `--permissioned` and `--min-deposit-amount <amount>` if you want whitelisted depositors and a minimum deposit size. Vault name must be unique.
-
-### Step 4: Update parameters and enable trading
-
-After creation you can lower fees, shorten redeem period, or adjust caps (within the one-way constraints above):
-
-```bash
-bun run cli -- manager-update-vault \
-  --vault-address <VAULT_ADDRESS> \
-  --redeem-period 1000 \
-  --max-tokens 200000 \
-  --management-fee 0 \
-  --profit-share 0
-```
-
-To enable margin trading on the vault:
-
-```bash
-bun run cli -- manager-update-margin-trading-enabled \
-  --vault-address <VAULT_ADDRESS> \
-  --enabled true
-```
-
-View vault state anytime:
-
-```bash
-bun run cli -- view-vault --vault-address <VAULT_ADDRESS>
-```
-
-### Step 5: Permissioned vaults (allowing depositors)
-
-For permissioned vaults, the manager must initialize each depositor:
-
-```bash
-bun run cli -- init-vault-depositor \
-  --vault-address <VAULT_ADDRESS> \
-  --deposit-authority <AUTHORITY_TO_ALLOW_DEPOSIT>
-```
-
-Deposits and withdrawals are otherwise as in the standard flow: request withdrawal → wait redeem period → complete withdrawal.
-
-### Step 6: Manager operations
-
-Common manager actions:
-
-- Manager deposit/withdraw
-- Apply profit share across depositors
-- View vault state and depositors
-
-Run `bun run cli -- --help` from `packages/vaults-sdk` for the full command list and flags.
-
-### Step 7: Security and guardrails
+**Security and guardrails:**
 
 - Managers **cannot** withdraw user funds directly; withdrawals are governed by **redeem period** and **share accounting**.
 - Managers can **decrease** (but not increase) the redeem period and can only **lower** fees after initialization.
-
-## Trusted vaults
-
-Trusted vaults extend the base vault with **manager borrowing** and (when enabled) margin trading. They are created like a normal vault; an admin must then update the vault class to Trusted. Once upgraded, the manager can borrow assets from the vault and repay or mark-to-market the borrow.
-
-<Callout type="warning" title="Approval required">
-Trusted vaults must be approved by the Velocity team before they can be used in production.
-</Callout>
-
-<Callout type="warning" title="Trust and risk">
-Vault depositors in Trusted vaults place significant trust in the manager. Borrowing and margin increase the manager's ability to move or risk vault capital. Depositors should only use Trusted vaults when they accept this additional trust assumption.
-</Callout>
-
-**Borrow:** Move vault assets out (e.g. USDC) up to the vault's capacity. Vault equity for share accounting includes the manager's borrowed value so depositor share price reflects the full claim on the vault.
-
-```bash
-bun run cli -- manager-borrow \
-  --vault-address <VAULT_ADDRESS> \
-  --borrow-spot-market-index 0 \
-  --borrow-amount <AMOUNT>
-```
-
-**Repay:** Send tokens back into the vault and reduce the outstanding borrow. You can repay in the same asset or another spot market and specify the value to deduct from `manager_borrowed_value`; omit amount to repay the full borrow.
-
-```bash
-bun run cli -- manager-repay \
-  --vault-address <VAULT_ADDRESS> \
-  --repay-spot-market-index <INDEX> \
-  --repay-amount <AMOUNT> \
-  --repay-value <VALUE_IN_DEPOSIT_ASSET>
-```
-
-**Update borrow value:** If borrowed funds have been used elsewhere and their mark-to-deposit-asset value has changed, you can set the tracked borrow value to the current mark:
-
-```bash
-bun run cli -- manager-update-borrow \
-  --vault-address <VAULT_ADDRESS> \
-  --new-borrow-value <VALUE>
-```
-
-Update the vault's class to Trusted with the admin command:
-
-```bash
-bun run cli -- admin-update-vault-class \
-  --vault-address <VAULT_ADDRESS> \
-  --vault-class trusted
-```
-
-Trusted vaults typically use margin trading; enable it with `manager-update-margin-trading-enabled` as in Step 4.
-
-## Multisig manager
-
-The vault **manager** is the ultimate owner: they update parameters, fees, and the trading delegate, and collect fees. The manager is set to the signer of the vault creation transaction and can be changed with `update_vault_manager` (signed by the current manager).
-
-**New vault with multisig as manager:** Set the manager to your Squads (or other multisig) address and use `--dump-transaction-message` to output a base58 transaction blob. Create a transaction in Squads (Developers → TX Builder → Create Transaction → Add Instruction → Import from base58), then have signers approve and execute.
-
-```bash
-bun run cli -- init-vault \
-  --name <VAULT_NAME> \
-  --market-index <SPOT_MARKET_INDEX> \
-  --redeem-period <SECONDS> \
-  --profit-share <PERCENT> \
-  --min-deposit-amount <AMOUNT> \
-  --manager <MULTISIG_ADDRESS> \
-  --dump-transaction-message
-```
-
-**Existing vault:** Transfer management to a multisig by having the current manager run:
-
-```bash
-bun run cli -- manager-update-vault-manager \
-  --vault-address <VAULT_ADDRESS> \
-  --new-manager <MULTISIG_ADDRESS>
-```
-
-**Any manager command via multisig:** Use `--dump-transaction-message` on manager commands (`bun run cli -- manager-*`) to get a base58 blob, then import it in Squads as above. The CLI uses the manager as fee payer, so ensure the multisig wallet has enough SOL for transaction fees.
 
 ## Accounting
 
@@ -208,6 +47,14 @@ bun run cli -- manager-update-vault-manager \
 **Liquidations:** If a depositor has waited the redeem period and their withdrawal would breach the vault's initial margin requirement (e.g. the delegate is over-leveraged), a permissioned liquidator can temporarily assume delegate control and close positions in reduce-only mode (until withdrawal is processed or for up to 1 hour), then restore the original delegate. Monitor **total outstanding withdrawal requests** (stored on the vault account) and keep margin usage in check so depositor withdrawals don't trigger takeovers; the redeem period gives you time to unwind positions.
 
 **Trust and incentives:** The design is not trustless between depositors and managers. Without reputation or stake, incentives can be misaligned (e.g. moving value via losing trades). Depositors have no on-chain recourse, so they must trust the manager. Operate with clear terms and consider reputation or skin-in-the-game where appropriate.
+
+## In this section
+
+<Cards>
+  <Cards.Card title="Quickstart: create and run a vault" href="/developers/vault-managers/quickstart" />
+  <Cards.Card title="Trusted vaults" href="/developers/vault-managers/trusted-vaults" />
+  <Cards.Card title="Multisig manager" href="/developers/vault-managers/multisig-ops" />
+</Cards>
 
 ## Related Resources
 

@@ -301,7 +301,7 @@ const minSpread = Math.max(0.05, confidence * 2);
 
 ## Using JIT Proxy (JitterSniper / JitterShotgun)
 
-Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-proxy`](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) library which handles auction timing, transaction building, and retry logic. **Not yet published to npm** — build it from `packages/jit-proxy` in the monorepo until it is.
+Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) library which handles auction timing, transaction building, and retry logic. **Not yet published to npm** — build it from `packages/jit-proxy` in the monorepo until it is.
 
 ```typescript
 import { JitterSniper, PriceType } from "@velocity-exchange/jit-proxy";
@@ -323,7 +323,7 @@ await jitter.subscribe();
 // You just need to configure pricing and filters
 ```
 
-See the [`JitMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
+See the [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
 - Per-market subaccount isolation (1 subaccount per market)
 - Volatility-based fill rejection (`isMarketVolatile`)
 - DLOB-aware pricing (excludes own orders from best bid/ask calculation)
@@ -342,4 +342,4 @@ See the [`JitMaker`](https://github.com/velocity-exchange/protocol-v2/blob/maste
 - [SWIFT API](./swift-api) - Receive orders 100-500ms faster via offchain WebSocket
 - [Bot Architecture](./bot-architecture) - Priority fees, health monitoring, graceful shutdown
 - [DLOB MM](./dlob-mm) - Resting order approach (can be combined with JIT)
-- [@velocity-exchange/jit-proxy](https://github.com/velocity-exchange/protocol-v2/tree/master/packages/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`
+- [@velocity-exchange/jit-proxy](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`

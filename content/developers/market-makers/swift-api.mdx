@@ -2,6 +2,8 @@
 
 **SWIFT** is Velocity's offchain signed-order protocol: it lets market makers receive signed taker orders over WebSocket before they hit the onchain JIT auction. This enables ultra-low-latency market making. In the SDK, SWIFT orders are called "signed-message" orders (`SignedMsgOrderParams`, `isSignedMsgOrder`, `SwiftOrderSubscriber`) — the "SWIFT" name is the product-facing term for the same feature.
 
+This page covers the maker side — receiving and filling signed orders. For the taker side (how these orders are signed and submitted), see [Swift in the SDK docs](/developers/velocity-sdk/swift).
+
 ## How SWIFT works
 
 ### Flow overview

@@ -5,7 +5,7 @@ Trading Automation covers both **trading workflows** (SDK-first integrations) an
 - **Keeper bots**: protocol maintenance (matching, triggers, liquidations).
 - **Trading bots**: profit-seeking strategies (e.g. JIT market making).
 
-The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the velocity-v1 monorepo, and most examples below follow that app's config + entrypoint pattern.
+The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the velocity-v1 monorepo, and most examples below follow that app's config + entrypoint pattern. Unlike Drift's standalone `keeper-bots-v2` repo, there is no separate devnet/mainnet-beta branch split — the app's `ENV` config value selects the cluster.
 
 <Steps>
 ### Pick your path
@@ -16,28 +16,46 @@ The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://
 
 **Keeper bots** (protocol-critical):
 
-| Bot Type      | Difficulty | Capital Required | Rewards | Link                                                                             |
-| :------------ | :--------- | :--------------- | :------ | -------------------------------------------------------------------------------- |
-| Matching Bot  | Basic      | No               | TBD     | [Tutorial: Order Matching Bot](/developers/trading-automation/keeper-bots/order-matching-bot) |
-| Order Trigger | Basic      | No               | TBD     | [Tutorial: Order Trigger Bot](/developers/trading-automation/keeper-bots/order-trigger-bot)   |
-| Liquidator    | Advanced   | Yes              | TBD     | [Tutorial: Liquidation Bot](/developers/trading-automation/keeper-bots/liquidation-bot)       |
+| Bot Type      | Difficulty | Capital Required | Link                                                                                           |
+| :------------ | :--------- | :---------------- | :---------------------------------------------------------------------------------------------- |
+| Matching Bot  | Basic      | No                 | [Tutorial: Order Matching Bot](/developers/trading-automation/keeper-bots/order-matching-bot) |
+| Order Trigger | Basic      | No                 | [Tutorial: Order Trigger Bot](/developers/trading-automation/keeper-bots/order-trigger-bot)   |
+| Liquidator    | Advanced   | Yes                | [Tutorial: Liquidation Bot](/developers/trading-automation/keeper-bots/liquidation-bot)       |
 
 **Trading bots** (strategy-driven):
 
-| Bot Type      | Difficulty | Capital Required | Rewards | Link                                                                    |
-| :------------ | :--------- | :--------------- | :------ | ----------------------------------------------------------------------- |
-| JIT Maker Bot | Advanced   | Yes              | TBD     | [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot) |
+| Bot Type      | Difficulty | Capital Required | Link                                                                                |
+| :------------ | :--------- | :---------------- | -------------------------------------------------------------------------------------- |
+| JIT Maker Bot | Advanced   | Yes                | [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot) |
+
+Rewards vary by bot and duty performed — see each bot's tutorial page, or [Keeper Incentives](/protocol/how-it-works/keepers/keeper-incentives) for how the protocol compensates keepers.
 
 ### Prepare environment + wallet
 
-All bots require a funded wallet for fees, and some require collateral. Use a bot wallet setup, and keep the keypair secure:
+All bots require a funded wallet for fees, and some require collateral. See [Bot wallet](#bot-wallet) below to set one up, and pick an [RPC provider](#rpc-providers) that supports what bots need.
 
-- [Bot wallet setup](/developers/trading-automation/bot-wallet)
-- [RPC providers](/developers/trading-automation/rpc-providers)
+### Clone the monorepo and install
+
+```shell copy
+git clone https://github.com/velocity-exchange/velocity-v1.git
+cd velocity-v1
+bun install   # run once, at the repo root — this is a Bun workspace
+```
 
 ### Configure the bot
 
-`apps/keeper-bots-v2` uses a YAML config (see `example.config.yaml` in the app directory). At minimum, set:
+From `apps/keeper-bots-v2`, copy the env template and set the required values:
+
+```shell copy
+cd apps/keeper-bots-v2
+cp .env.example .env
+```
+
+- `KEEPER_PRIVATE_KEY`: keypair array or path to `keypair.json`
+- `ENDPOINT`: RPC endpoint
+- `ENV`: `devnet` or `mainnet-beta`
+
+The app also uses a YAML config (see `example.config.yaml` in the app directory). At minimum, set:
 
 - `global.endpoint` (RPC URL)
 - `global.keeperPrivateKey` (keypair or env var)
@@ -49,6 +67,25 @@ Bots that place orders or manage positions require a Velocity user account. From
 
 ```shell copy
 bun run dev --init-user
+```
+
+Or do the same from your own SDK code:
+
+```typescript copy
+if (!(await velocityClient.getUser().exists())) {
+  logger.info(`Creating User for ${wallet.publicKey}`);
+  const [txSig] = await velocityClient.initializeUserAccount();
+  logger.info(`Initialized user account in transaction: ${txSig}`);
+}
+```
+
+### Deposit collateral (if needed)
+
+Required for liquidators and JIT makers that keep open positions:
+
+```shell copy
+# deposit 10,000 of spot market 0's quote asset (USDC on mainnet-beta; dUSDT on devnet)
+bun run dev --force-deposit 10000
 ```
 
 ### Run and monitor
@@ -67,3 +104,40 @@ Common issues (missing USDC ATA, user not initialized, RPC limits) are covered i
 
 - [Troubleshooting](/developers/trading-automation/troubleshooting)
 </Steps>
+
+## Bot wallet
+
+Bots require a private key in order to sign transactions. The private key is stored in a wallet file and can either be in base58 format, or a numbers array format.
+
+### Generate a fresh keypair
+
+1. Download and install the [Solana CLI](https://docs.solanalabs.com/cli/install).
+2. Create a new keypair file named `new_keypair.json`:
+
+   ```shell copy
+   solana-keygen new -o new_keypair.json
+   ```
+
+   This will contain a new keypair in JSON format.
+
+### Export a keypair from a browser wallet
+
+Alternatively you may export the private key from an existing browser wallet such as [Phantom](/protocol/getting-started/wallet-setup/phantom-wallet).
+
+### Key security
+
+Treat a bot's private key like any other production secret:
+
+- Never commit a keypair file or raw private key to version control.
+- Prefer loading the key from an environment variable or a secret manager rather than a plaintext file on disk.
+- Use a dedicated hot wallet for the bot, funded only with what it needs for fees (and collateral, if required), rather than reusing a wallet that holds other funds.
+
+## RPC providers
+
+Solana utilizes a network of [RPC Nodes](https://solana.com/rpc) to serve data to users. These nodes require a lot of resources to run and therefore can be quite expensive to operate.
+
+Some of the commonly used free RPC providers are insufficient for operating Velocity bots because we require some functions that are commonly disabled (i.e. websockets and `getProgramAccounts`). [Helius](https://www.helius.dev/) has a generous free plan that is sufficient for getting started. But consider upgrading to a paid plan as you get more serious with operating bots on Velocity or Solana in general.
+
+Bots also rely on `programSubscribe` and websocket subscriptions to receive timely account updates (for example, the JIT maker bot uses `programSubscribe` to find fillable orders — see [JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)); confirm your provider supports these before committing to a plan.
+
+A more complete list of providers is available [here](https://solana.com/rpc).

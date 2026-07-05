@@ -2,21 +2,9 @@
 
 ### Settling P&L
 
-Settling P&L refers to settling the total funds available in the per-market pool of funds that users can claim.  
+Settling P&L refers to settling the total funds available in the per-market **P&L Pool** — see [Introduction to Profit & Loss](/protocol/trading/profit-loss#types-of-pl) for how Unrealised, Settled, and Claimable/Unsettled P&L relate, and [Accounting & Settlement](/protocol/trading/profit-loss/accounting-settlement) for how the P&L Pool is funded.
 
-This pool is called the **P&L Pool** (read more here: [Accounting and Settlement](/protocol/trading/profit-loss/accounting-settlement)).  
-
-A trader that has made a profitable trade and realises its profits may wish to withdraw that realised profit.
-
-However, users can only withdraw realised profits if there is enough settled P&L available in the P&L Pool. The P&L Pool is comprised of all the accumulated realised losses of other participants in that market. It represents the total amount available for withdrawal.
-
-For each dollar to be withdrawn from realised profits, there must also be a corresponding dollar of realised losses (which will be made available in the P&L Pool). This mechanism exists to ensure that users do not withdraw more from the platform than what actually exists.
-
-If a user made a profitable trade and has a positive realised P&L from the position, but there isn't enough Settled P&L in the Per-Market P&L pool to pay out the user to withdraw, the user may need to wait for the pool to be replenished by settled losses.  
-
-When this occurs, the user's P&L will be considered to be **unsettled P&L.**
-
-For more information on what happens when there is not enough Settled P&L, read [P&L Pool](/protocol/how-it-works/profit-loss-pool).
+In short: for each dollar withdrawn from realised profits, there must be a corresponding dollar of realised losses sitting in the P&L Pool. If a profitable position's realised P&L exceeds what's currently settled in the pool, the excess is **unsettled P&L** until the pool is replenished by other users' settled losses. See [P&L Pool](/protocol/how-it-works/profit-loss-pool) for what happens when there isn't enough Settled P&L.
 
 ### Margining of Unsettled P&L  
 

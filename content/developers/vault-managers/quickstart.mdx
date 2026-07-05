@@ -1,0 +1,97 @@
+# Quickstart: Create and Run a Vault
+
+This walks through creating a vault, updating its parameters, onboarding depositors, and handling day-to-day manager operations via the `vaults-sdk` CLI. For a conceptual overview of roles and fee constraints, see [Vault Managers](/developers/vault-managers).
+
+<Steps>
+
+### Decide vault parameters
+
+| Parameter | Description |
+| --------- | ----------- |
+| **`market-index`** / **`spotMarketIndex`** | Deposit token (e.g. 0 = USDC on mainnet-beta, dUSDT on devnet). |
+| **`redeem-period`** | Withdrawal cooldown in seconds (often 3–7 days). |
+| **`max-tokens`** | Capacity / risk control. |
+| **`management-fee`** | Annualized management fee. |
+| **`profit-share`** | Performance fee on realized gains. |
+| **`permissioned`** + **`min-deposit-amount`** | Optional onboarding controls. |
+
+### Initialize the vault
+
+Vault initialization is permissionless. From the `@velocity-exchange/vaults-sdk` CLI (`packages/vaults-sdk` in the `velocity-v1` monorepo):
+
+```bash
+git clone https://github.com/velocity-exchange/velocity-v1.git
+cd velocity-v1
+bun install                       # once, at the repo root
+cd packages/vaults-sdk
+
+bun run cli -- init-vault \
+  --name "MyVault" \
+  --market-index 0 \
+  --redeem-period 604800 \
+  --max-tokens 0 \
+  --management-fee 2 \
+  --profit-share 20
+```
+
+`--management-fee`/`--profit-share` take a plain percentage number (`2` = 2%, not basis points) — the CLI scales it against the on-chain `PERCENTAGE_PRECISION` (1e6 = 100%), and `initialize_vault` rejects any value ≥ 100%.
+
+The CLI reads `-u/--url` (or `RPC_URL`) and `-k/--keypair` (or `KEYPAIR_PATH`) for the RPC endpoint and signer; `--env` selects `devnet` or `mainnet-beta` (default `mainnet-beta`).
+
+Add `--permissioned` and `--min-deposit-amount <amount>` if you want whitelisted depositors and a minimum deposit size. Vault name must be unique.
+
+### Update parameters and enable trading
+
+After creation you can lower fees, shorten redeem period, or adjust caps (within the one-way constraints described in [Vault Managers](/developers/vault-managers)):
+
+```bash
+bun run cli -- manager-update-vault \
+  --vault-address <VAULT_ADDRESS> \
+  --redeem-period 1000 \
+  --max-tokens 200000 \
+  --management-fee 0 \
+  --profit-share 0
+```
+
+To enable margin trading on the vault:
+
+```bash
+bun run cli -- manager-update-margin-trading-enabled \
+  --vault-address <VAULT_ADDRESS> \
+  --enabled true
+```
+
+View vault state anytime:
+
+```bash
+bun run cli -- view-vault --vault-address <VAULT_ADDRESS>
+```
+
+### Permissioned vaults (allowing depositors)
+
+For permissioned vaults, the manager must initialize each depositor:
+
+```bash
+bun run cli -- init-vault-depositor \
+  --vault-address <VAULT_ADDRESS> \
+  --deposit-authority <AUTHORITY_TO_ALLOW_DEPOSIT>
+```
+
+Deposits and withdrawals are otherwise as in the standard flow: request withdrawal → wait redeem period → complete withdrawal.
+
+### Manager operations
+
+Common manager actions:
+
+- Manager deposit/withdraw
+- Apply profit share across depositors
+- View vault state and depositors
+
+Run `bun run cli -- --help` from `packages/vaults-sdk` for the full command list and flags.
+
+</Steps>
+
+## Next steps
+
+- Need manager borrowing or margin beyond the base vault? See [Trusted vaults](/developers/vault-managers/trusted-vaults).
+- Want a multisig (e.g. Squads) as vault manager instead of a single keypair? See [Multisig manager](/developers/vault-managers/multisig-ops).

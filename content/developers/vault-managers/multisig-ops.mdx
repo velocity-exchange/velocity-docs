@@ -1,0 +1,28 @@
+# Multisig Manager
+
+The vault **manager** is the ultimate owner: they update parameters, fees, and the trading delegate, and collect fees (see [Vault Managers](/developers/vault-managers) for the full role breakdown). The manager is set to the signer of the vault creation transaction and can be changed with `update_vault_manager` (signed by the current manager). This page covers running that manager role through a multisig (e.g. Squads) instead of a single keypair.
+
+**New vault with multisig as manager:** Set the manager to your Squads (or other multisig) address and use `--dump-transaction-message` to output a base58 transaction blob. Create a transaction in Squads (Developers → TX Builder → Create Transaction → Add Instruction → Import from base58), then have signers approve and execute.
+
+```bash
+bun run cli -- init-vault \
+  --name <VAULT_NAME> \
+  --market-index <SPOT_MARKET_INDEX> \
+  --redeem-period <SECONDS> \
+  --profit-share <PERCENT> \
+  --min-deposit-amount <AMOUNT> \
+  --manager <MULTISIG_ADDRESS> \
+  --dump-transaction-message
+```
+
+**Existing vault:** Transfer management to a multisig by having the current manager run:
+
+```bash
+bun run cli -- manager-update-vault-manager \
+  --vault-address <VAULT_ADDRESS> \
+  --new-manager <MULTISIG_ADDRESS>
+```
+
+**Any manager command via multisig:** Use `--dump-transaction-message` on manager commands (`bun run cli -- manager-*`) to get a base58 blob, then import it in Squads as above. The CLI uses the manager as fee payer, so ensure the multisig wallet has enough SOL for transaction fees.
+
+For the base vault creation flow these commands build on, see [Quickstart](/developers/vault-managers/quickstart). For manager borrowing under a Trusted vault, see [Trusted vaults](/developers/vault-managers/trusted-vaults).

@@ -16,7 +16,6 @@
 - [JIT-only market making](/developers/market-makers/jit-only)
 - [JIT Auctions](/developers/market-makers/jit-auctions)
 - [Tutorial on how to run JIT trading bot](/developers/trading-automation/keeper-bots/jit-maker-bot)
-- [Dune Dashboard](https://dune.com/bigz/drift-jit)
 
 JIT Proxy Address: `J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP` — this is the jit-proxy program originally deployed under Drift; the client in the velocity-v1 monorepo targets this address. Verify the address against official Velocity channels before sending funds or transactions.
 
@@ -119,20 +118,9 @@ JIT mechanism enables the Maker to be their own filler. The Maker will submit th
 
 When filling a taker order with JIT liquidity, JIT makers do not use the DLOB. They place, fill and cancel an order atomically.
 
-###  I got "TakerOrderNotFound" or "AskNotCrossed" errors. What do they mean?
-
-- **'TakerOrderNotFound'**: the auction order you tried to take was either already filled by another user or removed due to slowness in your request.
-- **'AskNotCrossed'**: the auction order's price doesn't reach your minimum selling price specified in the JIT parameters.
-
-It's common practice to simulate transactions before submitting them, but this can carry a higher risk of being too slow to compete in real-time situations.
-
 ### Why do some transactions appear on Velocity but not on-chain?
 
 This might be a temporary display issue related to Solana forks. Transactions shown on Velocity might be unconfirmed or failed due to these forks, even though they appear successful initially. Refreshing the page usually resolves the issue.
-
-### Does Velocity have stats on market orders? Is there any option to track the history of any specific JIT auction?
-
-Yes, you can access data on hourly, daily usage, and placeAndMake by market here: [Dune Dashboard](https://dune.com/bigz/drift-jit).
 
 ### I'm not getting any orders filled. What can I do to get more fills?
 
@@ -144,8 +132,6 @@ The solution is two-fold:
 
 No, this indicates a limit order auction that has concluded. Limit order auctions have a predefined duration, and the negative `slots_left value signifies the auction has surpassed its intended timeframe.
 
-### I'm encountering errors that say "cannot read .data and .DataAndSlot" when I try to run my bot. How can I fix this?
-
-These errors (cannot read .data or .dataAndSlot) typically occur when the free RPC keys run out of credits or reach their limits. This happens because maker/keeper bot functions require a lot of RPC calls. To address this, consider using a paid RPC service or setting up a custom node.
+For bot troubleshooting (error codes, RPC issues, and other bot-development errors), see [Trading Automation Troubleshooting](/developers/trading-automation/troubleshooting).
 
 ---

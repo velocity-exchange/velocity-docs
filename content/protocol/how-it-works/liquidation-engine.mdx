@@ -38,32 +38,25 @@ If the oracle price deviates 50% or more from the 5min TWAP, liquidations are **
 
 ## Insurance Fund as a safety net
 
-Even with all these protections, extreme events can still create negative balances. That’s where Velocity's **Insurance Fund** comes in. It’s the protocol’s first backstop against insolvency.
+Even with all these protections, extreme events can still create negative balances. Velocity's **Insurance Fund** is the protocol's first backstop against this insolvency — it covers spot bankruptcies in full and perp bankruptcies up to a set per-market limit, with any remainder handled by socialized loss. See [Insurance Fund](/protocol/insurance-fund) for the coverage rules, funding sources, and the full perp-bankruptcy resolution waterfall.
 
-The Insurance Fund covers trader losses that exceed their account balances. Anyone can stake assets, like USDC, SOL, BTC, or ETH, into the fund and earn a share of Velocity's trading and liquidation fees. Since the [fee redesign](/protocol/trading/trading-fees), the Insurance Fund is **100% staker-owned** — there are no protocol-owned IF shares, so every dollar that settles into it accrues entirely to stakers as share-price appreciation.
+## Liquidators
 
-### How It’s Used
+Liquidations act as position transfers between accounts. Liquidator accounts thus need to be collateralised in order to satisfy the transfer's initial margin requirements.
 
-- **Spot markets:** Covered in full.
-- **Perpetual markets:** Covered up to a set per-market limit.
+The core instructions pertaining to liquidations are:
 
-Each asset has its own Insurance Fund. For example, the USDC fund backs both perps and borrow/lend, while SOL, BTC, and ETH funds cover borrow/lend losses specific to those assets.
+| Instruction                    | Details                                                          |
+| ------------------------------ | ---------------------------------------------------------------- |
+| liquidate_perp                 | Liquidator takes over user perpetual positions at a discount. Also handles [isolated positions](/protocol/trading/margin), liquidating them 100% in one shot instead of the throttled cross-margin ramp. |
+| liquidate_perp_with_fill       | Same as `liquidate_perp`, but fills the taken-over position against a maker in the same instruction. |
+| liquidate_spot                 | Liquidator takes over borrow at a discount to the deposit value. |
+| liquidate_spot_with_swap_begin / _end | Liquidator takes over a borrow via an atomic swap (e.g. against Jupiter) rather than direct token transfer. |
+| liquidate_borrow_for_perp_pnl  | Liquidator takes over borrow for discounted P&L.                  |
+| liquidate_perp_pnl_for_deposit | Liquidator takes over negative P&L for discounted deposit.      |
 
-> The fund accumulates capital through user staking (deposits) and from a portion of trading, borrowing, and liquidation fees 
+Liquidators are open-sourced and can be triggered by anybody running a liquidator bot. Liquidators, also known as Keepers, will have their collateral reward credited to their Velocity account. Every liquidation fee is split three ways (`liquidator_fee` / `if_liquidation_fee` / `protocol_liquidation_fee`) to reward them — see [Liquidations](/protocol/trading/liquidations#liquidation-fees) for the split logic.
 
-## How Perp Bankruptcy Resolution Works
+Bankruptcy (see [Insurance Fund](/protocol/insurance-fund)) is possible if a liquidated user still has outstanding liabilities and no further assets — see [Bankruptcy and Solvency Status](/protocol/trading/liquidations#bankruptcy-and-solvency-status).
 
-Velocity follows a clear hierarchy for resolving perp market insolvency (`resolve_perp_bankruptcy`), gated by [`State.solvencyStatus`](/protocol/trading/liquidations#bankruptcy-and-solvency-status) rather than the general withdraw-pause flag:
-
-<Steps>
-### In-transit insurance fees
-The market's own not-yet-swept `pending_if_fee` is canceled against the bankrupting loss first — both are just accounting claims on future pnl-pool inflows, so no tokens need to move.
-### External Insurance Fund
-The Insurance Fund vault covers remaining debt, bounded by the market's insurance-claim caps.
-### AMM fee-provision clawback
-If the Insurance Fund is insufficient, the market claws back its own AMM fee provision — capped at the cumulative amount the AMM has ever received via the [fee split](/protocol/trading/trading-fees) (`amm_protocol_fees_received`), first the not-yet-tokenized portion, then tokens already swept into the AMM's fee pool. The AMM's own trading/spread capital beyond that provision is never touched.
-### Socialized loss
-If all of the above are exhausted, **socialized loss** applies pro rata across all open positions within that market.
-</Steps>
-
-This structure ensures that insolvency events are handled fairly and predictably. The system aims to keep socialized losses as close to zero as possible.
+If you would like to run a liquidator bot, see [Tutorial: Liquidation Bot](/developers/trading-automation/keeper-bots/liquidation-bot).

@@ -1,24 +1,9 @@
 # P&L Pool
 
-Any account can call the `settlePNL` instruction, which will trigger negative P&L accounts to be settled, adding to each per-market P&L pool. Negative P&L being settled increases the amount available to be settled, whilst positive P&L being settled decreases the amount available for settlement.
-
-![Velocity Perpetuals P&L Settlement Mechanism](/assets/8bAYsBqUpelsCx7xgTblP_drift-pandl-settlement-mechanism-banner-v2-1.png)
-
+The **P&L Pool** is each perpetual market's pool of settled funds available for withdrawal — negative unrealised P&L that gets settled into it increases the amount available; positive P&L settled out of it decreases that amount. See [Accounting & Settlement](/protocol/trading/profit-loss/accounting-settlement) for how the pool is funded and prioritised against fee sweeps, and [Introduction to Profit & Loss](/protocol/trading/profit-loss) for how calling `settlePNL` relates to realising and claiming P&L.
 
 <Callout type="important">
-Note: Calling `settlePNL` does not affect open positions. The function only settles the funds available in the PNL Pool for withdrawal.
-
-It's important to recognise the difference between **settling P&L** and **realising P&L** (read more here: [Introduction to Profit & Loss](/protocol/trading/profit-loss)).
+Calling `settlePNL` does not affect open positions — it only settles the funds available in the P&L Pool for withdrawal. It's important to recognise the difference between **settling P&L** and **realising P&L** — see [Introduction to Profit & Loss](/protocol/trading/profit-loss).
 </Callout>
 
-### Calling `settlePNL`
-
-Any account can call `settlePNL` instruction. Once called, all unrealised P&L will be settled and added to (or subtracted from) the market's P&L Pool to be made available for withdrawal.
-
-- Users with open positions that have negative unrealised P&L will have their unrealised P&L settled and sent to the P&L Pool; **however, their position will be unaffected**.
-
-- As users are settled against, the Cost Basis for their position will be adjusted so that their position remains unchanged even though a portion of their unrealised negative P&L has been realised and sent to the P&L Pool.
-
-- The P&L settled as a result of the `settlePNL` instruction will be reflected in the`Unrealised P&L` tab, specifically within the`Realised P&L` column. The adjusted cost basis for the position is reflected in the `Cost Basis` column.
-
-![Claiming Unrealised PnL](/assets/L1J0T17SoiEsYYH8FO8MJ_image.png)
+Any account can call `settlePNL` permissionlessly to settle all unrealised P&L for a position, adding to (or subtracting from) the market's P&L Pool.

@@ -63,6 +63,16 @@ The key difference lies in the availability for withdrawal:
 **Withdrawing realised P&L requires settling/claiming it first.** Closing your position realizes your P&L, but it doesn't automatically make it available for withdrawal.
 </Callout>
 
+### How `settlePNL` Affects Your Position
+
+Calling `settlePNL` settles a position's negative unrealised P&L and sends it to the [P&L Pool](/protocol/how-it-works/profit-loss-pool) — but **the position itself is unaffected**. Instead, the position's Cost Basis is adjusted so the position stays unchanged even though a portion of its unrealised loss has been realised and settled.
+
+![Velocity Perpetuals P&L Settlement Mechanism](/assets/8bAYsBqUpelsCx7xgTblP_drift-pandl-settlement-mechanism-banner-v2-1.png)
+
+The P&L settled this way shows up in the `Unrealised P&L` tab, specifically in the `Realised P&L` column, with the adjusted cost basis reflected in the `Cost Basis` column:
+
+![Claiming Unrealised PnL](/assets/L1J0T17SoiEsYYH8FO8MJ_image.png)
+
 ### Claiming Settled P&L
 
 1. On any [trades screen](https://app.velocity.exchange) navigate to the "Balances" tab.

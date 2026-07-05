@@ -2,57 +2,59 @@
 
 ## Overview
 
-Velocity’s Builder Code (VBC) system enables any builder to build on top of Velocity **while earning fees** for routing trades.
+Velocity's Builder Code (VBC) system enables any builder to build on top of Velocity **while earning fees** for routing trades.
 
-Velocity Builder Codes establish the financial infrastructure layer on Solana, by allowing anyone tap into Velocity’s deep liquidity and efficient execution, without building their own backend. This enables a fully open, composable UI layer for perps on Solana.
+Velocity Builder Codes establish the financial infrastructure layer on Solana, by allowing anyone to tap into Velocity's deep liquidity and efficient execution, without building their own backend. This enables a fully open, composable UI layer for perps on Solana.
 
-This Builder Code system makes Velocity an on-chain DEX on Solana that offers **per order monetization** for third-party frontends, setting the stage for a permissionless ecosystem of apps, bots, and aggregators all aligned with Velocity and Solana’s liquidity growth. 
+This Builder Code system makes Velocity an on-chain DEX on Solana that offers **per order monetization** for third-party frontends, setting the stage for a permissionless ecosystem of apps, bots, and aggregators all aligned with Velocity and Solana's liquidity growth.
+
+<Callout type="info">
+Builder fees are denominated in **tenths of a basis point** throughout the protocol (e.g. `100` = 10 bps ÷ 10 = 0.01%). Fields like `builderFeeTenthBps`, `feeTenthBps`, and `maxFeeTenthBps` all use this unit.
+</Callout>
 
 ### Getting started with VBC
 
 - **Builder Registration:**
-In order to receive fees, builders are required to have an existing Velocity account, as well as set up a `RevenueShareAccount`
+In order to receive fees, builders are required to have an existing Velocity account, as well as set up a `RevenueShareAccount` (via the `initializeRevenueShare` instruction).
 
-- **User Onboarding:**  
-Before placing any orders, users must approve the builder and the maximum allowed builder fee.  
-This approval is stored directly inside the `RevenueShareEscrow` account.
+- **User Onboarding:**
+Before placing any orders, users must approve the builder and the maximum allowed builder fee, via the `changeApprovedBuilder` instruction (builder pubkey, `maxFeeTenthBps`). This approval is stored directly inside the user's `RevenueShareEscrow` account.
 
 ### How Builder Codes Work
 
 <Steps>
 #### Order Placement
-   The builder’s app constructs a `place_order` transaction, which includes their `builderIdx` and `builderFee` in the signed order params 
-   The `RevenueShareEscrow` account is included in the transaction so the program can validate and record the order.
+   The builder's app places an order (e.g. `placePerpOrder`) with `builderIdx` and `builderFeeTenthBps` set in the order params. The `RevenueShareEscrow` account is included in the transaction so the program can validate and record the order.
 
 #### Fee Accrual (Per Order)
-When an order is filled, the fee is credited to the user’s `RevenueShareEscrow` as a `RevenueShareOrder`:
-   - This tracks builder’s pubkey, `feesAccrued`, `orderId`, `feeBps`, market type (spot or perp), and completion status.
+When an order is filled, the fee is credited to the user's `RevenueShareEscrow` as a `RevenueShareOrder`:
+   - This tracks the builder index (`builderIdx`), `feesAccrued`, `orderId`, `feeTenthBps`, market index and type, and completion status.
    - Fees remain in escrow until settlement.
 
 #### Settlement
-   On `settle_pnl`, any accrued fees in the escrow are swept to the builder’s `RevenueShareAccount`:
+   On `settlePnl`, any accrued fees in the escrow are swept to the builder's `RevenueShareAccount`.
 </Steps>
 
-Code examples can be found [here](/developers/velocity-sdk/builder-codes)
+Code examples can be found in [Builder Codes (SDK)](/developers/velocity-sdk/builder-codes).
 
-### Notes on builder codes for MM’s
+### Notes on builder codes for MMs
 
-**RevenueShareEscrow Inclusion:**  Fillers and market makers must include the user’s `RevenueShareEscrow` account in every order fill transaction. This PDA is derived from the user’s pubkey (requires no additional RPC calls).
+**RevenueShareEscrow Inclusion:** Fillers and market makers must include the user's `RevenueShareEscrow` account in every order fill transaction. This PDA is derived from the user's pubkey (requires no additional RPC calls).
 
-**Multi Builder Support:**  Users can approve multiple builders, so MM’s may see multiple builder accounts to sweep to during `SettlePnl`. The protocol will not throw if a specific builder is omitted, but all filled rewards must eventually be swept.
+**Multi Builder Support:** Users can approve multiple builders, so MMs may see multiple builder accounts to sweep to during `settlePnl`. The protocol will not throw if a specific builder is omitted, but all filled rewards must eventually be swept.
 
-**Error Handling:**  If a required escrow account isn’t included, the program will throw. Therefore it's recommended to always include it.
+**Error Handling:** If a required escrow account isn't included, the program will throw. Therefore it's recommended to always include it.
 
 ### FAQ
 
-**Q: Can a user approve multiple builders?**  
-A: Yes. Each builder entry in `approvedBuilders` has its own max fee bps.
+**Q: Can a user approve multiple builders?**
+A: Yes. Each builder entry in `approvedBuilders` has its own `maxFeeTenthBps`.
 
-**Q: How are builder fees capped?**  
-A: A: The protocol enforces the user-approved max fee per builder. Attempts to go over will result in a transaction failure.
+**Q: How are builder fees capped?**
+A: The protocol enforces the user-approved max fee per builder. Attempts to go over will result in a transaction failure.
 
-**Q: Do MM’s or fillers need to know the builder/referrer accounts for every order?**  
+**Q: Do MMs or fillers need to know the builder/referrer accounts for every order?**
 A: No, but including the `RevenueShareEscrow` is required to process reward accrual and settlement.
 
-**Q: When are builder rewards paid?**  
-A: On the user’s `settle_pnl` call (which sweeps escrowed fees to the builder).
+**Q: When are builder rewards paid?**
+A: On the user's `settlePnl` call (which sweeps escrowed fees to the builder).

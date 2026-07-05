@@ -254,9 +254,9 @@ await velocityClient.cancelOrders();
 
 ## Reference implementation
 
-Resting orders you place are picked up by the hosted DLOB server — [`apps/dlob-server`](https://github.com/velocity-exchange/protocol-v2/tree/master/apps/dlob-server) in the [velocity-v1 monorepo](https://github.com/velocity-exchange/protocol-v2) — which is what backs the REST/WebSocket orderbook described in [Orderbook & Matching](./orderbook-and-matching#accessing-the-dlob). You don't need to run it yourself to make markets; it's listed here in case you want to run your own instance or read its source for how order filtering/aggregation works.
+Resting orders you place are picked up by the hosted DLOB server — [`apps/dlob-server`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/dlob-server) in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1) — which is what backs the REST/WebSocket orderbook described in [Orderbook & Matching](./orderbook-and-matching#accessing-the-dlob). You don't need to run it yourself to make markets; it's listed here in case you want to run your own instance or read its source for how order filtering/aggregation works.
 
-The [`FloatingPerpMaker`](https://github.com/velocity-exchange/protocol-v2/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
+The [`FloatingPerpMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
 
 - **Slot based cooldown:** waits `MARKET_UPDATE_COOLDOWN_SLOTS` (30 slots) before re quoting a market, avoiding excessive transactions
 - **Mutex guarded periodic tasks:** uses `async mutex` to prevent overlapping quote updates
