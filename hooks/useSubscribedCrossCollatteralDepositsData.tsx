@@ -98,7 +98,7 @@ export const useSubscribedCrossCollateralDepositsData =
             if (assetIndex !== -1) {
               const newValues = getWeightDataFromAccount(
                 account,
-                subscriptionRef.current
+                subscriptionRef.current!
               );
               const valuesChanged =
                 JSON.stringify(weightData[assetIndex]) !==

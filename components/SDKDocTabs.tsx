@@ -4,7 +4,7 @@ import { Callout, Tabs } from "nextra/components";
 
 export type SDKTab = {
   label: string;
-  description?: string;
+  description?: React.ReactNode;
   heading?: string;
   content?: React.ReactNode;
   placeholder?: boolean;

@@ -1,6 +1,7 @@
 .DS_Store
 .next
 node_modules
+*.tsbuildinfo
 .env.local
 _pagefind/
 sitemap*.xml

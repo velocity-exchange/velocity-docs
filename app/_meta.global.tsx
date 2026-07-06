@@ -165,6 +165,7 @@ const META = {
         "title": "Risk and Safety",
         "items": {
           "risk-parameters": "",
+          "block-conditions": "",
           "delisting-process": "",
           "protocol-guard-rails": "",
           "audits": "",
@@ -199,7 +200,6 @@ const META = {
           "index": "",
           "program-structure": "",
           "account-model": "",
-          "block-conditions": "",
           "optimizations": "",
           "program-vault-addresses": ""
         }
