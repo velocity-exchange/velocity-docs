@@ -43,13 +43,6 @@ Per-market leverage gives traders more flexibility and control:
 Per-market leverage caps do **not** isolate risk between positions. Unless a position is an [isolated position](/protocol/trading/margin), all of a subaccount's positions share one pool of collateral and one maintenance-margin requirement — a large loss on one market (say PUMP-PERP) still draws down the collateral backing your other positions (say BTC-PERP) and can contribute to a cross-margin liquidation. To fully segregate a position's collateral and liquidation, use an **isolated position**.
 </Callout>
 
-## Code Implementation
-
-### Files and functions
-
-Per-market leverage logic is implemented in:
-
-* `state/user.rs` stores `max_margin_ratio` on the `PerpPosition` struct
-* `VelocityClient.updateUserPerpPositionCustomMarginRatio` (`@velocity-exchange/sdk`, `velocityClient.ts`) updates per-position settings
-
-This is independent of [isolated positions](/protocol/trading/margin) — per-market leverage caps a position's margin ratio, while isolated positions segregate a position's collateral and liquidation from the rest of the subaccount; the two can be combined.
+<Callout type="info">
+**For developers:** per-position caps are stored as `max_margin_ratio` on the `PerpPosition` struct, and set through the [Velocity SDK](/developers/velocity-sdk)'s `updateUserPerpPositionCustomMarginRatio`. This is independent of [isolated positions](/protocol/trading/margin): per-market leverage caps a position's margin ratio, while isolated positions segregate a position's collateral and liquidation from the rest of the subaccount — the two can be combined.
+</Callout>
