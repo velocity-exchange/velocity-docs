@@ -128,7 +128,7 @@ await velocityClient.placeOrders([
   </TypeScript>
 </SDKDoc>
 
-> **Bulk margin enforcement:** `placeOrders`/`placeScaleOrders` run the initial-margin check once per risk scope touched by the batch (cross-margin, plus each isolated market with a risk-increasing order) rather than a single end-of-batch check. A batch that would have slipped past a weaker/absent margin gate under the old check may now be rejected with `InsufficientCollateral`.
+> **Bulk margin enforcement:** `placeOrders`/`placeScaleOrders` run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than a single end-of-batch check. A batch that would have slipped past a weaker/absent margin gate under the old check may now be rejected with `InsufficientCollateral`.
 
 ### Oracle / Auction-Style Orders
 

@@ -38,12 +38,12 @@ import { getConfig, initialize } from "@velocity-exchange/sdk";
 initialize({ env: "devnet" });
 console.log(getConfig().QUOTE_MINT_ADDRESS);
 // devnet: GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6 (dUSDT, a devnet placeholder)
-// mainnet-beta: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (USDC, unchanged from Drift)
+// mainnet-beta: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v (USDT, unchanged from Drift)
 ```
   </TypeScript>
 </SDKDoc>
 
-On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDC — mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is still USDC at its original mint address.
+On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDT — mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is still USDT at its original mint address.
 
 <SDKDoc>
   <TypeScript name="TokenFaucet" type="class">

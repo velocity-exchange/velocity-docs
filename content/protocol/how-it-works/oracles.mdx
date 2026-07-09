@@ -104,5 +104,3 @@ Because the Lazer relay is keeper-driven rather than push-based, `oracle_delay` 
 ## Prelaunch Oracle
 
 Markets that haven't yet listed on Pyth/Pyth Lazer can instead use a self-referential `Prelaunch` oracle source (`OracleSource::Prelaunch`, `state/oracle.rs:170`). `PrelaunchOracle::update` (`state/oracle.rs:668-708`) derives its price from the market's own mark TWAP, capped by an admin-configured `max_price`: it uses `last_mark_price_twap` unless that TWAP has reached or exceeded `max_price`, in which case it clamps to `max_price` (`state/oracle.rs:670-683`). Confidence is set from the wider of the bid/ask TWAP spread and `mark_std` (`state/oracle.rs:687-696`).
-
-This is intentionally brief here — see [Prelaunch Markets](/protocol/trading/prelaunch-markets) for the full mechanics of prelaunch markets.

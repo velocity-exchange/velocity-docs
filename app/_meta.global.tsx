@@ -32,7 +32,6 @@ const META = {
             },
           },
           "cross-collateral-deposits": "",
-          "place-your-first-trade": "",
           "managing-subaccounts": "",
           "delegated-accounts": "",
           "versioned-transactions": "",
@@ -42,16 +41,8 @@ const META = {
       "trading": {
         "title": "Trading",
         "items": {
-          "perpetuals-trading": {
-            "title": "Perpetuals Trading",
-            "items": {
-              "index": "",
-              "perpetuals-trading": "",
-              "auction-parameters": "",
-              "funding-rates": "",
-            }
-          },
-          "spot-trading": "Spot Trading",
+          "auction-parameters": "",
+          "funding-rates": "",
           "margin": {
             "title": "Margin",
             "items": {
@@ -84,7 +75,6 @@ const META = {
             }
           },
           "market-specs": "",
-          "prelaunch-markets": "",
         }
       },
       "borrow-lend": {

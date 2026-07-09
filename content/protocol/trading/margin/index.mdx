@@ -20,6 +20,7 @@ Velocity does not have High Leverage Mode. It was part of the original Drift pro
 
 <PerpMarginTable />
 
+{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
 ---
 
 ## Isolated Positions
@@ -30,6 +31,7 @@ Alongside cross-margin (the default — every position and deposit in a subaccou
 - **Independent margin health.** An isolated position's initial/maintenance margin is calculated on its own (`IsolatedMarginCalculation`), using only that position's deposited collateral and PnL — it cannot draw on, or be drawn on by, the subaccount's cross-margin collateral or other isolated positions. A loss on one isolated position never touches unrelated positions.
 - **Orders.** Orders that risk-increase an isolated position carry the `IsIsolatedPosition` bit flag (see [Order Types](/protocol/trading/order-types)).
 - **Liquidation.** Isolated positions are liquidated independently of the rest of the account and, unlike cross-margin liquidations (which unwind gradually over a throttled window), close in a single shot at 100% — see [Liquidations](/protocol/trading/liquidations) for the full mechanics.
+*/}
 
 ## Unrealized PnL Cap on Initial Margin
 

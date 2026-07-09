@@ -50,9 +50,9 @@ Preview the expected output and route before committing. `UnifiedSwapClient.getQ
   <TypeScript name="getQuote" type="method" owner="UnifiedSwapClient">
 ```js
 const quote = await swapClient.getQuote({
-  inputMint: usdcMint,    // PublicKey
+  inputMint: usdtMint,    // PublicKey
   outputMint: solMint,    // PublicKey
-  amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDC, BN
+  amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDT, BN
   slippageBps: 50,
   userPublicKey: velocityClient.wallet.publicKey, // required for Titan, ignored by Jupiter
 });
@@ -71,9 +71,9 @@ console.log(quote);
 // Assumes `velocityClient` is subscribed.
 const txSig = await velocityClient.swap({
   swapClient,
-  inMarketIndex: 0,  // e.g. USDC (spot market index)
+  inMarketIndex: 0,  // e.g. USDT (spot market index)
   outMarketIndex: 1, // e.g. SOL (spot market index)
-  amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDC
+  amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDT
   slippageBps: 50,         // 0.5% max slippage
   onlyDirectRoutes: false, // allow multi-hop routes for better pricing
 });

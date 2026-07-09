@@ -31,7 +31,7 @@ const rawBase = new BN(2_500_000_000);
 const size = convertToNumber(rawBase, BASE_PRECISION);
 console.log(size); // 2.5
 
-// Collateral: raw 10_000_000 → 10 USDC (or dUSDT on devnet)
+// Collateral: raw 10_000_000 → 10 USDT (or dUSDT on devnet)
 const rawQuote = new BN(10_000_000);
 const usd = convertToNumber(rawQuote, QUOTE_PRECISION);
 console.log(usd); // 10
@@ -71,7 +71,7 @@ Spot balances are stored as interest-bearing scaled values. These helpers conver
 ```js
 import { getTokenAmount, SpotBalanceType, convertToNumber } from "@velocity-exchange/sdk";
 
-const spotMarket = velocityClient.getSpotMarketAccount(0); // e.g. dUSDT on devnet, USDC on mainnet
+const spotMarket = velocityClient.getSpotMarketAccount(0); // e.g. dUSDT on devnet, USDT on mainnet
 const user = velocityClient.getUser();
 const spotPosition = user.getUserAccount().spotPositions[0];
 

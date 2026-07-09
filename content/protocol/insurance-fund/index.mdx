@@ -75,7 +75,7 @@ Velocity does **not** run a separate insurance vault per perpetual market. Every
 This is the opposite of a dedicated per-market fund: the riskiest markets are walled **out** of insurance coverage so that their losses cannot drain the fund protecting safer markets.
 
 <Callout type="info">
-Don't confuse a market's **insurance cap** with [Isolated Pools](/protocol/how-it-works/isolated-pools) or [isolated positions](/protocol/trading/margin) — those confine collateral/margin to a single pool or position. A market's insurance cap instead limits how much that market can ever draw from the shared, per-collateral insurance fund (and for the riskiest tiers, that limit is zero).
+Don't confuse a market's **insurance cap** with [Isolated Pools](/protocol/how-it-works/isolated-pools){/* HIDDEN: or [isolated positions](/protocol/trading/margin) */} — those confine collateral{/* HIDDEN: /margin */} to a single pool{/* HIDDEN:  or position */}. A market's insurance cap instead limits how much that market can ever draw from the shared, per-collateral insurance fund (and for the riskiest tiers, that limit is zero).
 </Callout>
 
 ## How Perp Bankruptcy Resolution Works

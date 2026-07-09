@@ -19,7 +19,7 @@ If you haven't yet, skim the [Concepts](/developers/concepts) section first — 
 
 ## End-to-end example
 
-A minimal flow — connect, deposit USDC, place a market order, and read back the position. Each step is covered in depth on its own page.
+A minimal flow — connect, deposit USDT, place a market order, and read back the position. Each step is covered in depth on its own page.
 
 ```js
 import { Connection } from "@solana/web3.js";
@@ -35,7 +35,7 @@ const velocityClient = new VelocityClient({ connection, wallet, env: "mainnet-be
 await velocityClient.subscribe();
 
 try {
-  // 2. Deposit 100 USDC as collateral (see Deposits & Withdrawals)
+  // 2. Deposit 100 USDT as collateral (see Deposits & Withdrawals)
   const marketIndex = 0; // quote asset spot market
   const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
   const associatedTokenAccount = await velocityClient.getAssociatedTokenAccount(marketIndex);

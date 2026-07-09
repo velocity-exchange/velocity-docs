@@ -13,9 +13,9 @@ By design, **Velocity's liquidation engine** revolves around 3 key areas:
 
   The buffer system ensures that users aren’t liquidated right back at maintenance margin. Instead, Velocity places liquidated accounts slightly behind a safe margin buffer, far enough to reduce immediate risk but close enough to stay competitive for traders using leverage.
 
-  <Callout type="important">
-  This gradual, throttled unwind applies to **cross-margin** positions only. [Isolated positions](/protocol/trading/margin) skip the ramp and are liquidated 100% in a single shot — see [Liquidations](/protocol/trading/liquidations#isolated-position-liquidations).
-  </Callout>
+<Callout type="important">
+This gradual, throttled unwind applies to **cross-margin** positions only. {/* HIDDEN: isolated positions — reinstate later: [Isolated positions](/protocol/trading/margin) skip the ramp and are liquidated 100% in a single shot — see [Liquidations](/protocol/trading/liquidations#isolated-position-liquidations). */}
+</Callout>
 
 - #### Speed
   Velocity's liquidation engine liquidates progressively, adjusting speed based on how “unhealthy” the user’s account is and how the price evolves after the liquidation starts.
@@ -45,7 +45,7 @@ The core instructions pertaining to liquidations are:
 
 | Instruction                    | Details                                                          |
 | ------------------------------ | ---------------------------------------------------------------- |
-| liquidate_perp                 | Liquidator takes over user perpetual positions at a discount. Also handles [isolated positions](/protocol/trading/margin), liquidating them 100% in one shot instead of the throttled cross-margin ramp. |
+| liquidate_perp                 | Liquidator takes over user perpetual positions at a discount. |
 | liquidate_perp_with_fill       | Same as `liquidate_perp`, but fills the taken-over position against a maker in the same instruction. |
 | liquidate_spot                 | Liquidator takes over borrow at a discount to the deposit value. |
 | liquidate_spot_with_swap_begin / _end | Liquidator takes over a borrow via an atomic swap (e.g. against Jupiter) rather than direct token transfer. |

@@ -1,6 +1,6 @@
 # Accounting & Settlement
 
-Within Velocity, all token deposits are held in a global collateral vault. This is required for seamless cross-margin and borrow-lend. The only exception to this is the insurance fund vault residing outside. [Isolated positions](/protocol/trading/margin) are still backed by the same vault — their collateral is just accounted for separately from the account's cross-margin balance.
+Within Velocity, all token deposits are held in a global collateral vault. This is required for seamless cross-margin and borrow-lend. The only exception to this is the insurance fund vault residing outside. {/* HIDDEN: isolated positions — reinstate later: [Isolated positions](/protocol/trading/margin) are still backed by the same vault — their collateral is just accounted for separately from the account's cross-margin balance. */}
 
 Ensuring proper accounting across users requires a robust settlement mechanism. The protocol uses intermediate Pool Balances to facilitate transfers and ensure that claimed gains are required to come from settled offsetting losses.
 

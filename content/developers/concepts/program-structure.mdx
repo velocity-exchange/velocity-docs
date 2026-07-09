@@ -31,8 +31,10 @@ Tracks long/short exposure in perpetual futures markets.
 - `openBids` - Notional value locked in buy orders
 - `openAsks` - Notional value locked in sell orders
 
+{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
 **Isolated margin:**
 - `isolatedPositionScaledBalance` - When the `IsolatedPosition` position flag is set, this position is backed by its own ring-fenced collateral instead of drawing on the account's shared cross-margin pool
+*/}
 
 <Callout type="info">
 Velocity has no vAMM LP shares — `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields from Drift do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
@@ -97,7 +99,7 @@ This gives better prices while maintaining MEV resistance. See [JIT Auctions](/d
 - `reduceOnly` - Order can only reduce position size, not increase or flip it
 - `postOnly` - Order must be maker, rejected if would match immediately
 - `immediateOrCancel` - Fill what you can immediately, cancel the rest
-- `bitFlags` (`OrderBitFlag`) also carries `HasBuilder` (order attaches a builder fee) and `IsIsolatedPosition` (order trades against an isolated-margin position)
+- `bitFlags` (`OrderBitFlag`) also carries `HasBuilder` (order attaches a builder fee){/* HIDDEN:  and `IsIsolatedPosition` (order trades against an isolated-margin position) */}
 
 ## Collateral and margin
 

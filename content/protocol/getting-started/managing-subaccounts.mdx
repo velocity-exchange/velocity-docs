@@ -6,9 +6,11 @@ Each subaccount's margin and positions are isolated from other subaccounts, mean
 
 Each subaccount has independent positions, balances and margins, and can trade independently. Balances or liquidations from each subaccount will not affect other subaccounts. By default, every position and deposit within a single subaccount is cross-margined.
 
+{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
 <Callout type="info">
 Don't confuse subaccount-level isolation with **[isolated positions](/protocol/trading/margin)** — a newer feature that lets you segregate a *single perp position's* collateral and liquidation risk from the rest of one subaccount, without needing a separate subaccount for it.
 </Callout>
+*/}
 
 <Callout type="important">
 A subaccount can hold up to 8 perpetual and 8 spot positions and 32 open orders total. A perpetual position with 0 base, but only unsettled P&L counts as an open position. 

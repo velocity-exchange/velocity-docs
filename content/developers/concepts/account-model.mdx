@@ -316,7 +316,7 @@ Each order contains:
 - **Market identification** - Market index and type (perp/spot)
 - **Order parameters** - Type (limit, market, oracle, trigger), direction, base amount, price
 - **Order IDs** - System order ID (`orderId`) and user-defined order ID (`userOrderId`)
-- **Flags** - `bitFlags` (`OrderBitFlag`) — post-only, reduce-only, and now also `HasBuilder` (order attaches a builder fee) and `IsIsolatedPosition` (order trades against an isolated-margin position)
+- **Flags** - `bitFlags` (`OrderBitFlag`) — post-only, reduce-only, and now also `HasBuilder` (order attaches a builder fee){/* HIDDEN:  and `IsIsolatedPosition` (order trades against an isolated-margin position) */}
 - **Auction settings** - JIT auction parameters (`auctionStartPrice`, `auctionEndPrice`, `auctionDuration`)
 
 *When an order fills, it's marked as filled but not immediately removed, allowing order history tracking within the account.*

@@ -85,6 +85,7 @@ console.log(lev.toNumber() / TEN_THOUSAND.toNumber()); // e.g. 2.5 (2.5x leverag
   </TypeScript>
 </SDKDoc>
 
+{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
 ### Isolated positions
 
 A perp position opened in **isolated margin mode** is backed only by its own dedicated quote deposit rather than the account's shared cross-margin pool — a loss on an isolated position cannot draw down collateral backing your other positions, and vice versa. Every risk helper above accepts an optional trailing `perpMarketIndex` to scope its result to a single market's isolated position bucket instead of the cross-margin account:
@@ -106,6 +107,7 @@ const isolatedLeverage = user.getLeverage(true, isolatedMarketIndex);
 </SDKDoc>
 
 `getFreeCollateral` and `getLeverage` return `ZERO` for a market with no open isolated position; `getMarginRequirement` does the same. `getTotalCollateral(marginCategory, strict, includeOpenOrders, liquidationBuffer, perpMarketIndex)` is the one exception — it **throws** if no isolated margin calculation exists for that market, so guard the call if the position may not exist.
+*/}
 
 ### Unrealized PnL
 

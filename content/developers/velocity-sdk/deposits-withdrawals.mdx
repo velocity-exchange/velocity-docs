@@ -21,7 +21,7 @@ Convert a human-readable token amount into the onchain precision units required 
 <SDKDoc>
   <TypeScript name="convertToSpotPrecision" type="method" owner="VelocityClient">
 ```js
-// marketIndex 0 is the protocol's quote asset (dUSDT on devnet, USDC on mainnet-beta)
+// marketIndex 0 is the protocol's quote asset (dUSDT on devnet, USDT on mainnet-beta)
 const marketIndex = 0;
 const amount = velocityClient.convertToSpotPrecision(marketIndex, 100); // 100 units (example)
 ```

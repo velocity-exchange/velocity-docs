@@ -50,4 +50,7 @@ These flags can be combined with the order types above.
 | Post‑Only | Enforces that the order is a maker order that can provide liquidity to the pool and earns a maker rebate (currently 0.25 bps) instead of paying a taker fee.
 | Immediate‑or‑Cancel (IOC) | An order that is placed and potentially partially filled. The remainder that is not filled immediately is then cancelled.
 | Has Builder | Set when the order carries a builder code (`builderIdx` / `builderFeeTenthBps`) — see [Trading Fees](/protocol/trading/trading-fees).
+
+{/* HIDDEN: isolated positions — reinstate this row into the flags table above:
 | Is Isolated Position | Set on orders that risk-increase an [isolated perp position](/protocol/trading/margin) rather than the account's cross-margin position.
+*/}

@@ -197,7 +197,7 @@ Many Velocity instructions need dynamic account lists (oracles, markets, positio
 ```js
 const remainingAccounts = velocityClient.getRemainingAccounts({
   userAccounts: [user.getUserAccount()],
-  writableSpotMarketIndexes: [0],  // USDC market
+  writableSpotMarketIndexes: [0],  // USDT market
 });
 
 // These accounts get passed to the instruction

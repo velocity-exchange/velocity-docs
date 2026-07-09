@@ -74,14 +74,6 @@ footer {
   background-color: rgb(var(--nextra-bg));
 }
 
-.velocity-logo {
-  color: #05060C;
-}
-
-.dark .velocity-logo {
-  color: #ffffff;
-}
-
 /* ── Semantic callouts ───────────────────────────────────────────────
    Nextra tags each callout type with Tailwind color utilities on
    .nextra-callout (purple = important, blue = info, yellow = warning,

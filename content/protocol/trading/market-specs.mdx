@@ -23,7 +23,6 @@ Each market's current Contract Tier assignment can change over time as risk para
 
 For the full per-tier numeric limits — insurance caps, oracle confidence bands, TWAP-sanitization bounds, and PnL-settlement divergence thresholds — see the [Contract Tiers](/protocol/risk-and-safety/contract-tiers) reference.
 
-
 | Tier                   | Description                                                                                                             |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Speculative | Speculative tier has no access to external insurance funds (only the perpetual market's fee pool)
@@ -38,7 +37,7 @@ The oracle provider which provides a price, confidence band, and timeliness info
 | Pyth | [Read more](https://docs.pyth.network/home)
 | Pyth Lazer | Pyth's low-latency push oracle service. [Read more](https://docs.pyth.network/lazer)
 | Switchboard | **Deprecated.** Legacy Switchboard oracle sources are no longer supported; markets configured with a deprecated Switchboard source will fail to load a price. [Read more](https://docs.switchboard.xyz/)
-| Prelaunch | "Prelaunch" is a custom internal oracle source for [Prelaunch Markets](/protocol/trading/prelaunch-markets) (markets without external oracle). For Prelaunch markets, given there is no spot reference price, that oracle sources uses the mark twap as the oracle price. The oracle is also configured with a custom maximum price to prevent price manipulation. This self-referential and leads to funding payments that encourage price stability (those holding positions in trend will pay those holding against trend) and ultimately relies upon market participants anticipating a valid oracle in the future. Every Prelaunch oracle has an initial price AND max price. The oracle value cannot exceed the max price.
+| Prelaunch | "Prelaunch" is a custom internal oracle source for prelaunch markets (markets without external oracle). For prelaunch markets, given there is no spot reference price, that oracle sources uses the mark twap as the oracle price. The oracle is also configured with a custom maximum price to prevent price manipulation. This self-referential and leads to funding payments that encourage price stability (those holding positions in trend will pay those holding against trend) and ultimately relies upon market participants anticipating a valid oracle in the future. Every Prelaunch oracle has an initial price AND max price. The oracle value cannot exceed the max price.
 
 ### Max Open Interest
 A maximum amount of open interest that can exist within the perpetual market. Additional orders/fills that would breach this open interest limit are blocked.

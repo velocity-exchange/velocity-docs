@@ -6,7 +6,7 @@ Get a simple market maker running in under 10 minutes. This guide shows how to p
 
 - Node.js + TypeScript project
 - Velocity SDK installed: `npm i @velocity-exchange/sdk`
-- Funded Solana account with collateral (dUSDT on devnet; USDC on mainnet)
+- Funded Solana account with collateral (dUSDT on devnet; USDT on mainnet)
 - Basic familiarity with async/await
 
 > **⚠️ RPC choice matters:** The default `https://api.mainnet-beta.solana.com` is rate-limited and unsuitable for production bots. Use a dedicated RPC provider (Helius, Triton, etc.) or you'll hit 429 errors within minutes. For WebSocket subscriptions, you need a provider that supports `accountSubscribe`.

@@ -48,7 +48,7 @@ await velocityClient.settlePNL(user.userAccountPublicKey, user.getUserAccount(),
 
 ```ts
 await velocityClient.deposit(
-  depositAmount,  // BN, spot market's mint precision (e.g. 1e6 for USDC/dUSDT)
+  depositAmount,  // BN, spot market's mint precision (e.g. 1e6 for USDT/dUSDT)
   0,              // spotMarketIndex
   userTokenAccount
 );
@@ -258,4 +258,4 @@ If you're batching or sending frequent transactions, consider:
 - **Compute budget** — Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
 - **Address Lookup Tables (ALTs)** — Reduce transaction size when referencing many accounts
 - **Retry logic** — Transactions can be dropped; implement retries with backoff for production systems
-- **Bulk order margin enforcement**: `placeOrders`/`placeScaleOrders` now run the initial-margin check once per risk scope touched by the batch (cross-margin, plus each isolated market with a risk-increasing order) rather than a single end-of-batch check — a batch that previously succeeded may now revert with `InsufficientCollateral`
+- **Bulk order margin enforcement**: `placeOrders`/`placeScaleOrders` now run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than a single end-of-batch check — a batch that previously succeeded may now revert with `InsufficientCollateral`

@@ -42,7 +42,7 @@ const unrealizedPnl = user.getUnrealizedPNL(true, 0);   // withFunding=true, mar
 const health = user.getHealth();                        // 0-100
 ```
 
-See [PnL & Risk](/developers/velocity-sdk/pnl-risk) for `getTotalCollateral`, `getMarginRequirement`, `getFreeCollateral`, `getLeverage`, and isolated-position variants.
+See [PnL & Risk](/developers/velocity-sdk/pnl-risk) for `getTotalCollateral`, `getMarginRequirement`, `getFreeCollateral`, and `getLeverage`{/* HIDDEN: , and isolated-position variants */}.
 
 ### Open orders
 
@@ -59,7 +59,7 @@ for (const order of userAccount.orders) {
   order.baseAssetAmountFilled;
   order.oraclePriceOffset;        // BN (i64) — always wrap in `new BN(...)` when constructing
   order.reduceOnly;
-  order.bitFlags;                 // OrderBitFlag bitmask: postOnly / reduceOnly / HasBuilder / IsIsolatedPosition
+  order.bitFlags;                 // OrderBitFlag bitmask: postOnly / reduceOnly / HasBuilder
 }
 ```
 

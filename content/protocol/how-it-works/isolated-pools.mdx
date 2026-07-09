@@ -3,7 +3,7 @@
 Velocity's isolated pools allow users to trade or provide liquidity with specific risks confined to a particular pool. Each isolated pool is segregated, meaning that the risks associated with one pool do not impact other pools on Velocity.
 
 <Callout type="info">
-Not to be confused with an [Isolated Insurance Fund](/protocol/insurance-fund) (a per-market insurance backstop) or [isolated positions](/protocol/trading/margin) (per-position perp margin). Isolated pools are segregated collateral pools.
+Not to be confused with an [Isolated Insurance Fund](/protocol/insurance-fund) (a per-market insurance backstop){/* HIDDEN: or [isolated positions](/protocol/trading/margin) (per-position perp margin) */}. Isolated pools are segregated collateral pools.
 </Callout>
 
 ### What's the difference between Isolated and Cross-collateral pools?
@@ -38,6 +38,12 @@ Cross collateral (default accounts for Velocity) shares a single collateral pool
     - Other pools or positions you hold remain unaffected. At the same time, you'll not be able to use the token deposited in the isolated pool for other positions.
     - Isolated pools can potentially offer higher LTV as the risk exposure is contained
 </Callout>
+
+### Supported Pools
+
+| **Pool** | **Assets** |
+| --- | --- |
+| JLP Isolated Pool | JLP, USDT |
 
 ### How to deposit into an isolated pool
 
