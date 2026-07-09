@@ -1,27 +1,12 @@
 import { AnchorProvider, Program } from "@coral-xyz/anchor";
 import { Connection } from "@solana/web3.js";
-import {
-  DelistedMarketSetting,
-  VelocityCore,
-  VelocityProgram,
-  WebSocketVelocityClientAccountSubscriber,
-} from "@velocity-exchange/sdk";
+import { VelocityCore, VelocityProgram } from "@velocity-exchange/sdk";
 
-export const getSpotMarketAccountSusbcriber = async () => {
-  return new WebSocketVelocityClientAccountSubscriber(
-    getVelocityProgram(),
-    [],
-    [],
-    [],
-    true,
-    DelistedMarketSetting.Unsubscribe,
-    undefined,
-    "confirmed"
-  );
-};
-
-const getVelocityProgram = (): VelocityProgram => {
-  const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
+// Server-side (no signer) Velocity program/connection builder. Used by
+// app/api/onchain-data/route.ts to read on-chain account data directly via
+// RPC, rather than subscribing over a websocket.
+export const getVelocityProgram = (rpcUrl: string): VelocityProgram => {
+  const connection = new Connection(rpcUrl);
   const provider = new AnchorProvider(
     connection,
     // @ts-ignore

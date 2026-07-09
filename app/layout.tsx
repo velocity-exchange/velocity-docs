@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Footer, Layout, Navbar } from "nextra-theme-docs";
 import { getPageMap } from "nextra/page-map";
 import { Logo } from "../components/Logo";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: {
@@ -81,7 +82,7 @@ export default async function RootLayout({
             </Footer>
           }
         >
-          {children}
+          <Providers>{children}</Providers>
         </Layout>
       </body>
     </html>
