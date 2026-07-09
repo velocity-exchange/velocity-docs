@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import type { AccountInfo, Connection, PublicKey } from "@solana/web3.js";
 import type { BN } from "@coral-xyz/anchor";
 import {
@@ -24,9 +25,14 @@ import type {
   PerpMarginRow,
 } from "../../../types/onchain-data";
 
+// The handler itself runs per request (so an error response is never baked
+// into the route cache); the expensive on-chain read below is what's cached,
+// via unstable_cache, and only successful snapshots are stored.
+export const dynamic = "force-dynamic";
+
 // Cross-collateral and margin tables only change when governance updates
 // protocol params, so a same-hour-old snapshot is fine to serve from cache.
-export const revalidate = 3600;
+const REVALIDATE_SECONDS = 3600;
 
 // solana-web3.js's getMultipleAccountsInfo caps out at 100 pubkeys per call.
 const MAX_ACCOUNTS_PER_CALL = 100;
@@ -106,7 +112,7 @@ function getWeightRowFromSpotMarket(
 
 function getLTVRowFromWeightRow(weightRow: AssetWeightRow): LTVRow {
   return {
-    asset: stripPoolId(weightRow.asset),
+    asset: weightRow.asset,
     initialLTV:
       (
         (1 / Number(weightRow.initialLiabilityWeight.replace("%", ""))) *
@@ -144,58 +150,46 @@ function getPerpMarginRow(market: PerpMarketAccount): PerpMarginRow | null {
   };
 }
 
-export async function GET() {
-  const rpcUrl = process.env.RPC_URL ?? process.env.NEXT_PUBLIC_RPC_URL;
-  if (!rpcUrl) {
-    return NextResponse.json(
-      { error: "RPC_URL (or NEXT_PUBLIC_RPC_URL) is not configured" },
-      { status: 500 }
-    );
+async function loadOnChainData(rpcUrl: string): Promise<OnChainData> {
+  const program = getVelocityProgram(rpcUrl);
+  const connection = program.provider.connection;
+  const programId = program.programId;
+
+  // Fetch the tiny State account alone first, so we know how many
+  // spot/perp markets exist before deriving their PDAs.
+  const statePublicKey = await getVelocityStateAccountPublicKey(programId);
+  const stateAccountInfo = await connection.getAccountInfo(statePublicKey);
+  if (!stateAccountInfo) {
+    throw new Error("Velocity State account not found");
   }
+  // Note: Program's constructor camelCases IDL account names (the raw IDL
+  // has "State"/"SpotMarket"/"PerpMarket"), so program.coder.accounts keys
+  // off "state"/"spotMarket"/"perpMarket" rather than the PascalCase names.
+  const state = program.coder.accounts.decode<StateAccount>(
+    "state",
+    stateAccountInfo.data
+  );
 
-  try {
-    const program = getVelocityProgram(rpcUrl);
-    const connection = program.provider.connection;
-    const programId = program.programId;
+  const spotMarketPubkeys = Array.from(
+    { length: state.numberOfSpotMarkets },
+    (_, marketIndex) => getSpotMarketPublicKeySync(programId, marketIndex)
+  );
+  const perpMarketPubkeys = Array.from(
+    { length: state.numberOfMarkets },
+    (_, marketIndex) => getPerpMarketPublicKeySync(programId, marketIndex)
+  );
 
-    // Fetch the tiny State account alone first, so we know how many
-    // spot/perp markets exist before deriving their PDAs.
-    const statePublicKey = await getVelocityStateAccountPublicKey(programId);
-    const stateAccountInfo = await connection.getAccountInfo(statePublicKey);
-    if (!stateAccountInfo) {
-      throw new Error("Velocity State account not found");
-    }
-    // Note: Program's constructor camelCases IDL account names (the raw IDL
-    // has "State"/"SpotMarket"/"PerpMarket"), so program.coder.accounts keys
-    // off "state"/"spotMarket"/"perpMarket" rather than the PascalCase names.
-    const state = program.coder.accounts.decode<StateAccount>(
-      "state",
-      stateAccountInfo.data
-    );
+  // Round trip (a): all spot markets + all perp markets in one batch
+  // (chunked internally to respect the 100-pubkey cap). State was already
+  // fetched above to learn the counts, so it isn't re-requested here.
+  const marketBuffers = await getMultipleAccountBuffersChunked(connection, [
+    ...spotMarketPubkeys,
+    ...perpMarketPubkeys,
+  ]);
+  const spotMarketBuffers = marketBuffers.slice(0, spotMarketPubkeys.length);
+  const perpMarketBuffers = marketBuffers.slice(spotMarketPubkeys.length);
 
-    const spotMarketPubkeys = Array.from(
-      { length: state.numberOfSpotMarkets },
-      (_, marketIndex) => getSpotMarketPublicKeySync(programId, marketIndex)
-    );
-    const perpMarketPubkeys = Array.from(
-      { length: state.numberOfMarkets },
-      (_, marketIndex) => getPerpMarketPublicKeySync(programId, marketIndex)
-    );
-
-    // Round trip (a): state + all spot markets + all perp markets in one
-    // batch (chunked internally to respect the 100-pubkey cap).
-    const marketBuffers = await getMultipleAccountBuffersChunked(connection, [
-      statePublicKey,
-      ...spotMarketPubkeys,
-      ...perpMarketPubkeys,
-    ]);
-    const spotMarketBuffers = marketBuffers.slice(
-      1,
-      1 + spotMarketPubkeys.length
-    );
-    const perpMarketBuffers = marketBuffers.slice(1 + spotMarketPubkeys.length);
-
-    const spotMarkets = spotMarketBuffers
+  const spotMarkets = spotMarketBuffers
       .map((buffer) =>
         buffer
           ? program.coder.accounts.decode<SpotMarketAccount>(
@@ -257,10 +251,30 @@ export async function GET() {
     });
 
     const perpMargin = perpMarkets
-      .map(getPerpMarginRow)
-      .filter((row): row is PerpMarginRow => row !== null);
+    .map(getPerpMarginRow)
+    .filter((row): row is PerpMarginRow => row !== null);
 
-    const body: OnChainData = { assetWeights, ltv, perpMargin };
+  return { assetWeights, ltv, perpMargin };
+}
+
+// Cache only successful snapshots: unstable_cache stores the resolved value
+// and does not cache a thrown error, so a transient RPC failure can't poison
+// the cache for the whole revalidate window.
+const getCachedOnChainData = unstable_cache(loadOnChainData, ["onchain-data"], {
+  revalidate: REVALIDATE_SECONDS,
+});
+
+export async function GET() {
+  const rpcUrl = process.env.RPC_URL ?? process.env.NEXT_PUBLIC_RPC_URL;
+  if (!rpcUrl) {
+    return NextResponse.json(
+      { error: "RPC_URL (or NEXT_PUBLIC_RPC_URL) is not configured" },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  try {
+    const body = await getCachedOnChainData(rpcUrl);
     return NextResponse.json(body);
   } catch (error) {
     console.error("[api/onchain-data] failed to fetch on-chain data", error);
@@ -271,7 +285,7 @@ export async function GET() {
             ? error.message
             : "Failed to fetch on-chain data",
       },
-      { status: 502 }
+      { status: 502, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

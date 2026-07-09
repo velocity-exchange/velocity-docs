@@ -14,7 +14,7 @@ export function AssetWeightsTable({ poolId }: { poolId: number }) {
     "IMF Factor",
   ];
 
-  const { data } = useOnChainData();
+  const { data, isError } = useOnChainData();
 
   const poolWeightData = useMemo(
     () => data?.assetWeights.filter((row) => row.poolId === poolId),
@@ -45,7 +45,9 @@ export function AssetWeightsTable({ poolId }: { poolId: number }) {
         ) : (
           <tr>
             <td colSpan={headings.length}>
-              <div className={modStyles.loading}>Loading...</div>
+              <div className={modStyles.loading}>
+                {isError ? "Failed to load on-chain data." : "Loading..."}
+              </div>
             </td>
           </tr>
         )}
@@ -57,7 +59,7 @@ export function AssetWeightsTable({ poolId }: { poolId: number }) {
 export function LTVTable({ poolId }: { poolId: number }) {
   const headings = ["Asset", "Initial LTV", "Max LTV"];
 
-  const { data } = useOnChainData();
+  const { data, isError } = useOnChainData();
   const poolLTVData = useMemo(
     () => data?.ltv.filter((row) => row.poolId === poolId),
     [data, poolId]
@@ -84,7 +86,9 @@ export function LTVTable({ poolId }: { poolId: number }) {
         ) : (
           <tr>
             <td colSpan={headings.length}>
-              <div className={modStyles.loading}>Loading...</div>
+              <div className={modStyles.loading}>
+                {isError ? "Failed to load on-chain data." : "Loading..."}
+              </div>
             </td>
           </tr>
         )}

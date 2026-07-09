@@ -2,16 +2,16 @@
 
 import { useOnChainData } from "../../hooks/useOnChainData";
 
-function LoadingRow({ colSpan }: { colSpan: number }) {
+function StatusRow({ colSpan, message }: { colSpan: number; message: string }) {
   return (
     <tr>
-      <td colSpan={colSpan}>Loading...</td>
+      <td colSpan={colSpan}>{message}</td>
     </tr>
   );
 }
 
 export function PerpMarginTable() {
-  const { data } = useOnChainData();
+  const { data, isError } = useOnChainData();
   const headings = [
     "Index",
     "Perpetuals",
@@ -31,7 +31,12 @@ export function PerpMarginTable() {
       </thead>
       <tbody>
         {!data ? (
-          <LoadingRow colSpan={headings.length} />
+          <StatusRow
+            colSpan={headings.length}
+            message={
+              isError ? "Failed to load on-chain data." : "Loading..."
+            }
+          />
         ) : (
           data.perpMargin.map((row) => (
             <tr key={row.index}>
