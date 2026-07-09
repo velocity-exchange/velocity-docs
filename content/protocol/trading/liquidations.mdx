@@ -24,15 +24,13 @@ Velocity also supports **[isolated positions](/protocol/trading/margin)** — a 
 
 You can be liquidated when your `totalCollateral` becomes less than your`maintenanceMarginRequirement`. Your total collateral is the weighted value of your deposits and perp pnl. Your margin requirement is the weighted value of your borrows and perp positions.  
 
-Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders + LP positions. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Velocity State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.  
+Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Velocity State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.  
 
 The `Health` measure on the user page can help visualise how close a user is to liquidation territory. At 0 Health, a user can get liquidated.
 
 `Health = 100% - maint. margin / total collateral`
 
-The user's trade price at liquidation for a perpetual position will be based on the oracle price. The penalty / fee that is set per market, likely above the normal taker fee, in order to give the liquidator a rebate.  
-
-Liquidations triggered and positions will be liquidated using margin engine prices.
+The user's trade price at liquidation for a perpetual position will be based on the oracle price. The penalty / fee that is set per market, likely above the normal taker fee, in order to give the liquidator a rebate.
 
 <Callout type="error">
 **In the case of an extreme oracle error: the market will pause most fills, liquidations, and funding rate updates.**
@@ -49,13 +47,13 @@ You deposit 500 USDT and you long 200 SOL-PERP at $25.
 Calculations:
 
 * Total collateral = `500 * 1.00 = 500`
-* Margin requirement = `5000 * .05 = 250`
+* Margin requirement = `5000 * .03 = 150`
 
-You are liquidated if the price of SOL decreases by 5.28% to $23.6825. This is because:
+You are liquidated if the price of SOL decreases by ~7.22% to ~$23.20. This is because:
 
-* Perp PnL = `200 * $25 * -0.0527 = -263.5`
-* New total collateral = `500 - 263.5 = 236.5`
-* New margin requirement = `23.6825 * 200 * .05 = 236.825`
+* Perp PnL = `200 * $25 * -0.0722 = -361`
+* New total collateral = `500 - 361 = 139`
+* New margin requirement = `23.20 * 200 * .03 = 139.2`
 
 At that point your total collateral is less than your margin requirement and liquidation is triggered.
 </Callout>

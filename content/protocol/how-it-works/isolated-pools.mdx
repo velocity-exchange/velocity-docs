@@ -20,22 +20,22 @@ Cross collateral (default accounts for Velocity) shares a single collateral pool
 
 <Callout type="info">
 ### Example - Cross Collateral Pool
-1. **Deposit Collateral**: Deposit 1000 JLP into your account.
-2. **Open a BTC Long Position**: Use some of the JLP as collateral to open a leveraged SOL long position.
-3. **Open a USDT Borrow Position**: Simultaneously borrow USDT using the same JLP collateral.
+1. **Deposit Collateral**: Deposit 1000 SOL into your account.
+2. **Open a BTC Long Position**: Use some of the SOL as collateral to open a leveraged BTC long position.
+3. **Open a USDT Borrow Position**: Simultaneously borrow USDT using the same SOL collateral.
 4. **Risk Management**:
-    - Both positions rely on the same JLP collateral.
-    - If JLP's value drops significantly, both the SOL and USDT positions may face liquidation.
+    - Both positions rely on the same SOL collateral.
+    - If SOL's value drops significantly, both the BTC and USDT positions may face liquidation.
 </Callout>
 
 <Callout type="info">
 ### Example - Isolated Pool
-1. **Choose an Isolated Pool**: Select a JLP/USDT pool 
-2. **Deposit Collateral**: Deposit 1000 JLP into the pool.
-3. **Open a Leveraged Position**: Borrow USDT and swap into JLP. Borrow more USDT based on the new deposit of JLP and swap into JLP, creating a leveraged exposure to JLP. You can now earn higher yield on your initial deposit of 1000 JLP
+1. **Choose an Isolated Pool**: Select an isolated pool for the asset pair you want to trade.
+2. **Deposit Collateral**: Deposit collateral into the pool.
+3. **Open a Leveraged Position**: Borrow against your deposit and swap into the collateral asset to increase exposure. You can earn higher yield on your initial deposit through this leveraged position.
 4. **Risk Management**:
-    - If JLP’s price drops, only this pool’s position is at risk of liquidation.
-    - Other pools or positions you hold remain unaffected. At the same time, you’ll not be able to use the token deposited in isolated pool for other positions.
+    - If the collateral asset's price drops, only this pool's position is at risk of liquidation.
+    - Other pools or positions you hold remain unaffected. At the same time, you'll not be able to use the token deposited in the isolated pool for other positions.
     - Isolated pools can potentially offer higher LTV as the risk exposure is contained
 </Callout>
 
@@ -49,7 +49,7 @@ Cross collateral (default accounts for Velocity) shares a single collateral pool
 
 <Steps>
 #### Navigate to isolated pool markets
-Find the isolated pool markets at the bottom of the [borrow/lend page](https://app.velocity.exchange/earn/borrow-lend)
+Find the isolated pool markets at the bottom of the [borrow/lend page](https://velocity.exchange/earn/borrow-lend)
 
 ![Isolated Pool](/assets/isolated-pool.png)
 

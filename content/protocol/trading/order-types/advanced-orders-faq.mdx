@@ -2,8 +2,8 @@
 
 **How are the Limit Orders filled?**
 
-Limit Orders are taker orders that are filled against the AMM. 
-The orders are stored and settled on-chain. The queue is constructed by a network of off-chain keepers that are incentivised to fill orders against the AMM based on age.
+Limit Orders are taker orders that are filled either against the AMM or peer-to-peer against a resting maker order, whichever the protocol determines gives the best execution. 
+The orders are stored and settled on-chain. The queue is constructed by a network of off-chain keepers that are incentivised to fill orders based on age.
 
 **Is there a charge for placing an order? Is that charged in SOL or USDT?**
 
@@ -59,7 +59,7 @@ Similar to the take profit scenario, stop-loss orders are also triggered based o
 
 **What does trigger price mean?**
 
-Trigger price refers to the price the particular asset needs to hit before the limit order can be executed against the AMM by a Keeper.
+Trigger price refers to the price the particular asset needs to hit before the limit order can be executed (against the AMM or against a resting maker order) by a Keeper.
 
 **Why is the orderbook constructed off-chain?**
 

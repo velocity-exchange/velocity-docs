@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # Trading Fees
 
 Velocity offers a highly competitive fee structure with low taker fees and a flat maker rebate, with the potential for even lower fees as trading volume increases. Fees are calculated per trade based on the filled notional position size and are charged in the market's quote asset (USDT), affecting the position's cost basis.
@@ -7,7 +11,7 @@ If a user holds only non-USDT assets, a USDT borrow may be triggered upon settle
 Velocity's tiered fees for futures markets are based **only** on an on-chain calculation of **30-Day Volume** — there is no governance-token staking discount. (Drift's DRIFT-staking fee discount was removed as part of the [fee redesign](#fee-redesign).)
 
 <Callout type="important">
-Velocity has no spot order book, so spot trades are not charged a trading fee — see [Spot Market Fees](#spot-market-fees) below.
+Velocity has no spot order book, so there's no maker/taker fee on spot trades. Direct token swaps are not charged a trading fee, but swaps routed through the VLP hedge LP pool do carry a dynamic fee — see [Spot Market Fees](#spot-market-fees) below.
 </Callout>
 
 ## Perp Market Fees
@@ -27,45 +31,45 @@ Tier is selected purely by the account's trailing 30-day perp volume; the maker 
   <tbody>
     <tr>
       <td>0</td>
-      <td>&lt; &#36;2M</td>
-      <td>0.100%</td>
-      <td>-0.020%</td>
+      <td>&lt; \$2M</td>
+      <td>0.035%</td>
+      <td>-0.0025%</td>
     </tr>
     <tr>
       <td>1</td>
-      <td>&#36;2M – &#36;10M</td>
-      <td>0.090%</td>
-      <td>-0.020%</td>
+      <td>\$2M – \$10M</td>
+      <td>0.030%</td>
+      <td>-0.0025%</td>
     </tr>
     <tr>
       <td>2</td>
-      <td>&#36;10M – &#36;20M</td>
-      <td>0.080%</td>
-      <td>-0.020%</td>
+      <td>\$10M – \$20M</td>
+      <td>0.0275%</td>
+      <td>-0.0025%</td>
     </tr>
     <tr>
       <td>3</td>
-      <td>&#36;20M – &#36;80M</td>
-      <td>0.070%</td>
-      <td>-0.020%</td>
+      <td>\$20M – \$80M</td>
+      <td>0.025%</td>
+      <td>-0.0025%</td>
     </tr>
     <tr>
       <td>4</td>
-      <td>&#36;80M – &#36;200M</td>
-      <td>0.060%</td>
-      <td>-0.020%</td>
+      <td>\$80M – \$200M</td>
+      <td>0.0225%</td>
+      <td>-0.0025%</td>
     </tr>
     <tr>
       <td>5 (VIP)</td>
-      <td>&ge; &#36;200M</td>
-      <td>0.050%</td>
-      <td>-0.020%</td>
+      <td>&ge; \$200M</td>
+      <td>0.020%</td>
+      <td>-0.0025%</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-These are the protocol's default `FeeStructure.feeTiers` — an admin can update them (`updatePerpFeeStructure`), so treat the table above as the shipped default rather than an immutable constant.
+The taker fees and maker rebate shown are the values currently live on-chain (`FeeStructure.feeTiers`); an admin can update them (`updatePerpFeeStructure`), so treat the table as current rather than fixed. The 30-day-volume breakpoints are indicative.
 
 Every tier also carries the same **referrer reward** (15% of the taker fee, paid to the referrer) and **referee discount** (5% off the taker fee, for accounts that signed up via a referral) — see [Referee Discount / Referrer Reward](#referee-discount--referrer-reward) below.
 
@@ -110,7 +114,7 @@ Key differences from the pre-redesign model:
 
 ## Spot Market Fees
 
-Spot trading on Velocity charges **no trading fee** — the swap fee is hardcoded to zero, and (per [Order Types](/protocol/trading/order-types)) there's no spot order book to charge a maker/taker fee on in the first place. Spot trades route through `begin_swap` / `end_swap` (direct swaps) or the LP pool swap. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply — see [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
+There's no spot order book (per [Order Types](/protocol/trading/order-types)), so there's no maker/taker fee to charge on spot trades in the first place. Direct swaps via `begin_swap` / `end_swap` are charged **no trading fee** — the swap fee on that path is hardcoded to zero. Swaps routed through the VLP hedge LP pool are different: the LP pool charges dynamic in/out swap fees (`handle_view_lp_pool_swap_fees`), which vary with the pool's constituent balances relative to target weights rather than being zero. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply — see [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
 
 ### Referee Discount / Referrer Reward
 

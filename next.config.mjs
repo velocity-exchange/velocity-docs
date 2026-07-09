@@ -109,7 +109,6 @@ const redirects = [
     ["/legal-and-regulations/terms-of-use", "/protocol/legal-and-regulations/terms-of-use"],
     ["/legal-and-regulations/disclaimer", "/protocol/legal-and-regulations/disclaimer"],
     ["/legal-and-regulations/privacy-policy", "/protocol/legal-and-regulations/privacy-policy"],
-    ["/legal-and-regulations/competition-terms", "/protocol/legal-and-regulations/competition-terms"],
     // --- IA reorg: pages relocated into the "How Velocity Works" section
     ["/protocol/trading/oracles", "/protocol/how-it-works/oracles"],
     ["/protocol/trading/liquidations/liquidation-engine", "/protocol/how-it-works/liquidation-engine"],

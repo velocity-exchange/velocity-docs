@@ -18,7 +18,7 @@ You can always review Auction Parameters for a particular order in the Confirmat
 </Callout>
 
 
-**Start Price Fields:**
+## Start Price Fields
 
 | Field | Description
 | ----- | ------
@@ -32,6 +32,8 @@ You can always review Auction Parameters for a particular order in the Confirmat
 <Callout type="warning">
 **For Large Size:** It's recommended to set a longer duration, "Use Oracle Offset", and wider start, end buffers.
 </Callout>
+
+## How auctions work
 
 With Velocity, users can determine the duration of their order in 'slots', and set starting and ending prices based on the keeper network's view of the DLOB.
 
@@ -49,9 +51,9 @@ Additionally, user's can specify their auctions as offsets from oracle price. Th
 
 ### Auctions for Limit Orders
 
-When submitted limit orders crosses local DLOB and/or AMM, a limit order without post only flag will actually submit an auction first. The limit order uses the user defined rule for start price for its start auction param. It effectively the same as a market auction order **except the user explicitly overrides the End Price and Slippage Tolerance Limit Price.**
+When submitted limit orders cross the local DLOB and/or AMM, a limit order without post only flag will actually submit an auction first. The limit order uses the user defined rule for start price for its start auction param. It is effectively the same as a market auction order **except the user explicitly overrides the End Price and Slippage Tolerance Limit Price.**
 
 
 ### Atomic Fills against Resting Liquidity
 
-When 'Fill against resting liquidity first' is enabled, placed orders will go through the `place_and_take` instruction. In Place And Take, a list of makers can be passed in with the user's order and if the user's *auction END price* crosses the makers' limit price(s), the order will match. Any remaining amount of the order after this step will go through a typical auction (from start to end), unless IOC is enabled (in which case the order will cancel after attempting to fill vs makers). Note than Velocity's AMM will not provide liquidity to takers atomically in the first step.
+When 'Fill against resting liquidity first' is enabled, placed orders will go through the `place_and_take` instruction. In Place And Take, a list of makers can be passed in with the user's order and if the user's *auction END price* crosses the makers' limit price(s), the order will match. Any remaining amount of the order after this step will go through a typical auction (from start to end), unless IOC is enabled (in which case the order will cancel after attempting to fill vs makers). Note that Velocity's AMM can also participate atomically in this first step alongside the makers, provided the AMM is currently available to fill (e.g. not paused); if the AMM is unavailable at that moment, it is excluded and only the maker orders fill atomically.

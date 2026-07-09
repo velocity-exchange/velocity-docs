@@ -17,24 +17,19 @@ A limit order that activates when the trigger price condition is met. Used for S
 
 #### Trigger Order mechanics
 
-Trigger orders (Stop Market / Stop Limit / Take profit market / Take profit limit) activate off a **trigger price**.
+Trigger orders (Stop Market / Stop Limit / Take Profit Market / Take Profit Limit) activate when a **trigger reference price** crosses the trigger price you set.
 
-The trigger price is computed as the median of the following three values:
+By default, the trigger reference price is the market's **oracle price**. This is the behaviour currently live on Velocity mainnet.
 
-<Steps>
-### Oracle Price Adjustment
-`Oracle Price + (Mark Price 5min TWAP − Oracle Price 5min TWAP)`
+<Callout type="info">
+Velocity also has a governance-gated **median trigger price** mode that is **currently disabled** (the `MedianTriggerPrice` feature flag is off by default, and is not set on mainnet). When enabled, the trigger reference price is instead the **median** of three values:
 
-### Last Trade Price
+- **Oracle Price Adjustment** — `Oracle Price + (Mark Price 5min TWAP − Oracle Price 5min TWAP)`
+- **Last Trade Price**
+- **Oracle Price with Funding Adjustment** — `Oracle Price × (1 + Last Funding Rate × (Time Until Next Funding / Funding Period))`
 
-### Oracle Price with Funding Adjustment
-`Oracle Price × (1 + Last Funding Rate × (Time Until Next Funding / Funding Period))`
-
-</Steps>
-
-The **median** of these three values is used as the trigger price.
-
-> **Example:** If the three calculated prices are 100.2, 100.5, and 100.1, the trigger will use **100.2** as the median.
+For example, if the three values are 100.2, 100.5, and 100.1, the median **100.2** is used. This mode reduces sensitivity to any single price source, at the cost of extra computation.
+</Callout>
 
 
 #### Oracle Limit
@@ -52,7 +47,7 @@ These flags can be combined with the order types above.
 | Flag | Description
 | -- | --
 | Reduce‑Only | Enforces that the order will never increase or reverse the current position (go from long to short, or short to long).
-| Post‑Only | Enforces that the order is a maker order that can provide liquidity to the pool for a reduced exchange fee (0%). Without this flag, orders that don't execute immediately are not post-only.
+| Post‑Only | Enforces that the order is a maker order that can provide liquidity to the pool and earns a maker rebate (currently 0.25 bps) instead of paying a taker fee.
 | Immediate‑or‑Cancel (IOC) | An order that is placed and potentially partially filled. The remainder that is not filled immediately is then cancelled.
 | Has Builder | Set when the order carries a builder code (`builderIdx` / `builderFeeTenthBps`) — see [Trading Fees](/protocol/trading/trading-fees).
 

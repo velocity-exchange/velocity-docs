@@ -40,4 +40,8 @@ There is a cooldown period of 13 days for unstaking any collateral from the Insu
 
 A user first requests to unstake a specific amount (denominated in shares). During the cooldown period, the staked amount does not receive rewards. After the elapsed period, the user can fully unstake. 
 
-*Note: You cannot unstake while the spot market utilization (or 1hr utilization twap) is above 80%. This does not affect opening/timing on unstake requests.*
+*Note: You cannot unstake while the spot market utilization (or 1hr utilization twap) is above 90%. This does not affect opening/timing on unstake requests.*
+
+<Callout type="warning">
+Your escrowed principal remains at risk during the 13-day cooldown. Requesting an unstake locks in a target payout value, but the amount you actually receive when the cooldown ends is capped at the current value of your shares — `min(current share value, value at request time)`. If the Insurance Fund absorbs a bankruptcy/deficit draw while your request is pending, your payout is reduced accordingly. Submitting an unstake request does not remove your capital from Insurance Fund risk until the withdrawal is completed.
+</Callout>

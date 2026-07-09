@@ -6,3 +6,8 @@ node_modules
 _pagefind/
 sitemap*.xml
 robots.txt
+
+# Local Claude Code tooling (not part of the docs repo)
+.claude/
+.agents/
+skills-lock.json

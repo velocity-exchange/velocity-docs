@@ -3,7 +3,7 @@
 ## Perpetual Markets Specs
 
 ### Contract Tier
-Contract tiers are used to categorically label and rank the risk of perpetual markets. There are five unique tiers:
+Contract tiers are used to categorically label and rank the risk of perpetual markets. There are six unique tiers:
 - A
 - B
 - C
@@ -19,6 +19,10 @@ These ranked tiers are used for:
 
 Fundamentally, a market in Contract Tier B is in a 'safer' tranche vs Contract Tier C, Speculative, and Isolated. 
 
+Each market's current Contract Tier assignment can change over time as risk parameters are reviewed; the authoritative value for a given market is shown in-app and on-chain. As an example, at the time of writing, SOL-PERP, BTC-PERP, and ETH-PERP are Contract Tier B, and HYPE-PERP is Contract Tier C.
+
+For the full per-tier numeric limits — insurance caps, oracle confidence bands, TWAP-sanitization bounds, and PnL-settlement divergence thresholds — see the [Contract Tiers](/protocol/risk-and-safety/contract-tiers) reference.
+
 | Tier                   | Description                                                                                                             |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Speculative | Speculative tier has no access to external insurance funds (only the perpetual market's fee pool)
@@ -31,6 +35,9 @@ The oracle provider which provides a price, confidence band, and timeliness info
 | Source                 | Description                                                                                                             |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Pyth | [Read more](https://docs.pyth.network/home)
+| Pyth Lazer | Pyth's low-latency push oracle service. [Read more](https://docs.pyth.network/lazer)
+| Switchboard | **Deprecated.** Legacy Switchboard oracle sources are no longer supported; markets configured with a deprecated Switchboard source will fail to load a price. [Read more](https://docs.switchboard.xyz/)
+| Prelaunch | "Prelaunch" is a custom internal oracle source for prelaunch markets (markets without external oracle). For prelaunch markets, given there is no spot reference price, that oracle sources uses the mark twap as the oracle price. The oracle is also configured with a custom maximum price to prevent price manipulation. This self-referential and leads to funding payments that encourage price stability (those holding positions in trend will pay those holding against trend) and ultimately relies upon market participants anticipating a valid oracle in the future. Every Prelaunch oracle has an initial price AND max price. The oracle value cannot exceed the max price.
 
 ### Max Open Interest
 A maximum amount of open interest that can exist within the perpetual market. Additional orders/fills that would breach this open interest limit are blocked.
@@ -60,4 +67,4 @@ A maximum amount of tokens that can be added to collateral vault.
 A margin fraction factor. Used to increase liability weight and decrease asset weight for large positions
 
 ### Order Step/Tick Size
-Spot orders must have base lots which are a multiple of the step size and price lots which are a multiple of tick size
+Spot markets retain `order_step_size` and `order_tick_size` fields, but **spot order placement is disabled on Velocity** — there is no spot order book. These fields are therefore unused for spot; deposits, borrows, and swaps are not subject to them. (On **perpetual** markets, order sizes must be a multiple of the step size and prices a multiple of the tick size.)
