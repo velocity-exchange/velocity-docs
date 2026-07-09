@@ -219,6 +219,12 @@ const META = {
         "title": "GUIDES",
         "type": "separator"
       },
+      "migrate-from-drift": {
+        "title": "Migrate from Drift",
+        "items": {
+          "agent-guide": "AI Agent Guide"
+        }
+      },
       "market-makers": {
         "title": "Market Makers",
         "items": {

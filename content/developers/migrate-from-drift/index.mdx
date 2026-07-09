@@ -1,0 +1,103 @@
+---
+asIndexPage: true
+---
+
+# Migrating from Drift
+
+Velocity Protocol is a fork of Drift Protocol v2, taken at Drift SDK `v2.163.0-beta.0`. It is **not** an upgrade of Drift in place — it is an entirely new on-chain program deployment with a new program ID, a reduced feature set, and its own renamed SDK. The Drift program is paused, and **no on-chain state carries over**: user accounts must be re-initialized and balances start fresh on Velocity.
+
+Because the program ID changed, **every PDA address is different** from Drift — even for the accounts whose seeds are byte-for-byte unchanged (`user`, `user_stats`, `perp_market`, `spot_market`, `spot_market_vault`, `insurance_fund_vault`). One trading seed was also renamed: the State PDA seed went from `drift_state` to `velocity_state`. Never reuse a Drift-derived address on Velocity.
+
+## At a glance
+
+| | Drift | Velocity |
+|---|---|---|
+| Program ID | `dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH` | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` |
+| npm package | `@drift-labs/sdk` (`2.163.0-beta.0`) | `@velocity-exchange/sdk` (`0.6.x`) |
+| Client class | `DriftClient` | `VelocityClient` (no back-compat alias) |
+| Anchor | `@coral-xyz/anchor@0.29.0` | `@anchor-lang/core@1.0.1` (aliased as `@coral-xyz/anchor`) |
+| IDL file | `drift.json` | `velocity.json` |
+| Mainnet quote asset | USDC | USDT |
+
+<Callout type="info">
+This page covers the **TypeScript SDK** at `@velocity-exchange/sdk` 0.6.0. Rust (`velocity-rs`) and raw-ABI integrators should also read the [full migration reference](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) in the monorepo.
+</Callout>
+
+## Quote asset is now USDT
+
+This is the single most money-relevant change. On Drift, spot market 0 — the cross-margin quote and collateral asset — is **USDC**. On Velocity **mainnet-beta** it is **USDT**.
+
+| Network | Quote mint |
+|---|---|
+| Drift mainnet (USDC) | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| Velocity mainnet-beta (USDT) | `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB` |
+| Velocity devnet (dUSDT placeholder) | `GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6` |
+
+Both USDC and USDT are 6-decimal SPL tokens, so notional amounts look identical and nothing type-checks differently. An MM that funds accounts with USDC (as on Drift) is depositing the wrong token — deposits, withdrawals, ATA derivation, collateral, and settlement all reference the USDT mint. **Switch every quote-mint hardcode and associated-token-account to USDT on mainnet (dUSDT on devnet); never assume `QUOTE_MINT_ADDRESS == USDC`.** Read the mint from `getConfig().QUOTE_MINT_ADDRESS` rather than hardcoding it. See [Setup](/developers/velocity-sdk/setup) for the config accessor.
+
+## Removed features
+
+Several Drift subsystems were dropped. Their SDK exports are gone (no back-compat), and their on-chain error variants are preserved only as deprecated, code-stable stubs.
+
+| Feature | What it means for you |
+|---|---|
+| Spot DLOB trading | `place_spot_order`, `place_and_take_spot_order`, `place_and_make_spot_order`, `fill_spot_order` are removed. Spot markets still exist — for collateral and borrow-lend — but you cannot place orders on a spot book. Attempting it returns `SpotDlobTradingDisabled` (6350). |
+| External spot fulfillment | Serum, Phoenix, and OpenBook fulfillment are gone. The `serum/*`, `phoenix/*`, `openbook/*` subscribers and fulfillment-config maps, and the `SERUM_V3` / `PHOENIX` / `OPENBOOK` env config fields, are removed. |
+| Fuel | The `math/fuel` module and the `FuelSeasonRecord` / `FuelSweepRecord` event types are removed. |
+| vAMM LP (BAMM) shares | LP provisioning on the vAMM is gone: `PerpPosition.lp_shares` and the `LPRecord` / `LPAction` types are removed. |
+| Protected maker mode | The four protected-maker instructions, the `ProtectedMakerModeConfig` account type, and `VelocityClient.updateUserProtectedMakerOrders` are removed. |
+| High leverage mode | The five HLM instructions and their config-account subscribers are removed. The on-chain `MarginMode` enum and the `User.marginMode` field are gone. (The TS `MarginMode` class still exists in the SDK, reduced to `DEFAULT` only, so imports don't break.) |
+| Prediction markets | `initialize_prediction_market` is removed; `ContractType.PREDICTION` is now `DEPRECATED_PREDICTION`. |
+| Legacy Pyth pull/push | The legacy Pyth pull/push instructions are removed, along with `oracles/pythPullClient` and `util/pythOracleUtils`. **Pyth Lazer is the supported Pyth path.** The `PythSolanaReceiver` and `WormholeCoreBridgeSolana` root exports are also gone. |
+| Switchboard oracles | `oracles/switchboardClient` and `oracles/switchboardOnDemandClient` are removed; the `OracleSource` Switchboard variants are renamed `DEPRECATED_SWITCHBOARD` / `DEPRECATED_SWITCHBOARD_ON_DEMAND` (discriminants preserved). |
+| Gov-token stake fee discounts | Staking a gov token for a fee discount is gone: `updateUserGovTokenInsuranceStake`, `GOV_SPOT_MARKET_INDEX`, and the delegate variant are removed. Perp fee tier is now 30-day volume only (see below). |
+| IF rebalance / protocol-IF shares | Protocol-owned insurance-fund shares and IF rebalancing are removed (the admin IF-withdraw, protocol-IF-share transfer, IF-swap, and IF-rebalance-config instructions). |
+
+## New on Velocity
+
+Velocity also adds subsystems Drift never had. In brief:
+
+- **VLP module** — a new liquidity-pool / vAMM-hedge component (`programs/velocity/src/vlp/`).
+- **Isolated perp positions** — per-position isolated collateral. The instructions are feature-gated **out of mainnet builds pending audit**; the state layout is present in every build.
+- **Builder codes** — the `change_approved_builder` instruction, a `RevenueShare` escrow account, and `ReferrerStatus.BuilderReferral = 4`. See [Builder Codes](/developers/velocity-sdk/builder-codes).
+- **Per-user equity floor** — `update_user_equity_floor` plus the equity-floor breaker instructions and a `User.equity_floor` field.
+- **Tiered admin keys** — the single `State.admin` is split into `cold_admin` / `warm_admin` / hot keys / `pause_admin`.
+- **Continuous funding dead zone** — a per-market funding clamp threshold and ramp slope.
+- **Per-market funding-bias spread widening** — an opt-in vAMM spread widen on the funding-paying side.
+- **Fast-fill auctions** — the DLOB server can force fast, marketable auctions (see below).
+- **Protocol fee redesign** — fees are re-routed (a three-way AMM / IF / protocol split) rather than changing the taker rate you pay.
+
+## Behavior changes to review
+
+These are semantic changes a compiler cannot catch — a port that builds cleanly can still mispredict on-chain behavior. Ordered by impact for a market maker.
+
+- **Quote asset is USDT (mainnet).** See above. Wrong-token deposits are the highest-severity failure mode.
+- **5-slot fast-fill auctions (DLOB server v3).** At API version ≥ 3, **every** market gets `isFastFill = true`: the auction starts inside the touch (`bestOffer` with a `-0.05` price offset) and lasts `5` slots (~2s) regardless of market tier. Auctions become marketable almost immediately — an MM quoting off stale prices gets run over. Re-tune fill logic to the 5-slot window and use the new `generatedAt` response field for staleness checks.
+- **Trigger orders priced at their post-trigger price.** The Rust DLOB library (`velocity-rs`, used by fillers and keeper bots) now rewrites a resting trigger order's book price to the computed post-trigger auction price (clamped to the limit price for `TriggerLimit`), instead of tagging it with its raw trigger price. If you consume that DLOB or services built on it, stop assuming a resting trigger order's book price equals its trigger price.
+- **AMM JIT dropped from match fills under a hard gate.** When a hard AMM gate is active (pause, drawdown, MM-oracle volatility, or oracle invalidity), a DLOB match fills DLOB-only — AMM JIT no longer tops it up. Fills can be capped to the resting maker's size during those windows. Don't assume AMM JIT backstops a DLOB match.
+- **MM-oracle native writes are throttled.** `update_mm_oracle_native` now **silently no-ops** (returns `Ok`, no error) on a non-monotonic slot, a resubmit within 2 slots, or a `>1%` per-write price step. MM crank bots that pushed fast or large updates now get no-ops with no error signal. Throttle to ≥ 2-slot cadence and clamp per-write steps to ≤ 1%.
+- **Funding floor raised 7.3% → 10.95% annualized.** The always-applied funding floor/ceiling is ~1.5× higher (the offset denominator dropped 5000 → 3333). The SDK mirror is in sync, so re-pull and re-model funding carry on any perp inventory.
+- **Fee cost changes for referred and staked users.** The gov-token stake discount is gone — perp fee tier is now 30-day volume only, so an MM that staked for a discount now pays the un-discounted tiered fee. Separately, `VelocityClient.getMarketFees` now subtracts the referee discount from the taker fee when the client's `UserStats` shows the referred bit, and `User.calculateFeeForQuoteAmount` is renamed `User.calculatePerpTakerFee` (gaining an optional `builderInfo` arg and rounding predicted fees **up** rather than down). Re-model taker fees without any stake benefit; expect the discounted/augmented value.
+- **`MarketStatus` discriminants shifted.** Drift's four now-removed pause variants sat between `Active` and `ReduceOnly`, so `ReduceOnly` / `Settlement` / `Delisted` were 6 / 7 / 8. On Velocity they are 2 / 3 / 4. The IDL/Anchor-based SDK decode is fine, but **any custom raw-byte decoder** will silently misclassify market state. Rebuild raw decoders against the new discriminants.
+- **Bulk order margin is tighter.** `place_orders` / `place_scale_orders` now accumulate risk across the batch and check **initial** margin once per touched risk scope (cross plus each isolated market), instead of only gating the last order at maintenance margin. Batches that previously slipped a risk-increasing order past a weak gate now revert with `InsufficientCollateral`. Size batches against initial margin.
+- **Deposits and transfers enforce per-market admission.** Same-market `transfer_deposit` (and the delegate variant) now applies the full deposit/withdraw admission logic (active status, `max_token_deposits`, reduce-only cap), and direct `deposit()` now respects the per-market `Deposit` pause bit independently of the global deposit pause. Transfers into a capped, non-active, or reduce-only market — and deposits into a market with only the per-market deposit bit paused — now revert where they used to succeed. Pre-check spot-market status and caps.
+
+## SDK surface
+
+The headline renames a TypeScript integrator hits first — there are **no back-compat aliases**, so these surface as build errors:
+
+- `DriftClient` → `VelocityClient`
+- `DRIFT_PROGRAM_ID` → `VELOCITY_PROGRAM_ID`
+- `DriftEnv` → `VelocityEnv`
+- Account subscribers: `webSocketDriftClientAccountSubscriber(V2)` → `webSocketVelocityClientAccountSubscriber(V2)`, `pollingDriftClientAccountSubscriber` → `pollingVelocityClientAccountSubscriber`, `grpcDriftClientAccountSubscriber(V2)` → `grpcVelocityClientAccountSubscriber(V2)`
+- Config field `USDC_MINT_ADDRESS` → `QUOTE_MINT_ADDRESS`
+- `Order.oraclePriceOffset` / `OrderParams.oraclePriceOffset` widened from `number` to `BN` — wrap raw numbers in `new BN(...)`
+- Removed root exports include `PythSolanaReceiver` and `WormholeCoreBridgeSolana` — importing either from the package root now breaks
+
+Note also that the IDL account names are PascalCase (e.g. `PerpMarket`, `SpotMarket`, `User`) — pass those exact names to the account coder.
+
+For the exhaustive symbol tables and a step-by-step procedure your AI coding agent can execute, see the [AI Agent Migration Guide](/developers/migrate-from-drift/agent-guide).
+
+## Scope & currency
+
+This page reflects `@velocity-exchange/sdk` **0.6.0** (July 2026) and covers the TypeScript SDK. Rust (`velocity-rs`) and raw-ABI integrators should consult [`docs/DRIFT-TO-VELOCITY.md`](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) in the velocity-v1 repository, which is the canonical layout-and-ABI reference.
