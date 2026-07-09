@@ -1,27 +1,21 @@
 # Introduction
 
-Velocity Protocol is a decentralised exchange, open-sourced and built on the [**Solana blockchain**](https://solana.com/). Velocity is a fork of [Drift Protocol v2](https://github.com/velocity-exchange/velocity-v1), deployed under its own program ID with a reduced feature set and new functionality.
+Velocity Protocol is an [open-source](https://github.com/velocity-exchange/velocity-v1), decentralised exchange built on the [Solana blockchain](https://solana.com/). Velocity is a fork of Drift Protocol v2, deployed under its own program ID with a reduced, more secure feature set focused on perpetual futures trading and lending/borrowing.
 
 ## Trade
 
-Focus on the strategy, and let Velocity take care of your position:
+- [**Perpetual Futures**](/protocol/trading/perpetuals-trading) - Trade perp markets with leverage.
+- [**Swap Tokens**](https://velocity.exchange/swap) - Swap any pair with up to 5x leverage.
 
-- [**Perpetual Futures / Swaps**](/protocol/trading/perpetuals-trading) - Trade perp markets with leverage.
-- [**Swap Tokens**](https://app.velocity.exchange/swap) - Swap any pair with up to 5x leverage.
+Velocity uses a **cross-margined risk engine** that lets a single pool of collateral back all of your positions, while limiting how much risk any account can take on:
 
-Velocity was designed with a goal to be **capital efficient but also protective of your assets.**
-
-We achieved that by setting up sophisticated **cross-margined risk engine** - a system of tools with an extensive protection from over-extending risk. For instance:
-
-- In the lend/borrow markets, you can also use collateral for perpetual futures and trade more efficiently with spot assets.
-- Every token you deposit can earn you more through borrowing and also act as a collateral for perpetual swaps.
-- Borrowers can only borrow if they have more collateral than needed, following multiple safety measures for extra protection.
+- Collateral in the lend/borrow markets can also back perpetual futures positions, so spot assets work double duty.
+- Every deposit earns lending yield and can serve as collateral for perpetual swaps at the same time.
+- Borrowers can only borrow as much as their collateral supports, staying at or above the required collateral ratio, with additional safety measures to prevent over-extension.
 
 <Callout type="info">
-Spot trading has been removed from the Velocity program — spot markets exist only for collateral and borrow-lend. You can still exchange spot assets via [swaps](https://app.velocity.exchange/swap). See [Spot Trading](/protocol/trading/spot-trading) for details.
+Spot trading has been removed from the Velocity program — spot markets exist only for collateral and borrow-lend. You can still exchange spot assets via [swaps](https://velocity.exchange/swap). See [Spot Trading](/protocol/trading/spot-trading) for details.
 </Callout>
-
-[**Place an order.**](https://app.velocity.exchange/)
 
 ## Earn
 
@@ -29,15 +23,9 @@ Spot trading has been removed from the Velocity program — spot markets exist o
 - [**Insurance Fund Staking**](/protocol/insurance-fund) - Stake your assets into a vault and earn yield from exchange fees.
 - [**Market Maker Participation**](/protocol/market-makers/market-maker-participation) - Provide liquidity as a maker.
 
-[**Earn yield.**](https://app.velocity.exchange/earn/borrow-lend)
-
 ## Build
 
-- [**SDKs**](/developers/velocity-sdk/setup) - [**Typescript**](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/sdk) SDK (`@velocity-exchange/sdk`). There is no Python SDK for Velocity.
+- [**SDK**](/developers/velocity-sdk/setup) - TypeScript SDK (`@velocity-exchange/sdk`) for building trading apps and bots.
 - [**Tutorials**](/developers/trading-automation/keeper-bots) - Build a [**Keeper bot**](/developers/trading-automation/keeper-bots) or [**JIT Trading bot**](/developers/trading-automation/keeper-bots/jit-maker-bot).
 
-Velocity Protocol is [**open-source**](https://github.com/velocity-exchange/velocity-v1) and contributions are welcome.
-
-[**Build a bot.**](/developers/trading-automation/keeper-bots)
-
-Velocity is a fork of Drift Protocol, whose smart contracts were audited by Trail of Bits, Neodyme, and OtterSec prior to the fork point — see [Audits](/protocol/risk-and-safety/audits).
+Velocity Protocol is [**open-source**](https://github.com/velocity-exchange/velocity-v1) and contributions are welcome — see [Velocity for Developers](/developers) to get started.

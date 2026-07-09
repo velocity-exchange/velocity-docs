@@ -17,7 +17,7 @@
 - [JIT Auctions](/developers/market-makers/jit-auctions)
 - [Tutorial on how to run JIT trading bot](/developers/trading-automation/keeper-bots/jit-maker-bot)
 
-JIT Proxy Address: `J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP` — this is the jit-proxy program originally deployed under Drift; the client in the velocity-v1 monorepo targets this address. Verify the address against official Velocity channels before sending funds or transactions.
+JIT Proxy Address: `J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ` — this is Velocity's jit-proxy program (`declare_id!` in `programs/jit-proxy/src/lib.rs`), which the client in the velocity-v1 monorepo targets. Verify the address against official Velocity channels before sending funds or transactions.
 
 ## Benefits
 
@@ -49,7 +49,7 @@ Yes, auctions can be partially filled up to a user's slippage tolerance. There a
 
 ### Can auctions be cancelled once initiated? 
 
-Yes, users can cancel the unfilled portion of their order in the auction once they've been initiated. Users will need to pay a network fee in SOL to cancel their ongoing auction, as well as a nominal fee to keepers of \$0.01 USDC.
+Yes, users can cancel the unfilled portion of their order in the auction once they've been initiated. Users will need to pay a network fee in SOL to cancel their ongoing auction, as well as a nominal fee to keepers of \$0.01 USDT.
 
 ### Can Makers pull out of an auction once they have filled on the auction?
 

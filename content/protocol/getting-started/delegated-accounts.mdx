@@ -14,7 +14,7 @@ Delegated authorities on Velocity can **ONLY**:
 
 -   place and cancel orders.
 
-Users can only delegate access to one account or authority. It's important to note that full control over the account remains with the owner.
+Delegation is set per subaccount, so a delegate only has access to the specific subaccount it's assigned to. It's important to note that full control over the account remains with the owner.
 
 A delegated party can **NOT**:  
 
@@ -29,12 +29,12 @@ A delegated party can **NOT**:
 Delegated authorities are restricted to depositing funds, swapping assets, and placing or canceling orders, therefore limiting their capabilities. All other actions must be carried out by the account owner.
 
 <Callout type="info">
-**Transfers between subaccounts** are an exception: a delegate can call `transferDepositByDelegate` to move spot deposits between the owner's subaccounts, but only after the owner explicitly opts in with `updateUserAllowDelegateTransfer(true)` (sets the `AllowDelegateTransfer` bit in `UserStats.delegatePermissions`). Without that opt-in, a delegate still cannot move funds out of a subaccount at all.
+**Transfers between subaccounts** are an exception: a delegate can call `transferDepositByDelegate` to move spot deposits between the owner's subaccounts, but only after the owner explicitly opts in with `updateUserAllowDelegateTransfer(true)` (sets the `AllowDelegateTransfer` bit in `UserStats.delegatePermissions`). A delegate can also call `transferPerpPosition` to move perp position value between the owner's own subaccounts at any time, without that opt-in. Without the opt-in, a delegate still cannot move spot deposits out to an external wallet, and no opt-in ever allows moving funds to a subaccount the owner doesn't control.
 </Callout>
 
 ### How do I delegate access to my account?  
 
-To delegate access to another Solana account using Velocity's UI, go to the the [Accounts Page](https://app.velocity.exchange/portfolio/accounts) in your portfolio. In this section, you'll find the option to set up a delegate account, as shown in the image below.
+To delegate access to another Solana account using Velocity's UI, go to the the [Accounts Page](https://velocity.exchange/portfolio/accounts) in your portfolio. In this section, you'll find the option to set up a delegate account, as shown in the image below.
 
 <img src="/assets/delegated-accounts-1.png" alt="" width="800" height="auto"></img>
 

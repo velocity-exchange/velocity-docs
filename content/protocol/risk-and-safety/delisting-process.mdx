@@ -13,7 +13,7 @@ The market immediately enters "reduce only mode" once an expiry date is set.
 
 *   All current orders that will increase risk will get cancelled on fill attempts
 
-*   No new funding rate updates
+*   Funding rate updates **continue** — funding still accrues throughout reduce-only mode (a market's funding updates while its status is `Active` **or** `ReduceOnly`), so positions keep paying/receiving funding right up to expiry
 
 *   Users cannot settle unrealized P&L prior to expiry
 
@@ -39,7 +39,7 @@ Once the number of users in the market reaches zero, the remaining balance PnL P
 <Steps>
 ### Reduce only mode
 The market immediately enters "reduce only mode" once an expiry date is set
-*   This blocks new borrows, new deposits, and new buys in the market
+*   This blocks new borrows and any deposit that does not pay down an existing borrow (there is no spot order book, so there are no spot "buys" to block)
 
 ### Force close mode (coming soon)
 After the expiry date, the market is set into "force close mode"

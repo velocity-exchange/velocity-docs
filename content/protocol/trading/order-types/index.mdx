@@ -18,7 +18,7 @@ A **Market Order** is an order to buy or sell an asset immediately at the curren
 
 Users can set a maximum **slippage tolerance**. A slippage tolerance sets an upper bound for the price that the order can be filled at, which is effectively a limit price versus the current market price.
 
-For instance, if the mark price of SOL-PERP is \$100.00 and a user goes long, a user can set a maximum slippage tolerance of 0.1%. As such, the worst price that a user can fill at is \$100.10. The order will fail if the quoted price exceeds the limit price (with slippage tolerance) for makers.
+For instance, if the mark price of SOL-PERP is \$100.00 and a user goes long, a user can set a maximum slippage tolerance of 0.1%. As such, the worst price that a user can fill at is \$100.10. The order will fail if the quoted price exceeds the limit price (with slippage tolerance) for takers.
 
 Market Orders will trigger a Just-In-Time auction, where market makers will be able to participate in a short (default ~5-second) Dutch auction to fill the user's orders. As the JIT auction finishes, the user's orders will be completed if the price is within their slippage tolerance limit order. If no market maker steps in during the JIT Auction, the remaining order will be filled against Velocity's AMM.
 
@@ -37,7 +37,7 @@ See [Trading Fees](/protocol/trading/trading-fees) and [Advanced Orders FAQ](/pr
 
 Velocity's perp order book supports a number of queued order types.
 
-These orders take against the AMM and are executed by a decentralised network of keepers, see [Decentralised Orderbook FAQ](/protocol/how-it-works/keepers/keepers-dlob-faq), once certain conditions are met (i.e. the mark price crosses the specified trigger/limit price).
+These orders are executed by a decentralised network of keepers, see [Decentralised Orderbook FAQ](/protocol/how-it-works/keepers/keepers-dlob-faq), once certain conditions are met (i.e. the mark price crosses the specified trigger/limit price). At fill time, a limit order can be matched peer-to-peer against another resting maker order or filled against Velocity's AMM, whichever the keeper network determines is best for the fill.
 
 These orders are executed **'best effort'** by the network with special economic incentives designed to mimic the typical execution order seen in a Centralised Limit Order Book (CLOB).
 

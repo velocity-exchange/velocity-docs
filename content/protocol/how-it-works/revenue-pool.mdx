@@ -70,7 +70,7 @@ Additionally, for direct draws from the insurance fund, it's parameterized by th
 
 Unlike spot markets, perp markets are capped by the max draw from insurance via `quote_max_insurance`.
 
-`quote_settled_insurance` tracks the insurance fund draw amount since inception. Once this threshold is reached or the insurance fund is depleted, the market resorts to its own [AMM Fee Pool](/protocol/how-it-works/fee-pool) as a clawback of last resort. For any remaining losses not covered, the market performs socialized losses in bankruptcy events — see [How Perp Bankruptcy Resolution Works](/protocol/how-it-works/liquidation-engine#how-perp-bankruptcy-resolution-works).
+`quote_settled_insurance` tracks the insurance fund draw amount since inception. Once this threshold is reached or the insurance fund is depleted, the market resorts to its own [AMM Fee Pool](/protocol/how-it-works/fee-pool) as a clawback of last resort. For any remaining losses not covered, the market performs socialized losses in bankruptcy events — see [How Perp Bankruptcy Resolution Works](/protocol/insurance-fund#how-perp-bankruptcy-resolution-works).
 
 The following instructions interact w/ the insurance fund:
 

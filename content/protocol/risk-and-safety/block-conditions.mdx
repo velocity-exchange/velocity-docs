@@ -27,9 +27,9 @@
 
 *   Users cannot place orders that would increase their number of outstanding liabilities above 1 if the liability has the isolated asset tier
 
-*   [SPOT ONLY] without margin trading enabled on an account, users won't be able to open spot orders than would create borrows on the account
-
-*   [SPOT ONLY] with margin trading enabled, users won't be able to borrow using the same rolling limits for withdraws
+<Callout type="info">
+Order placement applies to **perpetual** markets only. Spot order placement is disabled on Velocity (there is no spot order book) — borrows are instead opened through withdrawals and swaps, which are governed by the withdrawal conditions above.
+</Callout>
 
 ### Filling Orders
 

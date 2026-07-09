@@ -8,10 +8,6 @@ const pages = [
     {
         file: '../content/protocol/legal-and-regulations/privacy-policy.mdx',
         s3Url: process.env.NEXT_PUBLIC_S3_URL_PRIVACY_POLICY
-    },
-    {
-        file: '../content/protocol/legal-and-regulations/competition-terms.mdx',
-        s3Url: process.env.NEXT_PUBLIC_S3_URL_COMPETITION_TERMS
     }
 ]
 

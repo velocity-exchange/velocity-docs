@@ -28,7 +28,6 @@ const META = {
             "items": {
               "index": "",
               "phantom-wallet": "",
-              "passwordless-login": "",
               "wallet-faq": "Wallet FAQ",
             },
           },
@@ -77,16 +76,10 @@ const META = {
               "advanced-orders-faq": "",
             },
           },
-          "liquidations": {
-            "title": "Liquidations",
-            "items": {
-              "index": "",
-            }
-          },
+          "liquidations": "",
           "trading-fees": {
             "title": "Trading Fees",
             "items": {
-              "index": "",
               "other-trading-fees": "",
             }
           },
@@ -100,6 +93,7 @@ const META = {
           "index": "",
           "borrow-lend-faq": "",
           "borrow-lend-apy": "",
+          "withdrawal-limits": "",
           "amplify": {
             "title": "Amplify",
             "items": {
@@ -126,7 +120,6 @@ const META = {
           "keepers": {
             "title": "Keepers",
             "items": {
-              "index": "",
               "keepers-dlob-faq": "",
               "keeper-incentives": "",
             },
@@ -152,7 +145,6 @@ const META = {
       "market-makers": {
         "title": "Market Makers",
         "items": {
-          "index": "",
           "market-maker-participation": "",
           "maker-fee-rebate": "",
         }
@@ -165,6 +157,7 @@ const META = {
         "title": "Risk and Safety",
         "items": {
           "risk-parameters": "",
+          "contract-tiers": "",
           "block-conditions": "",
           "delisting-process": "",
           "protocol-guard-rails": "",
@@ -175,8 +168,8 @@ const META = {
           "risks": "",
         }
       },
-      "--- Legal": {
-        "title": "LEGAL",
+      "--- Terms": {
+        "title": "TERMS",
         "type": "separator"
       },
       "legal-and-regulations": {
@@ -184,8 +177,7 @@ const META = {
         "items": {
           "terms-of-use": "",
           "disclaimer": "",
-          "privacy-policy": "",
-          "competition-terms": ""
+          "privacy-policy": ""
         }
       },
     }
@@ -207,7 +199,6 @@ const META = {
       "velocity-sdk": {
         "title": "Velocity SDK",
         "items": {
-          "index": "",
           "setup": "",
           "precision-and-types": "",
           "deposits-withdrawals": "",
@@ -241,7 +232,6 @@ const META = {
       "market-makers": {
         "title": "Market Makers",
         "items": {
-          "index": "",
           "quickstart": "",
           "orderbook-and-matching": "",
           "jit-auctions": "",
@@ -255,7 +245,6 @@ const META = {
       "vault-managers": {
         "title": "Vault Managers",
         "items": {
-          "index": "",
           "quickstart": "",
           "trusted-vaults": "",
           "multisig-ops": "Multisig Ops"
@@ -264,7 +253,6 @@ const META = {
       "trading-automation": {
         "title": "Trading Automation",
         "items": {
-          "index": "",
           "trading-workflows": "",
           "keeper-bots": {
             "title": "Keeper Bots",
@@ -281,7 +269,6 @@ const META = {
       "ecosystem-builders": {
         "title": "Ecosystem Builders",
         "items": {
-          "index": "",
           "reading-data": "",
           "orderbook-and-ws": "",
           "sending-actions": ""

@@ -1,0 +1,67 @@
+# Contract Tiers
+
+Every perpetual market on Velocity is assigned a **Contract Tier** — `A`, `B`, `C`, `Speculative`, `Highly Speculative`, or `Isolated` (`ContractTier`, `state/perp_market.rs:75-89`). The tier is a single admin-set enum field (`PerpMarket.contract_tier`, updated via `handle_update_perp_market_contract_tier`, `instructions/admin.rs:2247-2263`) that drives a fixed set of derived risk limits: how much insurance a market can ever draw, how wide an oracle confidence band is tolerated before the oracle is treated as invalid, how tightly incoming TWAP data points are clamped, and how oracle/mark divergence is checked before settling PnL. This page tabulates those derived limits from source. For what a tier conceptually means and how it's described in-app, see [Market Specs — Contract Tier](/protocol/trading/market-specs#contract-tier); for oracle validity mechanics generally, see [Oracles](/protocol/how-it-works/oracles); for the insurance backstop itself, see [Insurance Fund](/protocol/insurance-fund).
+
+<Callout type="info">
+A market's tier assignment is a live, admin-adjustable value, not a fixed property of the asset. The roster of markets and their current tier assignments (for example, at the time of writing SOL-PERP/BTC-PERP/ETH-PERP are Tier B and HYPE-PERP is Tier C) should be read from the in-app market list or on-chain `PerpMarket` account, not from this page. The **numbers attached to each tier** below (insurance caps, confidence multipliers, TWAP bands) are the stable reference — only which market sits in which tier changes over time.
+</Callout>
+
+`ContractTier` is `Ord`-derived and ranked safest-to-riskiest in declaration order: `A < B < C < Speculative < HighlySpeculative < Isolated` (`state/perp_market.rs:72-89`). The default tier for a newly created market is `HighlySpeculative` (`#[default]`, `state/perp_market.rs:85-86`) — a market must be explicitly promoted to a safer tier.
+
+## Tier reference table
+
+| Tier | Insurance fund cap | Max oracle confidence before `TooUncertain` | TWAP-update sanitization band |
+| --- | --- | --- | --- |
+| **A** | \$100M (`INSURANCE_A_MAX`) | 1x base &rarr; 2% of price | new data point clamped to ±10% of the running TWAP |
+| **B** | \$1M (`INSURANCE_B_MAX`) | 1x base &rarr; 2% of price | ±20% of the running TWAP |
+| **C** | \$100k (`INSURANCE_C_MAX`) | 2x base &rarr; 4% of price | ±50% of the running TWAP |
+| **Speculative** | \$0 | 10x base &rarr; 20% of price | ±33% of the running TWAP (protocol default, see note below) |
+| **Highly Speculative** | \$0 | 50x base &rarr; 100% of price | ±33% of the running TWAP (protocol default) |
+| **Isolated** | \$0 | 50x base &rarr; 100% of price | ±33% of the running TWAP (protocol default) |
+
+Sources:
+
+- **Insurance cap** — `INSURANCE_A_MAX` / `INSURANCE_B_MAX` / `INSURANCE_C_MAX` / `INSURANCE_SPECULATIVE_MAX` (`math/constants.rs:144-147`); enforced as the ceiling on `quote_max_insurance`, `unrealized_max_imbalance`, and `max_revenue_withdraw_per_period` in `handle_update_perp_market_max_imbalances`'s tier match (`instructions/admin.rs:1499-1516`).
+- **Max oracle confidence** — `PerpMarket::get_max_confidence_interval_multiplier` (`state/perp_market.rs:582-592`) returns a per-tier multiplier applied to the guard rail's base confidence threshold (`ValidityGuardRails.confidence_interval_max_size`, assumed 2% of price per the function's own comment). The multiplied value is compared against the oracle's reported confidence as a percent of price inside `oracle_validity` (`math/oracle.rs:353-360`); exceeding it raises `OracleValidity::TooUncertain` (`math/oracle.rs:36`, `52`), which blocks or degrades margin calcs, fills, and liquidations depending on the action (see [Oracles](/protocol/how-it-works/oracles)).
+- **TWAP-update sanitization band** — `PerpMarket::get_sanitize_clamp_denominator` (`state/perp_market.rs:655-664`) returns an explicit denominator for tiers A/B/C (10/5/2 &rarr; 10%/20%/50% of the last TWAP value) and `None` for Speculative/Highly Speculative/Isolated, which falls back to `DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR = 3` (&rarr; ~33%) wherever the clamp is applied (`vlp/amm/math/amm.rs:193-215`). This denominator bounds how far a single new oracle-TWAP data point can move the market's running 5-minute/1-hour oracle TWAPs in one update (`PerpMarket::update_oracle_derived_stats`, `state/perp_market.rs:601-653`; consumed again in funding, `controller/funding.rs:234-248`, and spot balance updates, `controller/spot_balance.rs:84-89`).
+
+<Callout type="warning">
+The sanitization band is **not monotonic across tiers** in the source: Tier C's explicit override (50%) is wider than the ~33% default that Speculative, Highly Speculative, and Isolated fall back to. Don't assume "riskier tier &rarr; wider TWAP band" holds all the way down the tier list — verify against `get_sanitize_clamp_denominator` (`state/perp_market.rs:655-664`) for the exact band on a given tier.
+</Callout>
+
+## Oracle/mark divergence for PnL settlement
+
+Separately from the TWAP-sanitization band above, `PerpMarket::is_price_divergence_ok_for_settle_pnl` (`state/perp_market.rs:821-883`) gates whether unrealized PnL can be safely settled to/from a user's collateral. It checks two per-tier thresholds against the 5-minute oracle TWAP: the absolute oracle-vs-TWAP divergence, and the market's tracked oracle/mark standard deviation. Settlement is blocked if either is breached.
+
+| Tier | Max oracle/TWAP divergence | Max oracle/mark std-dev |
+| --- | --- | --- |
+| A | 50 bps | 200 bps of price |
+| B | 50 bps | 200 bps of price |
+| C | 100 bps | 500 bps of price |
+| Speculative | 250 bps | 1000 bps of price |
+| Highly Speculative | 250 bps | 1000 bps of price |
+| Isolated | 250 bps | 1000 bps of price |
+
+## Isolated tier: account-level requirements
+
+Unlike A/B/C/Speculative/Highly Speculative — which only change a market's risk limits — the **Isolated** tier additionally constrains the *user account* holding the position. These checks run in `validate_any_isolated_tier_requirements` (`math/margin.rs:649-686`) and `validate_spot_margin_trading` (`math/margin.rs:846-867`):
+
+- **Single perp liability.** While a user holds an open liability (position or order) in an Isolated-tier market, `num_perp_liabilities` may not exceed 1 — the account cannot simultaneously carry a liability in any other perp market (`math/margin.rs:653-658`).
+- **Cross-margin trading must be disabled.** A user with `is_margin_trading_enabled = true` cannot hold a position in an Isolated-tier market, and vice versa — entering one requires disabling the other (`math/margin.rs:660-664`, `846-864`, `ErrorCode::IsolatedAssetTierViolation`).
+- **No non-quote spot liabilities.** If the account also has a spot liability, it must be exactly one liability and it must be the market's own quote asset in a borrow position (`math/margin.rs:666-673`) — a non-USDT borrow alongside an Isolated-tier position is rejected.
+- **Reduce-only escape hatch.** These three checks are only enforced for accounts that are *not* already in reduce-only mode (`!user.is_reduce_only()`, `math/margin.rs:653`, `677`) — an account that ends up over these limits (e.g. after an admin re-tiers a market underneath it) is forced into reduce-only with respect to further risk-increasing action rather than being left in an unresolvable state.
+
+These are the on-chain rules behind the market-specs summary that Isolated tier "requires the user account refrain / disable cross margin trading" — see [Market Specs — Contract Tier](/protocol/trading/market-specs#contract-tier).
+
+## Liquidation priority across tiers
+
+`ContractTier` and `AssetTier` share a common safety ranking (`ContractTier::is_as_safe_as` / `is_as_safe_as_contract` / `is_as_safe_as_asset`, `state/perp_market.rs:91-108`) that is used once in the liquidation path, not for general position selection but specifically to gate `LiquidatePerpPnlForDeposit` (settling a market's negative PnL against a liquidatee's own deposits mid-liquidation):
+
+1. `calculate_user_safest_position_tiers` (`math/margin.rs:198-223`) scans every open perp position and spot liability on the account and returns the **single safest tier** present across each (the minimum `ContractTier` ordinal among open perp liabilities, and the minimum `AssetTier` ordinal among open spot liabilities).
+2. `liquidate_perp_pnl_for_deposit` (`controller/liquidation.rs:3093-3096`) then requires the market being settled to be *at least as safe* as that safest tier (`contract_tier.is_as_safe_as(&safest_tier_perp_liability, &safest_tier_spot_liability)`). If it isn't — `is_contract_tier_violation` — this settlement path is not permitted for that market while the account still holds a safer-tier liability open.
+
+In effect: a keeper cannot use this particular settlement action against a riskier-tier market's negative PnL while the account still holds an open liability in a safer tier — that safer-tier liability has to be resolved through the ordinary liquidation flow first. This is the one place contract tier feeds directly into liquidation sequencing; margin requirements themselves (`margin_ratio_initial` / `margin_ratio_maintenance`, `imf_factor`) are configured per market independently of tier and are not derived from it in code.
+
+## No insurance backstop below Tier C
+
+Speculative, Highly Speculative, and Isolated markets carry an insurance cap of \$0 (`INSURANCE_SPECULATIVE_MAX`, `math/constants.rs:147`, reused for all three tiers in the admin match at `instructions/admin.rs:1503-1508`). Bad debt in these markets skips the shared insurance fund entirely and falls straight to the market's own fee-pool clawback, then [socialised loss](/protocol/insurance-fund#what-is-socialised-loss). See [Insurance Fund — Insurance coverage by contract tier](/protocol/insurance-fund#insurance-coverage-by-contract-tier) for the full bankruptcy-resolution waterfall.

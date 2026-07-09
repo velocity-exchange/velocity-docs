@@ -1,0 +1,101 @@
+# Withdrawal & Borrow Limits
+
+Every withdrawal and every new borrow is checked against your own account health, but it is **also** checked against a second, independent set of market-level guard rails. These market-level checks exist to protect a spot market's liquidity buffer for *all* depositors — they can throttle or reject an action even when the requesting account is comfortably above its margin requirement.
+
+<Callout type="important">
+These limits are **not** a margin or liquidation check. They apply on top of (not instead of) `meets_withdraw_margin_requirement` — see [Withdraw and Close Account](/protocol/getting-started/withdraw-and-close-account). A perfectly healthy account can still have a withdrawal or borrow rejected because the *market* it's withdrawing from is near its liquidity limit.
+</Callout>
+
+There are two independent mechanisms:
+
+1. **Rolling withdrawal/borrow limits** — a always-on formula, recalculated on every action, that caps how far a market's deposit base can drain or its borrows can grow relative to its own 24-hour trailing averages (`check_withdraw_limits`, `math/spot_withdraw.rs`).
+2. **The per-market withdraw guard threshold** — a hard, admin-configured notional cap that pauses withdrawals on a market pending review (see [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold)).
+
+Both are enforced on the same code path used by withdrawals, borrows, subaccount-to-subaccount transfers (`handle_transfer_deposit`, `handle_transfer_pools`), and the settlement leg of token swaps (`handle_end_swap`) — see [What is Borrow & Lend?](/protocol/borrow-lend) for how deposits/borrows relate to swaps and cross-collateral.
+
+## Rolling withdrawal & borrow limits
+
+`check_withdraw_limits` runs on every withdraw-shaped action against the affected spot market. It computes, from the market's current balances and its 24-hour token/utilization TWAPs (`deposit_token_twap`, `borrow_token_twap`, `utilization_twap` — `state/spot_market.rs`), two bounds:
+
+* **`min_deposit_token`** — the lowest the market's total deposits are allowed to fall to.
+* **`max_borrow_token`** — the highest the market's total borrows are allowed to rise to.
+
+Each bound is the *stricter* of two independent calculations — a level/TWAP-drift check and a utilization check — so whichever constraint binds first wins.
+
+### Level check (`calculate_min_deposit_token_amount` / `calculate_max_borrow_token_amount`)
+
+**Minimum deposits.** The floor on deposits is the lower of "75% of the deposit TWAP" or "deposit TWAP minus the withdraw guard threshold":
+
+```
+min_deposit_token = deposit_token_twap − max(deposit_token_twap / 4, min(withdraw_guard_threshold, deposit_token_twap))
+```
+
+A larger guard threshold subtracts more from the TWAP, so it *loosens* this floor — a market with a high guard threshold can also see steeper level checks. If the threshold is at or above the TWAP, the floor collapses to 0 (`math/spot_withdraw.rs:14-26`).
+
+**Maximum borrows.** The ceiling on borrows depends on whether the market is the main pool (`pool_id == 0`) or an [isolated pool](/protocol/how-it-works/isolated-pools) (`pool_id > 0`), since isolated pools are tuned to tolerate materially higher utilization:
+
+| | Main pool (`pool_id == 0`) | Isolated pool (`pool_id > 0`) |
+|---|---|---|
+| Utilization-floor candidate | 1/3 (≈33%) of `min(deposits, deposit TWAP)` | 1/2 (50%) of `min(deposits, deposit TWAP)` |
+| TWAP-drift candidate | `borrow_token_twap` + 1/5 (20%) of `min(deposits, deposit TWAP)` | `borrow_token_twap` + 1/3 (≈33%) of `min(deposits, deposit TWAP)` |
+| Hard ceiling | 13/14 (≈92.9%) of `min(deposits, deposit TWAP)` | 19/20 (95%) of `min(deposits, deposit TWAP)` |
+
+The candidate value is `max(utilization-floor candidate, TWAP-drift candidate)`, capped at the hard ceiling, then floored at the market's `withdraw_guard_threshold` and capped again at `max_token_deposits × max_token_borrows_fraction` if that fraction is configured (`calculate_max_borrow_token_amount`, `math/spot_withdraw.rs:28-63`). In effect: borrows can grow by roughly 20% (main pool) or 33% (isolated) beyond the trailing borrow TWAP per window, but never above the pool's hard utilization ceiling.
+
+### Utilization check (`calculate_token_utilization_limits`)
+
+Separately, the market computes a maximum tolerable utilization for this action:
+
+```
+max_withdraw_utilization = max(optimal_utilization, utilization_twap + (100% − utilization_twap) / 2)
+```
+
+— i.e. never below the market's target `optimal_utilization`, and otherwise halfway between the current 24-hour utilization TWAP and 100%. This is translated back into token terms:
+
+* `min_deposit_tokens_for_utilization = borrow_token_amount / max_withdraw_utilization`, capped so it never blocks withdrawals once the resulting deposits would still exceed the guard threshold.
+* `max_borrow_tokens_for_utilization = max_withdraw_utilization × deposit_token_amount`, floored at the guard threshold so it never blocks small borrows.
+
+(`math/spot_withdraw.rs:110-146`)
+
+### Combining the checks
+
+```
+min_deposit_token = max(level-check min deposit, utilization-check min deposit)   // stricter = higher
+max_borrow_token  = min(level-check max borrow,  utilization-check max borrow)    // stricter = lower
+```
+
+The action is then validated against the market's *post-action* balances:
+
+* If the account's resulting position in this market is a **borrow**, both conditions must hold: `borrow_token_amount ≤ max_borrow_token` **and** `deposit_token_amount ≥ min_deposit_token`.
+* Otherwise (the account stays a depositor, or no specific account is being checked), only `deposit_token_amount ≥ min_deposit_token` is required.
+
+(`check_withdraw_limits`, `math/spot_withdraw.rs:148-226`)
+
+<Callout type="info">
+A withdrawal that draws an account's deposit balance down to zero and then keeps going — opening a **borrow** — is checked more strictly than a withdrawal that only reduces an existing deposit, because it additionally has to clear the `max_borrow_token` ceiling.
+</Callout>
+
+### Small-depositor exception
+
+If the global check fails, one narrow exception can still let a withdrawal through: `check_user_exception_to_withdraw_limits` permits a depositor to withdraw their own principal if they have never net-withdrawn more than they've deposited, their position has always been a net-positive deposit, and their resulting deposit balance plus the amount withdrawn stays under **1/10th of the market's `withdraw_guard_threshold`**. This lets small, straightforward depositors exit even while a market-wide limit is otherwise binding (`math/spot_withdraw.rs:65-108`).
+
+## The per-market withdraw guard threshold
+
+Independent of the rolling calculation above, each spot market carries a single admin-set `withdraw_guard_threshold` (token-precision units) that feeds directly into every formula above — and also acts as the market's designated "small market" cutout: deposits below it are never blocked from withdrawal, and borrows below it are never blocked from opening.
+
+Setting it is validated against a hard notional cap and requires only the **warm-or-cold** admin key (`check_warm`), not cold-only:
+
+* Max notional: **≈\$10,000**, priced at the greater of the live oracle price and its 5-minute TWAP (`MAX_WITHDRAW_GUARD_THRESHOLD_NOTIONAL`, `math/constants.rs:216`; `validate_withdraw_guard_threshold`, `validation/spot_market.rs:45-70`).
+* Authority: `AdminUpdateSpotMarketWithdrawGuardThreshold` requires `check_warm(&admin.key(), &state)` (`instructions/admin.rs:3931-3942`), and `has_one = oracle` on the spot market so the correct oracle is always used to price the cap.
+
+Full mechanics — including why the notional cap exists and how it interacts with oracle swaps — are documented in [Protocol Guard Rails § Withdraw Guard Threshold](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold).
+
+## Where this shows up for you
+
+* **Withdrawals and borrows** (`handle_withdraw`) — the most common place you'll see this; see [Withdraw and Close Account](/protocol/getting-started/withdraw-and-close-account).
+* **Subaccount transfers** (`handle_transfer_deposit`, `handle_transfer_pools`) — moving collateral between your own subaccounts still draws down the source market, so it's checked too.
+* **Token swaps** (`handle_end_swap`) — the sell-leg of a swap is a withdrawal from that market's perspective; see [What is Borrow & Lend?](/protocol/borrow-lend).
+
+<Callout type="warning">
+If a withdrawal or borrow fails with a "daily withdraw limit" style error (`ErrorCode::DailyWithdrawLimit`) or a "market withdraws paused" error, check whether the market itself is near its rolling limit or has a tripped guard threshold before assuming there's an issue with your account — these are market-wide conditions, not account-specific ones.
+</Callout>

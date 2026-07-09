@@ -12,7 +12,7 @@
 
 *   There is no borrow initiation fee.
 
-*   Each spot market has an `ifFeeFactor` which carves out a portion of deposit-interest gains directly to that market's Insurance Fund. The Insurance Fund is 100% staker-owned on Velocity — there is no protocol-owned split of this carveout (see [Insurance Fund](/protocol/insurance-fund)).
+*   Each spot market takes two independent cuts off of deposit-interest gains before lenders are credited: an `ifFeeFactor` carveout that goes to that market's Insurance Fund (staker-owned, see [Insurance Fund](/protocol/insurance-fund)), and a separate `protocolFeeFactor` carveout that goes to a protocol-owned, withdrawable fee pool. Lenders receive the deposit interest net of both cuts.
 
 **Are there any risks to lending?**
 
@@ -24,7 +24,7 @@
 
 **Why can I not borrow a particular asset?**
 
-*   If you've deposited an asset as collateral (say USDC or SOL); you can't borrow that asset until you have fully withdrawn it from the platform.  
+*   If you've deposited an asset as collateral (say USDT or SOL); you can't borrow that asset until you have fully withdrawn it from the platform.  
 
 **What is the LTV limit for borrows against SOL?**
 

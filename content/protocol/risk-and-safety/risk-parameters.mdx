@@ -8,15 +8,15 @@ On Velocity, to prevent market manipulation and protect users during volatile ev
 
 These formulas are defined below:
 
-Oracle-mark divergence = `(mark - oracle) * max_spread`
+Oracle-mark divergence = `(reference_price - oracle_twap_{5 minutes}) / reference_price`
 
-Oracle-TWAP-mark band = `within 10% of mark - oracle_twap_{5 minutes}`
+Oracle-TWAP-mark band = `within the greater of the market's configured divergence threshold or 10% (a protocol-wide floor)`
 
 ### Collateral Weight
 
 To guard against concentration risk from a single whale, when assets exceed a certain size, their asset weights can be discounted.
 
-Size Weightage = `1.1 / (weight * sqrt{size} * imf_factor)`
+Size Weightage = `min(weight, 1.1 / (1 + sqrt{size} * imf_factor))`
 
 Additionally, liabilities (borrows, perp positions, etc) can have premiums applied.
 
@@ -44,9 +44,9 @@ The following conditions will also expire/cancel the remainder(s) of orders:
 
 -   Out of favour oracle price divergence from maker's set limit price (post only orders)
 
-    -   oracle's price is 2.5% above the maker's ask limit price
+    -   oracle's price is above the maker's ask limit price by more than the market's initial margin ratio
 
-    -   oracle's price is 2.5% below the maker's bid limit price
+    -   oracle's price is below the maker's bid limit price by more than the market's initial margin ratio
 
 -   order fill would reduce free collateral below 0 (for taker orders)
 

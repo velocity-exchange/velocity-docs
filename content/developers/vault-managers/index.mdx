@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # Vault Managers
 
 Vaults are delegated trading pools where **depositors** provide capital and a **manager** (delegate) trades with it under strict withdrawal rules. Unlike Drift, where `drift-vaults` is a separate repo/program, Velocity Vaults are **first-party**: the `vaults` program (`programs/vaults/`, program ID `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` — unchanged from Drift) and its TypeScript client, [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk), live directly in the `velocity-v1` monorepo. This section covers the lifecycle and operations you need as a vault manager. You can manage vaults via the CLI (recommended, `packages/vaults-sdk/cli`) or programmatically with the SDK's `VaultClient`.

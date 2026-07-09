@@ -10,11 +10,11 @@ Velocity has no fuel (points/incentives) program — Drift's fuel-based keeper/u
 
 For matching orders, Keepers receive a portion of the taker fee as a **filler reward** — see [Filler Reward](/protocol/trading/trading-fees/other-trading-fees#definitions).
 
-For cancelling orders (that can be cancelled, see [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq)), Keepers will receive the `cancel_order_fee` on the state.
+For cancelling orders (that can be cancelled, see [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq)), Keepers will receive the `flat_filler_fee` from the market's fee structure, paid out via `pay_keeper_flat_reward_for_perps` when a keeper triggers an order expiry or reduce-only cancellation.
 
 Liquidation rewards for keepers are set per-market (`liquidator_fee`) and read directly from each market's on-chain account — check `PerpMarketAccount.liquidatorFee` / `SpotMarketAccount.liquidatorFee` for current values.
 
-Currently, the USDC reward function for keepers (_f_keeper_) is designed as:
+Currently, the USDT reward function for keepers (_f_keeper_) is designed as:
 
 $
 f_{\text{keeper}} = \textit{min}(0.01 \ast 
@@ -23,7 +23,7 @@ f_{\text{keeper}} = \textit{min}(0.01 \ast
 $
 
 where:
-$t_{\text{order}}$ is seconds since the order was placed
+$t_{\text{order}}$ is slots elapsed since the order was placed
 $f_{\text{user}}$ is the taker fee paid by the user who placed the order
 
 This is the lesser of a size-based reward (10% of the fee) and a time-based reward that grows with the fourth root of slots elapsed since the order was placed — see `calculate_filler_reward` (`math/fees.rs`) for the on-chain calculation.

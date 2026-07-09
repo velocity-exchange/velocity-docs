@@ -22,7 +22,7 @@ The streaming sweep reserves `max(net_user_pnl, 0)` in the P&L Pool on every dra
 
 ### Spot Market
 
-An individual spot market has a **Revenue Pool**, which stages the insurance fund's cut of protocol revenue (perp trading fees route to spot market 0 / USDC; spot lending and liquidation revenue stay in their own market) before it settles to the Insurance Fund vault.
+An individual spot market has a **Revenue Pool**, which stages the insurance fund's cut of protocol revenue (perp trading fees route to spot market 0 / USDT; spot lending and liquidation revenue stay in their own market) before it settles to the Insurance Fund vault.
 
 The Revenue Pool can collect fees from:
 
@@ -44,4 +44,4 @@ The protocol's own cut of these same fee sources goes directly to each market's 
 
 Currently, a Perpetuals Market can only pull from the Spot Market Revenue Pool and Insurance Fund for its quote currency.
 
--   In the future, it may be possible for a distressed associative perp market (BTC-PERP) to be able to pull funds from the associated spot market (BTC) revenue/insurance pool and immediately swap for USDC to top off its fee/P&L pool.
+-   In the future, it may be possible for a distressed associative perp market (BTC-PERP) to be able to pull funds from the associated spot market (BTC) revenue/insurance pool and immediately swap for USDT to top off its fee/P&L pool.

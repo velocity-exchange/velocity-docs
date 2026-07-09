@@ -33,7 +33,6 @@ const redirects = [
     ["/getting-started/wallet-setup/metamask-setup", "/protocol/getting-started/wallet-setup/metamask"],
     ["/getting-started/wallet-setup/bot-wallet-setup", "/developers/trading-automation#bot-wallet"],
     ["/getting-started/wallet-setup/wallet-faq", "/protocol/getting-started/wallet-setup/wallet-faq"],
-    ["/getting-started/passwordless-login", "/protocol/getting-started/wallet-setup/passwordless-login"],
     ["/getting-started/cross-collateral-deposits", "/protocol/getting-started/cross-collateral-deposits"],
     ["/getting-started/managing-subaccount", "/protocol/getting-started/managing-subaccounts"],
     ["/getting-started/delegated-accounts", "/protocol/getting-started/delegated-accounts"],
@@ -110,7 +109,6 @@ const redirects = [
     ["/legal-and-regulations/terms-of-use", "/protocol/legal-and-regulations/terms-of-use"],
     ["/legal-and-regulations/disclaimer", "/protocol/legal-and-regulations/disclaimer"],
     ["/legal-and-regulations/privacy-policy", "/protocol/legal-and-regulations/privacy-policy"],
-    ["/legal-and-regulations/competition-terms", "/protocol/legal-and-regulations/competition-terms"],
     // --- IA reorg: pages relocated into the "How Velocity Works" section
     ["/protocol/trading/oracles", "/protocol/how-it-works/oracles"],
     ["/protocol/trading/liquidations/liquidation-engine", "/protocol/how-it-works/liquidation-engine"],

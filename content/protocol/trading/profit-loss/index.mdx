@@ -19,7 +19,7 @@ A user's current position on Velocity is the cumulative sum of all their filled 
 ### Types of P&L
 
 - `Unrealised P&L (uP&L)`: Potential profit or loss on open positions based on current market price vs. your entry price. It fluctuates with the market.
-- `Settled P&L`: Actual realised profit and loss (can be settled without closing the position).
+- `Settled P&L`: The portion of your realised profit or loss that has been transferred out of the perpetual market and applied to your USDT balance — this can happen independently of closing the position.
 - `Claimable / Unsettled P&L`: Claimable P&L represents the portion of unsettled P&L that is available to be claimed at this moment. It is possible to have unsettled P&L that is not claimable due to insufficient funds in the P&L Pool, invalid oracle, or other reasons.
 
 <Callout type="info">
@@ -33,15 +33,14 @@ You open a position (e.g., buying BTC-PERP) creating **unsettled P&L** of $0 (no
 ### Price movement affects unsettled P&L
 As the price moves, the difference between the current oracle price and your cost basis creates **claimable / unsettled P&L**. This is the potential profit or loss on your open position.
 
-### Closing the position: realised P&L
-When you try to close the position, closing price is used to calculate your realised P&L. This is the actual profit or loss you lock in, based on the difference between the closing price and your cost basis.
-This portion becomes **settled P&L**, which you can then withdraw to your USDC balance. Withdrawing your profits (settled P&L) depends on the P&L pool. If the pool has enough funds, your profits are available right away. If not, you might need to wait for others to settle their losses before you can withdraw your profits.
+### Closing the position: realising P&L
+When you close (or reduce) the position, the closing price is used to calculate your **realised P&L**. This is the actual profit or loss you lock in, based on the difference between the closing price and your cost basis. *Note:* realising P&L does **not** settle it automatically — it only converts unrealised P&L into realised P&L that is still sitting unsettled in the perpetual market.
 
-### Withdrawal depends on P&L pool
-You decide to close your position by selling all or part of your contract. The closing price is used to calculate your **realised P&L**. This is the actual profit or loss you lock in, based on the difference between the closing price and your cost basis.
+### Settling P&L: a separate action
+Realised P&L only becomes **settled P&L** once a `settlePnl` action is submitted, moving it out of the perpetual market. This can be done by you, your delegate, or in some cases a third party.
 
-### Partial closes and settlement
-Settled P&L (a portion of realized P&L) becomes available for **withdrawal** from the [P&L pool](/protocol/how-it-works/profit-loss-pool) if the pool has enough funds. If not, you might need to wait for others to settle their losses before you can withdraw your profits.
+### Withdrawal depends on the P&L pool
+Once settled, your P&L becomes available for **withdrawal** from the [P&L pool](/protocol/how-it-works/profit-loss-pool) if the pool has enough funds. If not, you might need to wait for others to settle their losses before you can withdraw your profits.
 </Steps>
 
 </Callout>
@@ -55,7 +54,7 @@ The key difference lies in the availability for withdrawal:
 
 ### P&L Settlement and Withdrawal
 
-- Settling P&L moves profit/loss from a perpetual market to your USDC balance.
+- Settling P&L moves profit/loss from a perpetual market to your USDT balance.
 - Requires claiming settled P&L before withdrawal.
 - P&L pool liquidity determines if settled [P&L pool](/protocol/how-it-works/profit-loss-pool) is claimable immediately.
 
@@ -75,7 +74,7 @@ The P&L settled this way shows up in the `Unrealised P&L` tab, specifically in t
 
 ### Claiming Settled P&L
 
-1. On any [trades screen](https://app.velocity.exchange) navigate to the "Balances" tab.
+1. On any [trades screen](https://velocity.exchange) navigate to the "Balances" tab.
 2. Select "Claim" for specific positions or "Claim All".
 
 <img src="/assets/profit-loss-2.png" alt="" width="800" height="auto"></img>
@@ -91,7 +90,7 @@ Users can claim positive P&L when:
 <Callout type="warning">
 **Automatic P&L Settlement**
 
-P&L settlement is a permissionless action - anyone could settle two account's P&Ls at any time. 
+Settling a **negative** unrealised P&L is unconditionally permissionless — anyone can settle it for any account at any time. Settling a **positive** unrealised P&L on someone else's behalf, however, is only allowed when the market's P&L Pool has excess funds available, or when the caller is the position owner or their delegate.
 </Callout>
 
 Settling the P&L will improve the accounts health. 

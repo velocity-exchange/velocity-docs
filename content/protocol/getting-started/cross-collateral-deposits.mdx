@@ -1,12 +1,12 @@
 # Cross-collateral deposits
 
-By default, markets are quoted in USD and P&L is settled in USDC. All tokens deposited within the protocol can earn yield via Borrow/Lend. Until unrealised P&L is settled into your Balances, it will not earn (if profits) or be charged (if losses) the deposit/borrow interest respectively.
+By default, markets are quoted in USD and P&L is settled in USDT. All tokens deposited within the protocol can earn yield via Borrow/Lend. Until unrealised P&L is settled into your Balances, it will not earn (if profits) or be charged (if losses) the deposit/borrow interest respectively.
 
 Below is a table of assets supported by Velocity.
 
 Each asset counts towards margin for derivatives trading and has a weight applied to account for their respective volatilities.
 
-> For instance, depositing USDC gives users a 1:1 margin for derivatives trading, but depositing SOL (80% asset weight) means that 80% of the value of your SOL at the opening of your position will be available as margin for perpetual futures trading.
+> For instance, depositing USDT gives users a 1:1 margin for derivatives trading, but depositing SOL (80% asset weight) means that 80% of the value of your SOL at the opening of your position will be available as margin for perpetual futures trading.
 
 ## Margin Parameters
 
@@ -14,16 +14,6 @@ Each asset counts towards margin for derivatives trading and has a weight applie
 <br/>
 
 <AssetWeightsTable poolId={0} />
-
-### JLP Pool Asset Weights
-<br/>
-
-<AssetWeightsTable poolId={1} />
-
-### Exponent Pool Asset Weights
-<br/>
-
-<AssetWeightsTable poolId={3} />
 
 Initial Asset Weights are also scaled lower based on notional value of total deposits. As a reference, you can check out UI or the SpotMarket `get_scaled_initial_asset_weight` for this scale factor.
 
@@ -43,13 +33,3 @@ An asset's liability weight can be converted into an LTV ratio using:
 <br/>
 
 <LTVTable poolId={0} />
-
-### JLP Pool LTVs
-<br/>
-
-<LTVTable poolId={1} />
-
-### Exponent Pool LTVs
-<br/>
-
-<LTVTable poolId={3} />

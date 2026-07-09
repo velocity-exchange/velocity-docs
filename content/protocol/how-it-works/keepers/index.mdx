@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # Keepers
 
 ## Keeper Bots
@@ -8,21 +12,15 @@ Each Keeper holds its own orderbook (hence _decentralised_ orderbook).
 
 Keepers then listen to trigger conditions and match crossing orders and limit orders against the AMM when the users’ trigger or limit price is met.
 
+<Callout type="info">
+Keeper and DLOB fills apply to **perpetual** markets only. Velocity has no spot order book, so there are no spot orders for keepers to fill — spot markets exist only for collateral and [Borrow & Lend](/protocol/borrow-lend).
+</Callout>
+
 For performing this critical duty, the Keepers earn a fee for every trade they execute. Similar to liquidation bots, Keepers will compete for fees in a decentralised system; the most profitable Keepers are:
 
-<Steps>
-### Fastest
-
-Speed is a primary advantage in competing for fees.
-
-### Best price improvement for takers
-
-Keepers that provide better prices to takers gain a competitive edge.
-
-### Fulfil orders in the protocol’s desired sequence
-
-Keepers that execute orders in the desired order, oldest and largest first, are preferred.
-</Steps>
+- **Fastest** — Speed is a primary advantage in competing for fees.
+- **Best price improvement for takers** — Keepers that provide better prices to takers gain a competitive edge.
+- **Fulfil orders in the protocol’s desired sequence** — Keepers that execute orders in the desired order, oldest and largest first, are preferred.
 
 Reference implementations for the filler and trigger Keepers are provided: [Keeper Bots](/developers/trading-automation).
 

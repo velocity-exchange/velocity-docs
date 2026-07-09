@@ -10,8 +10,8 @@ The borrow interest rate is a function of utilization (U), or how much capital i
 
 ### Utilization Rate and Liquidity
 
-- If **U** is high -> there is abundant capital within the system and the protocol users are given incentives in the form of low-interest rates to encourage borrowing
-- If **U** is low -> capital within the system is scarce and the protocol will increase interest rates to incentivise more capital supply and repayment of debt.
+- If **U** is high -> most of the pool is already lent out, so free liquidity is scarce; the protocol charges **higher** interest rates to incentivise repayment of debt and attract new deposits.
+- If **U** is low -> most of the pool is sitting idle and liquidity is abundant; the protocol charges **lower** interest rates to encourage borrowing.
 
 ### Multi-Kink Interest Rate Model
 To balance capital efficiency with liquidity protection, Velocity uses a **multi-kink model**. This allows linear rates up to the optimal utilization point, and then introduces increasingly steeper rate hikes as utilization increases, especially in the 85–100% range.

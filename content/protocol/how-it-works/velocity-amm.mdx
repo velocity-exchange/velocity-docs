@@ -14,17 +14,23 @@ Velocity forked its AMM design from Drift Protocol v2, which itself iterated on 
 
 - **Fee Pool:** comprised of taker fee amounts (multiple methods for fee discounts to be implemented in the future)
 
-- **Fee Tranches:** percentage allocations from the fee pool to be distributed amongst the following operations:
-
-  - Adjusting Peg (alternatively, "repeg")
-
-  - `k` adjustments
-
-  - (Capped) funding payments
+- **Shared Curve Budget:** peg adjustments (repeg) and `k` adjustments draw from a single shared budget — the AMM's retained fees (net of distributions). There is no separate allocation per operation; whichever adjustment runs spends down the same pool. Funding payments are not part of this budget: outflows the AMM pays in funding are separately capped at 1/3 of the AMM's retained equity per funding period, so a sustained imbalance can't drain the AMM in one period.
 
 ## Velocity's AMM
 
 Velocity's AMM is still an AMM using a constant product curve but now includes external [Backstop AMM Liquidity (BAL)](/protocol/glossary) a concentration factor, and dynamic spread/peg that programmatically update prior to filling trades.
+
+### Liquidity Concentration
+
+The curve (`x * y = k`) is bounded on both sides by `min_base_asset_reserve` and `max_base_asset_reserve` — the reserves at which the curve is considered exhausted and stops quoting further. `concentration_coef` sets how tightly those bounds sit around the AMM's balanced (terminal) reserves, i.e. `sqrt_k`:
+
+`max_base_asset_reserve = sqrt_k * concentration_coef / CONCENTRATION_PRECISION`
+
+`min_base_asset_reserve = sqrt_k * CONCENTRATION_PRECISION / concentration_coef`
+
+A `concentration_coef` close to `CONCENTRATION_PRECISION` (1x) pulls both bounds in tight around `sqrt_k` — liquidity is concentrated near the peg, so trades close to mid get the lowest slippage, but the curve exhausts sooner as inventory skews. A larger `concentration_coef` (up to `MAX_CONCENTRATION_COEFFICIENT`, ≈1.4142x) pushes the bounds further apart, spreading the same `k` across a wider reserve range — more headroom for inventory to skew before the AMM stops quoting, at the cost of higher slippage near the edges of that range.
+
+Admins tune this indirectly through a `concentration_scale` parameter rather than setting `concentration_coef` directly: `concentration_coef = CONCENTRATION_PRECISION + (MAX_CONCENTRATION_COEFFICIENT - CONCENTRATION_PRECISION) / concentration_scale`. A larger scale yields a coefficient closer to `CONCENTRATION_PRECISION` (tighter, more concentrated liquidity); a smaller scale (minimum 1) pushes the coefficient toward its `MAX_CONCENTRATION_COEFFICIENT` ceiling (looser, more spread out). An update is rejected outright if the resulting bounds would no longer bracket the AMM's current net position.
 
 The mechanics behind the dynamic spread and peg are:
 
@@ -51,11 +57,13 @@ The long and short spread can be asymmetric due to changes in the underlying inv
 
 The bid/ask points on the curve are calculated as follows (exact efficient integer math method calculated on contract):
 
-` bid_quote_reserve = quote_reserve - (quote_reserve / (100%/short_spread))`
+` bid_quote_reserve = quote_reserve - (quote_reserve / (100% / ((short_spread - reference_price_offset) / 2)))`
 
-`ask_quote_reserve = quote_reserve + (quote_reserve / (100%/long_spread))`
+`ask_quote_reserve = quote_reserve + (quote_reserve / (100% / ((long_spread + reference_price_offset) / 2)))`
 
-The `quote_reserve` is defined as the total AMM reserves of the quote asset. Then using the same k to back out the base_reserve for the bid/ask curves as well.
+Only half of each spread is applied to the reserve shift (the spread is a bid-ask width, so each side moves by half of it from the reservation price), and `reference_price_offset` shifts both bid and ask together when the reservation price itself is offset from the peg-implied price. The `quote_reserve` is defined as the total AMM reserves of the quote asset. Then using the same k to back out the base_reserve for the bid/ask curves as well.
+
+**What drives `reference_price_offset`:** unlike the spread, which widens the band around the reservation price, `reference_price_offset` shifts the whole band together — a move of the reservation price itself. It's only active while `curve_update_intensity > 100` (held at zero below that), and its magnitude is capped at half of `max_spread` (up to ~100 bps once `curve_update_intensity >= 200`). The offset tracks a blend of the mark-vs-oracle premium over several windows (a fast twap, a slower twap, and the 24h average funding rate expressed as a price premium, each clamped to the max offset and then averaged) combined with the AMM's inventory skew (how close its net position sits to its available liquidity on either side, past a configurable deadband). It only applies when the sign of that premium agrees with the sign of the inventory skew — i.e. when market pricing and the AMM's own inventory lean the same way — otherwise the offset is zero. A sign flip between updates is smoothed across slots rather than snapping instantly. In effect, when the AMM is carrying a persistent premium/discount that lines up with which side it's already leaning, `reference_price_offset` nudges both bid and ask toward flattening that inventory, without changing the spread's total width.
 
 ### Oracle Live Pricing
 
@@ -72,27 +80,42 @@ The mark price is updated each time the oracle updates its price and when the co
 
 ### Oracle Live Pricing Sequence
 
-Every time a trader wants to fill against the AMM, the AMM will be updated in the same slot with a valid oracle price (see [Oracles](/protocol/how-it-works/oracles)).
+Every time a trader wants to fill against the AMM, the AMM will be updated in the same slot with a valid oracle price (see [Oracles](/protocol/how-it-works/oracles)):
 
-<Steps>
-### Step: Check the oracle price
-
-The AMM checks the oracle price.
-
-### Step: Move peg toward oracle
-
-The AMM moves its peg toward the oracle price.
-
-### Step: Set bid/ask spread
-
-The AMM sets its bid/ask spread versus its reservation price.
-
-### Step: Fill order
-
-The order will fill according to the bid/ask price if the order has lived longer than the minimum duration for AMM fills (10 slots).
-
-</Steps>
+1. **Check the oracle price** — the AMM checks the oracle price.
+2. **Move peg toward oracle** — the AMM moves its peg toward the oracle price.
+3. **Set bid/ask spread** — the AMM sets its bid/ask spread versus its reservation price.
+4. **Fill order** — the order will fill according to the bid/ask price if the order has lived longer than the minimum duration for AMM fills (10 slots).
 
 The overall spread will increase if the AMM is heavily levered or in debt. The oracle price and reservation price are always within this spread. Effective leverage is a function of many market stats, including Inventory P\&L and collateral within the fee pool in the terminal state.
 
 The reservation (AMM) price is the `quote/base reserves * peg`.
+
+## AMM JIT Participation
+
+Beyond quoting its own curve, the AMM can also co-fill a resting orderbook maker order just-in-time (JIT) — stepping in alongside that maker, at the maker's price, when doing so improves the AMM's own inventory. This trades away some of the AMM's natural curve spread in exchange for rebalancing.
+
+<Callout type="info">
+JIT only fires against resting maker orders. Filling directly against the AMM's own curve still requires an order to have lived past the minimum AMM-fill duration (10 slots, see above).
+</Callout>
+
+### When the AMM will JIT-make
+
+The AMM only considers JIT-making a fill when all of the following hold:
+
+- **`amm_jit_intensity` is non-zero.** This is the market's admin-configured JIT dial, ranging 0–100. `0` disables JIT participation entirely; larger values scale up how much of a fill the AMM is willing to take (see sizing below).
+- **The fill would improve the AMM's own balance.** The AMM only offers JIT liquidity when the taker's flow works to reduce the market's net imbalance — not when it would add to it.
+- **The taker isn't already guaranteed to land on the AMM's own curve next round.** A market order with no limit price, once its auction completes, fills on the curve automatically on the next round regardless — JIT is skipped in that case rather than filling the same flow twice.
+
+### Sizing a JIT fill
+
+Sizing is built from several caps, applied in sequence:
+
+1. **50% of the maker's size.** The AMM can never take more than half of what the resting maker order is offering: `max_jit_amount = maker_base_asset_amount / 2`.
+2. **Wash-trade guard.** With no valid oracle price, JIT participation is disabled outright for that fill. Otherwise, if the fill price sits on the wrong side of oracle by more than 5 bps — a taker buying below `oracle − 5bps`, or selling above `oracle + 5bps` — the 50% cap from step 1 is shrunk further, scaled down by how far the price has strayed past that 5 bps band relative to the AMM's own opposite-side spread. The further past the band, the smaller the AMM's participation.
+3. **Imbalance-based sizing.** The AMM compares its maximum open bids against its maximum open asks (the same bounds `concentration_coef` sets, see above). If the larger side is at least 1.5x the smaller side, the book is considered imbalanced and the AMM is willing to take up to the *full* size of the fill; otherwise it caps itself to 25% of the fill size.
+4. **Intensity scaling.** The step 3 result is scaled by `amm_jit_intensity / 100` — an intensity of 50, for instance, halves whatever step 3 allowed.
+5. **Inventory-flip guard.** The intensity-scaled amount is capped at the AMM's current absolute net position — a JIT fill can flatten the AMM's inventory but never flip it onto the opposite side.
+6. The final JIT size is the smaller of the wash-guard-adjusted cap from steps 1–2 and the imbalance/intensity-scaled amount from steps 3–5, standardized to the market's order step size.
+
+Every JIT fill happens at the resting maker's price, not the AMM's own curve price — the gap between the two is the cost (or benefit) the AMM absorbs in exchange for rebalancing.

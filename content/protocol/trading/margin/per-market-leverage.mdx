@@ -8,36 +8,39 @@ This allows higher leverage on stable assets and stricter limits on more volatil
 
 ## How Per-Market Leverage Works
 
-Each perpetual position stores its own `max_margin_ratio`, which defines the maximum leverage allowed for that market.
+Each perpetual market defines its own maximum leverage through its protocol-set **initial margin ratio** (`margin_ratio_initial`), with an additional surcharge (the IMF factor) applied to large positions. This is the *most* leverage anyone can use in that market.
 
-When checking a position, Velocity compares:
+On top of the market cap, you can optionally hold yourself to a **lower** limit — either account-wide (`account.max_margin_ratio`) or per position (`position.max_margin_ratio`). These overrides can only make your limit more conservative; they can never raise it above the market's cap.
+
+When evaluating a position, Velocity uses the **largest** (most conservative) applicable margin ratio — equivalently, the **lowest** leverage:
 
 ```
-effective_margin_ratio = min(position.max_margin_ratio, account.max_margin_ratio)
+effective_margin_ratio = max(
+    market.margin_ratio_initial,   // protocol cap for the market (+ IMF surcharge on large size)
+    account.max_margin_ratio,      // your optional account-wide cap
+    position.max_margin_ratio      // your optional per-position cap
+)
 ```
 
-| Market    | Account Limit | Market Limit | Effective Leverage | Result                |
-| --------- | ------------: | -----------: | -----------------: | --------------------- |
-| BTC-PERP  |           10x |          20x |            **10x** | Account limit applies |
-| PUMP-PERP |           10x |           5x |             **5x** | Market limit applies  |
+| Market   | Market cap (`margin_ratio_initial`) | Your optional override | Effective leverage | Result                          |
+| -------- | ----------------------------------: | ---------------------: | -----------------: | ------------------------------- |
+| SOL-PERP |                     20x (5% margin) |                   none |            **20x** | Market cap applies              |
+| SOL-PERP |                     20x (5% margin) |                    10x |            **10x** | Your override is more conservative |
 
-The lower value is always used, ensuring positions can’t exceed the most conservative limit.
+_Illustrative. SOL-PERP's live initial margin ratio is 5% (20x); each market's current values live on-chain._
 
-From this ratio, the protocol calculates the **maximum position size** a trader can open with their available collateral, and the **liquidation threshold** for that specific position.
+A higher margin ratio means lower leverage, so the most conservative limit always wins. From this ratio, the protocol derives the **maximum position size** you can open with your available collateral and the **liquidation threshold** for that position.
 
 ## Risk and Control
 
-Previously, all risk was managed at the account level, which meant that a large loss in one market could impact every position.
+Per-market leverage gives traders more flexibility and control:
 
-With per-market leverage, each market is evaluated independently. Furthermore, per-market leverage gives traders more flexibility and control:
+* Apply different leverage limits for different strategies or market conditions.
+* High-risk markets can be capped tightly without restricting more stable ones.
+* Each market’s maximum leverage and liquidation threshold are clear and predictable.
 
-* Apply different leverage levels for different strategies or market conditions.
-* High-risk markets can be capped without restricting more stable ones.
-* Because risk is contained at the market level, traders eliminate the chance of cascading liquidations.
-* Each market’s leverage and liquidation levels are clear and more predictable.
-
-<Callout type="info">
-Example: A trader runs 10x leverage on BTC-PERP and 5x leverage on PUMP-PERP. If PUMP-PERP is liquidated, BTC-PERP remains unaffected, keeping the rest of the account stable.
+<Callout type="warning">
+Per-market leverage caps do **not** isolate risk between positions. Unless a position is an [isolated position](/protocol/trading/margin), all of a subaccount's positions share one pool of collateral and one maintenance-margin requirement — a large loss on one market (say PUMP-PERP) still draws down the collateral backing your other positions (say BTC-PERP) and can contribute to a cross-margin liquidation. To fully segregate a position's collateral and liquidation, use an **isolated position**.
 </Callout>
 
 ## Code Implementation

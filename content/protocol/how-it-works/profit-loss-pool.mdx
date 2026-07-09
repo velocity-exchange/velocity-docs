@@ -6,4 +6,4 @@ The **P&L Pool** is each perpetual market's pool of settled funds available for 
 Calling `settlePNL` does not affect open positions — it only settles the funds available in the P&L Pool for withdrawal. It's important to recognise the difference between **settling P&L** and **realising P&L** — see [Introduction to Profit & Loss](/protocol/trading/profit-loss).
 </Callout>
 
-Any account can call `settlePNL` permissionlessly to settle all unrealised P&L for a position, adding to (or subtracting from) the market's P&L Pool.
+Any account can call `settlePNL` permissionlessly to settle a position's negative unrealised P&L into the P&L Pool. Settling *positive* P&L out to the user is more restricted: it only succeeds if the P&L Pool has sufficient excess to cover it, or if the caller is the position owner or their delegate.

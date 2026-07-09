@@ -2,21 +2,22 @@
 
 ### Withdraw collateral
 
-To withdraw collateral, ensure you meet the following requirements:
+You can withdraw collateral at any time, **including while you hold open positions or borrows**, as long as the withdrawal leaves your account above its **initial margin requirement** (`meets_withdraw_margin_requirement`). Partial withdrawals are fine — you can withdraw up to your available free collateral. To check how much is withdrawable, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://velocity.exchange/portfolio) screen.
 
-- No open positions.
-- No open borrows (check your 'Balances' page - opens in a new tab).
-- No unsettled PnL (settle any PnL before proceeding).
-
-You can partially withdraw collateral if you have enough initial free collateral. To check your collateral, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://app.velocity.exchange/portfolio) screen.
 <img src="/assets/withdraw-and-close-account-3.png" alt="" width="800" height="auto"></img>
+
+Large withdrawals may additionally be throttled by a spot market's rolling withdrawal limits, independent of your own margin — see [Withdrawal & Borrow Limits](/protocol/borrow-lend/withdrawal-limits) and [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold).
+
+<Callout type="info">
+Fully **deleting** a subaccount is stricter than withdrawing: an account can only be deleted once it holds no open positions, no open borrows, no unsettled PnL, and no remaining balances (see [Recovering Funds](#recovering-funds) below).
+</Callout>
 
 <Callout type="warning">
 Do not delete your account or subaccounts if you're staking at Insurance Vaults. This may cause difficulty unstaking.
 </Callout>
 
 <Callout type="error">
-Referred accounts cannot be deleted. 
+If you have referred other users (you are a referrer), your **main account (subaccount 0)** cannot be deleted, because it anchors your referral relationships (`validate_user_deletion`). Your other subaccounts can still be deleted.
 </Callout>
 
 ### Dynamic rent reclaiming
@@ -31,13 +32,13 @@ A keeper holding the `UserFlag` hot-admin role periodically triggers the cleanup
 
 **Excess Fee**
 
-Users can reclaim the excess fee after a 13-day waiting period. Visit the [Accounts Page](https://app.velocity.exchange/portfolio/accounts) in your portfolio. Look for the "Reclaimable Rent" section and click "Claim" to retrieve any excess fees paid during account creation. 
+Users can reclaim the excess fee after a 13-day waiting period. Visit the [Accounts Page](https://velocity.exchange/portfolio/accounts) in your portfolio. Look for the "Reclaimable Rent" section and click "Claim" to retrieve any excess fees paid during account creation. 
 
 <img src="/assets/withdraw-and-close-account-1.png" alt="" width="800" height="auto"></img>
 
 **Base Rent**
 
-To reclaim the base rent (0.035 SOL in the example above), you'll need to delete your Velocity account via the [Accounts Page](https://app.velocity.exchange/portfolio/accounts)
+To reclaim the base rent (0.035 SOL in the example above), you'll need to delete your Velocity account via the [Accounts Page](https://velocity.exchange/portfolio/accounts)
 
 Click the trash button next to your main account. This will permanently delete your account history and instantly redeem your base account rent. No further steps are required.
 
