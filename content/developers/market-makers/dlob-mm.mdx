@@ -94,10 +94,12 @@ Oracle offset orders are the **most efficient way to quote on Velocity**. Instea
 **Why this matters:** With fixed price limit orders, you need to cancel and replace every time the oracle moves (thousands of transactions per day). With oracle offset orders, you place them once and they track the oracle automatically. A typical MM using oracle offsets sends **~30 transactions per day** (just to adjust spread or size) vs **thousands** with cancel-replace.
 
 **How it works:**
-- Set `orderType: OrderType.ORACLE` (not `LIMIT`)
+- Keep `orderType: OrderType.LIMIT` — oracle tracking comes from `oraclePriceOffset`, not from the order type
 - Set `oraclePriceOffset` instead of `price`, this is the offset in PRICE_PRECISION units
 - Positive offset = above oracle, negative = below oracle
 - The onchain program evaluates `oracle_price + offset` at fill time
+
+> **Don't use `OrderType.ORACLE` for maker quotes.** On-chain, `OrderType::Oracle` is classified as a market/auction (taker-style) order, not a restable maker order — it's for takers who want to execute immediately at a price relative to the oracle, not for resting liquidity. Oracle-tracking for resting orders is controlled entirely by `oraclePriceOffset`, which works on a `LIMIT` order just as well. The examples below correctly use `OrderType.LIMIT` with `oraclePriceOffset` set.
 
 > **`oraclePriceOffset` is a `BN`, not a `number`.** It's stored on-chain as an `i64`, so the SDK's `OrderParams.oraclePriceOffset` type is `BN`. Pass the `BN` directly (don't call `.toNumber()` on it) — the examples below do this correctly.
 
@@ -118,7 +120,7 @@ const offsetBN = new BN(spreadOffset * PRICE_PRECISION.toNumber());
 
 await velocityClient.placeOrders([
   {
-    orderType: OrderType.ORACLE,
+    orderType: OrderType.LIMIT,
     marketType: MarketType.PERP,
     marketIndex: 0,
     direction: PositionDirection.LONG,
@@ -127,7 +129,7 @@ await velocityClient.placeOrders([
     postOnly: PostOnlyParams.MUST_POST_ONLY,
   },
   {
-    orderType: OrderType.ORACLE,
+    orderType: OrderType.LIMIT,
     marketType: MarketType.PERP,
     marketIndex: 0,
     direction: PositionDirection.SHORT,
@@ -168,7 +170,7 @@ const txSig = await velocityClient.cancelAndPlaceOrders(
   },
   [
     {
-      orderType: OrderType.ORACLE,
+      orderType: OrderType.LIMIT,
       marketType: MarketType.PERP,
       marketIndex: 0,
       direction: PositionDirection.LONG,
@@ -177,7 +179,7 @@ const txSig = await velocityClient.cancelAndPlaceOrders(
       postOnly: PostOnlyParams.MUST_POST_ONLY,
     },
     {
-      orderType: OrderType.ORACLE,
+      orderType: OrderType.LIMIT,
       marketType: MarketType.PERP,
       marketIndex: 0,
       direction: PositionDirection.SHORT,
