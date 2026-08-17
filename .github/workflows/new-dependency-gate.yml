@@ -51,9 +51,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           {
+            echo "<!-- new-dependency-gate -->"
             echo "### :package: New dependencies in this PR"
             echo
             echo "This PR adds packages that were not in the base lockfile. Confirm each one's"
@@ -65,7 +68,20 @@ jobs:
             awk -F'\t' '{print "| `" $1 "` | `" $2 "` |"}' /tmp/new-packages.txt
           } > /tmp/comment.md
 
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/comment.md
+          # Maintain a single sticky comment across re-pushes instead of piling one
+          # up per `synchronize` event. Falls back to a warning (not a hard failure)
+          # if the token can't write comments -- e.g. a fork PR, which gets a
+          # read-only GITHUB_TOKEN on `pull_request` -- so the gate below still runs.
+          existing_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq '[.[] | select(.body | contains("<!-- new-dependency-gate -->"))][0].id // empty' 2>/dev/null || true)
+
+          if [ -n "$existing_id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing_id" -f body=@/tmp/comment.md \
+              || echo "::warning::could not update the existing dependency-gate comment (read-only token on a fork PR?)"
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/comment.md \
+              || echo "::warning::could not post the dependency-gate comment (read-only token on a fork PR?)"
+          fi
 
           if echo "$LABELS" | grep -q "\"$OVERRIDE_LABEL\""; then
             echo "::notice::${{ steps.collect.outputs.count }} new package(s), signed off via '$OVERRIDE_LABEL'."
