@@ -1,0 +1,22 @@
+name: New dependency gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write # v2 deletes a stale label through the issues API
+
+jobs:
+  new-dependency-gate:
+    name: New dependency gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0 # required: the action diffs against the base commit
+      - uses: velocity-exchange/dependency-gate@e039f99f9238eafe289d9879caae848c450a1b8e # v2.0.0
+        with:
+          lockfiles: pnpm-lock.yaml
