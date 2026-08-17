@@ -72,7 +72,13 @@ jobs:
           # Read-only lookup -- GITHUB_TOKEN keeps read access even on a fork PR, but
           # fall back to "not found" on any hiccup rather than letting this step's
           # failure skip the enforcement step below.
-          id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+          #
+          # No --paginate: combined with --jq it runs the filter once per page and
+          # emits one result per page, which breaks this "just the id" query. This
+          # endpoint returns 30 comments/page, so a PR with more than 30 comments
+          # total could miss an existing marker comment on an earlier page and get a
+          # duplicate instead -- acceptable for now, not worth the added complexity.
+          id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
             --jq '[.[] | select(.body | contains("<!-- new-dependency-gate -->"))] | last | .id // empty' \
             2>/dev/null || true)
           echo "id=${id:-}" >> "$GITHUB_OUTPUT"
@@ -102,7 +108,7 @@ jobs:
                 echo
                 echo "No new packages remain in the watched lockfiles as of the latest push."
               } > /tmp/comment.md
-              gh api --method PATCH "repos/$REPO/issues/comments/$EXISTING_COMMENT_ID" -f body=@/tmp/comment.md \
+              gh api --method PATCH "repos/$REPO/issues/comments/$EXISTING_COMMENT_ID" -F body=@/tmp/comment.md \
                 || echo "::warning::could not update the existing dependency-gate comment (read-only token on a fork PR?)"
             fi
             exit 0
@@ -122,7 +128,7 @@ jobs:
           } > /tmp/comment.md
 
           if [ -n "$EXISTING_COMMENT_ID" ]; then
-            gh api --method PATCH "repos/$REPO/issues/comments/$EXISTING_COMMENT_ID" -f body=@/tmp/comment.md \
+            gh api --method PATCH "repos/$REPO/issues/comments/$EXISTING_COMMENT_ID" -F body=@/tmp/comment.md \
               || echo "::warning::could not update the existing dependency-gate comment (read-only token on a fork PR?)"
           else
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/comment.md \
