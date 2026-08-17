@@ -29,3 +29,10 @@ jobs:
 
       - name: Install dependencies (fails if pnpm-lock.yaml is out of sync)
         run: pnpm install --frozen-lockfile
+
+      - name: Fail on a stray lockfile
+        run: |
+          if git ls-files | grep -E '(^|/)(package-lock\.json|yarn\.lock)$'; then
+            echo "::error::pnpm-lock.yaml must be the only committed lockfile (see #73)"
+            exit 1
+          fi
