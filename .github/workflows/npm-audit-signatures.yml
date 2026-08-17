@@ -1,12 +1,17 @@
 name: npm audit signatures
 
 # Verifies registry signatures (and, where publishers provide them, provenance
-# attestations) for the resolved dependency tree. pnpm/bun don't implement this
-# check, so we resolve the tree with npm in a throwaway install for this job only.
+# attestations) for the dependency tree this repo actually installs.
 #
-# Non-blocking to start (continue-on-error: true): flip that off once the
-# baseline below is clean, so this becomes an enforced gate rather than noise
-# that gets ignored.
+# `npm audit signatures` is npm-only, but it reads node_modules rather than a
+# lockfile, so it can verify a pnpm-installed tree directly. That matters: an
+# `npm install` here re-resolves from the package.json ranges and audits
+# whatever npm prefers today (925 packages when measured) instead of what
+# pnpm-lock.yaml pins (892). Only the second set ever ships.
+#
+# Non-blocking to start (continue-on-error: true): flip that off once one run
+# has passed in CI, so this becomes an enforced gate rather than noise that
+# gets ignored.
 on:
   pull_request:
   push:
@@ -27,9 +32,20 @@ jobs:
         with:
           node-version: 24
 
-      - name: Resolve tree with npm and check signatures
-        run: |
-          set -euo pipefail
-          rm -f package-lock.json
-          npm install --ignore-scripts
-          npm audit signatures
+      # package.json pins pnpm by version and sha512, so corepack verifies the
+      # package manager itself before using it.
+      - name: Enable corepack
+        run: corepack enable
+
+      # --node-linker=hoisted lays the same locked versions out as real
+      # directories instead of symlinks into .pnpm. npm needs that here: reading
+      # the default symlinked layout, it pairs the alias directory name
+      # (@coral-xyz/anchor) with the aliased version (1.0.1) and aborts with
+      # ETARGET, because that name and version pair exists nowhere. The hoisted
+      # layout exposes the package's real name, so the alias resolves. This
+      # changes the layout only, never which versions are installed.
+      - name: Install the locked tree with pnpm
+        run: pnpm install --frozen-lockfile --ignore-scripts --node-linker=hoisted
+
+      - name: Verify registry signatures and provenance
+        run: npm audit signatures
