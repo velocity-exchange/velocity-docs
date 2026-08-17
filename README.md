@@ -42,4 +42,6 @@ This project is licensed under the MIT License.
 
 ## Deployment
 
-Before deploying to vercel, run yarn and commit the package-lock.json file. This is necessary for new navigation routes to show up in the build output.
+Before deploying to Vercel, run `pnpm install` and commit the updated `pnpm-lock.yaml`. This is necessary for new navigation routes to show up in the build output.
+
+This project uses pnpm (see `packageManager` in `package.json`). `pnpm-lock.yaml` is the only lockfile — do not commit a `package-lock.json` or `yarn.lock` alongside it.
