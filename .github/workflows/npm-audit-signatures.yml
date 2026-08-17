@@ -1,0 +1,35 @@
+name: npm audit signatures
+
+# Verifies registry signatures (and, where publishers provide them, provenance
+# attestations) for the resolved dependency tree. pnpm/bun don't implement this
+# check, so we resolve the tree with npm in a throwaway install for this job only.
+#
+# Non-blocking to start (continue-on-error: true): flip that off once the
+# baseline below is clean, so this becomes an enforced gate rather than noise
+# that gets ignored.
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  audit-signatures:
+    name: npm audit signatures
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@7c12f8017d5436eb855f1ed4399f037a36fbd9e8 # v2
+        with:
+          node-version: 24
+
+      - name: Resolve tree with npm and check signatures
+        run: |
+          set -euo pipefail
+          rm -f package-lock.json
+          npm install --ignore-scripts
+          npm audit signatures

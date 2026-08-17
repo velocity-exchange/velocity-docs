@@ -1,0 +1,54 @@
+version: 2
+
+updates:
+  # ────────────────────────────────────────────────────────────────────
+  # npm
+  # ────────────────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      root-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # ────────────────────────────────────────────────────────────────────
+  # GitHub Actions — keep SHA-pinned actions current with their tags
+  # ────────────────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      gha-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
