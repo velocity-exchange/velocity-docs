@@ -1,7 +1,7 @@
 name: New dependency gate
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
@@ -20,3 +20,4 @@ jobs:
       - uses: velocity-exchange/dependency-gate@e039f99f9238eafe289d9879caae848c450a1b8e # v2.0.0
         with:
           lockfiles: pnpm-lock.yaml
+          require-pull-request-target: true
