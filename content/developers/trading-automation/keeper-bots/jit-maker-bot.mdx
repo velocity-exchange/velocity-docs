@@ -30,7 +30,7 @@ The [`jit-maker-config.yaml`](https://github.com/velocity-exchange/velocity-v1/b
 * `global.endpoint`: set this to your RPC endpoint (see [RPC Providers](/developers/trading-automation#rpc-providers))
 * `global.keeperPrivateKey`: set this to your bot private key (alternatively you can leave it blank and set the `KEEPER_PRIVATE_KEY` environment variable)
 * `botConfigs.jitMaker.aggressivenessBps`: this is how aggressive you want your jit maker to be. If set to 30, the bot will attempt to buy 30 bps above the best bid, and sell 30 bps below the best ask.
-* `botConfigs.jitMaker.marketType` (`perp` or `spot`): this is the type of market we want to jit make
+* `botConfigs.jitMaker.marketType`: use `perp`. Velocity does not support spot order matching (spot markets are collateral-only), so a `spot` config produces jit transactions that always revert with `SpotOrdersNotSupported`.
 * `botConfigs.jitMaker.marketIndexes`: this is the list of markets that we want to jit make, it
 * `botConfigs.jitMaker.subaccounts`: this is the subaccount to use for each marketIndex provided
 
@@ -60,9 +60,9 @@ bun run dev --config-file=jit-maker-config.yaml
 
 ### Strategy overview
 
-This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) — build it from source, as `@velocity-exchange/jit-proxy` is not yet published to npm) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism.
+This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy), published to npm as `@velocity-exchange/jit-proxy`) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism.
 
-The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is the same program deployed under Drift (`J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP`) — the client is now ported to Anchor 1.0 and built against `@velocity-exchange/sdk`/`VelocityClient` instead of `@drift-labs/sdk`/`DriftClient`.
+The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is deployed under Velocity's own program ID (`J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ`), and the client is built against `@velocity-exchange/sdk`/`VelocityClient` instead of `@drift-labs/sdk`/`DriftClient`.
 
 ### JIT-able orders
 
@@ -110,14 +110,14 @@ SendTransactionError: failed to send transaction: Transaction simulation failed:
     'Program ComputeBudget111111111111111111111111111111 success',
     'Program ComputeBudget111111111111111111111111111111 invoke [1]',
     'Program ComputeBudget111111111111111111111111111111 success',
-    'Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP invoke [1]',
+    'Program J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ invoke [1]',
     'Program log: Instruction: Jit',
     'Program log: slot = 250667476 auction duration = 32 slots_left = 15',
     'Program log: taker order type Oracle auction start -12100 auction end -200 limit price 0 oracle price offset -193',
     'Program log: taker price 2220700 < worst ask 2234257',
     'Program log: AnchorError occurred. Error Code: AskNotCrossed. Error Number: 6001. Error Message: AskNotCrossed.',
-    'Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP consumed 39672 of 599700 compute units',
-    'Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP failed: custom program error: 0x1771'
+    'Program J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ consumed 39672 of 599700 compute units',
+    'Program J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ failed: custom program error: 0x1771'
   ]
 
 Failed to fill 24yfkkuFv849BpCBBo49tV6i6ycfc3aEUY6wWKFsN4SS-177961

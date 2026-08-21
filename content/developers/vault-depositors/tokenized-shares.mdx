@@ -1,0 +1,97 @@
+# Tokenized Shares
+
+Vault shares live on a `VaultDepositor` PDA, so they cannot be sent to another wallet, held by a smart contract, or listed anywhere. Tokenized shares solve that: a depositor can convert shares into a standard SPL token, transfer or hold that token freely, and later burn it back into shares.
+
+## How it works
+
+The vault manager creates a `TokenizedVaultDepositor` account and an SPL mint for it. That account is a depositor account like any other, except its shares back a token supply rather than one authority. Every holder of the mint has a pro-rata claim on the pool of shares that account holds.
+
+A depositor then moves shares into the pool and receives tokens in exchange, or burns tokens to move shares back out. The mint is derived from the vault and the vault's `sharesBase`, so a vault can have one tokenized depositor per share base:
+
+```typescript
+import {
+  getTokenizedVaultAddressSync,
+  getTokenizedVaultMintAddressSync,
+} from '@velocity-exchange/vaults-sdk';
+
+const tokenizedDepositor = getTokenizedVaultAddressSync(
+  VAULT_PROGRAM_ID,
+  vault,
+  vaultAccount.sharesBase
+);
+const mint = getTokenizedVaultMintAddressSync(
+  VAULT_PROGRAM_ID,
+  vault,
+  vaultAccount.sharesBase
+);
+```
+
+## Setup (manager only)
+
+Only the vault manager can create the tokenized depositor, because it also creates the token's Metaplex metadata under the vault's authority:
+
+```typescript
+await vaultClient.initializeTokenizedVaultDepositor({
+  vault,
+  tokenName: 'My Vault Share',
+  tokenSymbol: 'MVS',
+  tokenUri: 'https://example.com/mvs.json',
+  decimals: 6,      // defaults to the vault's spot market decimals
+  sharesBase: 0,    // defaults to the vault's current shares base
+});
+```
+
+`VaultClient` must be constructed with a Metaplex instance for this call, and throws locally without one.
+
+## Tokenize
+
+```typescript
+import { WithdrawUnit } from '@velocity-exchange/vaults-sdk';
+
+await vaultClient.tokenizeShares(
+  vaultDepositor,
+  new BN(500_000),
+  WithdrawUnit.SHARES_PERCENT // 500_000 = 50% of the depositor's shares
+);
+```
+
+The units are the same as for a withdrawal request: `SHARES`, `TOKEN`, or `SHARES_PERCENT`.
+
+Tokenizing rejects in these cases:
+
+| Condition | Error |
+| --- | --- |
+| The vault has rebased past the tokenized depositor's recorded share base | `InvalidVaultRebase` |
+| The depositor has a pending withdraw request | `InvalidVaultDeposit` |
+| The vault is in liquidation | `OngoingLiquidation` |
+| The pool's value is below its pooled cost basis | `InvalidTokenization` |
+
+That last check is the important one. The tokenized depositor holds a **single** cost basis for every holder of the mint, and profit share comes out of the pool's own shares, so it dilutes every token equally regardless of who accrued the gain. Minting into a pool that is under water would hand the new entrant a share of the incumbents' loss shelter. The program therefore refuses to tokenize whenever the pool's current value is below its pooled cost basis (net deposits plus cumulative profit share). Tokenizing applies the pool's profit share first, which already forces value down to basis whenever value is above it, so in practice the gate only blocks genuinely under-water pools.
+
+## Redeem
+
+```typescript
+await vaultClient.redeemTokens(
+  vaultDepositor,
+  new BN(1_000_000), // tokens to burn
+  sharesBase        // optional; defaults to the vault's current shares base
+);
+```
+
+Burning tokens transfers the corresponding shares out of the pool and back onto the caller's own `VaultDepositor` account. From there the normal [request withdraw, wait, withdraw](/developers/vault-depositors/deposit-and-withdraw) flow applies. Redeeming is blocked while the caller has a pending withdraw request (`InvalidVaultDeposit`) and while the vault is in liquidation (`OngoingLiquidation`).
+
+Redemption crystallizes both the management fee and the tokenized depositor's profit share before the shares move.
+
+<Callout type="important">
+Redemption stays open after a rebase; tokenization does not. Once the vault's `sharesBase` moves past a tokenized depositor's recorded base, `tokenizeShares` rejects and only `redeemTokens` works for that mint. The manager can resync the pool with `applyRebaseTokenizedDepositor` and create a tokenized depositor for the new base.
+</Callout>
+
+<Callout type="warning">
+Holding the token is not the same as holding a depositor account. Token holders have no withdraw request of their own, so exiting means redeeming into a `VaultDepositor` first, then waiting the vault's redeem period. Price the token accordingly.
+</Callout>
+
+## Related resources
+
+- [Deposit and withdraw](/developers/vault-depositors/deposit-and-withdraw), the two-step withdrawal flow
+- [Vault Depositors](/developers/vault-depositors), the account model and share accounting
+- [Manager operations](/developers/vault-managers/manager-operations), including `applyRebaseTokenizedDepositor`

@@ -6,7 +6,7 @@ asIndexPage: true
 
 ## Keeper Bots
 
-Keeper Bots listen, store, sort and fill valid limit orders. Keepers do this by compiling all valid open orders found on-chain and organising them into an off-chain orderbook. These orders are sorted by price and age, and if two orders have the same age, they’re then sorted by position size.
+Keeper Bots listen, store, sort and fill valid limit orders. Keepers do this by compiling all valid open orders found on-chain and organising them into an off-chain orderbook. These orders are sorted by price, and ties on price are broken by age (arrival order), oldest first.
 
 Each Keeper holds its own orderbook (hence _decentralised_ orderbook).
 
@@ -20,7 +20,7 @@ For performing this critical duty, the Keepers earn a fee for every trade they e
 
 - **Fastest** — Speed is a primary advantage in competing for fees.
 - **Best price improvement for takers** — Keepers that provide better prices to takers gain a competitive edge.
-- **Fulfil orders in the protocol’s desired sequence** — Keepers that execute orders in the desired order, oldest and largest first, are preferred.
+- **Fulfil orders in the protocol’s desired sequence**, Keepers that execute the oldest order first are preferred. Filler rewards also cap out at 10% of the taker fee, which favors filling larger orders within that limit.
 
 Reference implementations for the filler and trigger Keepers are provided: [Keeper Bots](/developers/trading-automation).
 

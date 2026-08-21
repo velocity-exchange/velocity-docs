@@ -41,7 +41,7 @@ Columns in the table below are part of each category:
 | takerFee                                   | int                               |           | Fee charged to the taker for filling the order.                            |
 | makerRebate                                | int                               |           | Rebate provided to the maker for placing the order.                        |
 | referrerReward                             | int                               |           | Reward received by the referrer for referring the order.                   |
-| quoteAssetAmountSurplus                    | int                               |           | Amount of the quote asset remaining unfilled after the order is completed. |
+| quoteAssetAmountSurplus                    | int                               |           | The vAMM's quote surplus on the fill: the difference between the quote amount the curve actually moved and the quote at the reference price (the AMM's spread capture). Not related to unfilled size. |
 | takerOrderBaseAssetAmount                  | int                               |           | Total amount of the base asset the taker ordered to buy or sell.           |
 | takerOrderCumulativeBaseAssetAmountFilled  | int                               |           | Cumulative amount of the base asset filled for the taker's order.          |
 | takerOrderCumulativeQuoteAssetAmountFilled | int                               |           | Cumulative amount of the quote asset filled for the taker's order.         |
@@ -71,7 +71,7 @@ Columns in the table below are part of each category:
 | takerFee                                   | int                                                                  |           | Fee charged to the taker for filling the order.                         |
 | makerRebate                                | int                                                                  |           | Rebate provided to the maker for placing the order.                     |
 | referrerReward                             | int                                                                  |           | Reward received by the referrer for referring the order.                |
-| quoteAssetAmountSurplus                    | int                                                                  |           | Amount of the quote asset remaining unfilled after the order.           |
+| quoteAssetAmountSurplus                    | int                                                                  |           | The vAMM's quote surplus on the fill: the difference between the quote amount the curve actually moved and the quote at the reference price (the AMM's spread capture). Not related to unfilled size. |
 | takerOrderBaseAssetAmount                  | int                                                                  |           | Total amount of the base asset the taker ordered to buy or sell.        |
 | takerOrderCumulativeBaseAssetAmountFilled  | int                                                                  |           | Cumulative amount of the base asset filled for the taker's order.       |
 | takerOrderCumulativeQuoteAssetAmountFilled | int                                                                  |           | Cumulative amount of the quote asset filled for the taker's order.      |
@@ -103,9 +103,9 @@ Columns in the table below are part of each category:
 | cumulativeFundingRateShort     | int  |           | Short positions' cumulative funding.          |
 | oraclePriceTwap                | int  |           | TWAP of oracle price (period).                |
 | markPriceTwap                  | int  |           | TWAP of mark price (period).                  |
-| periodRevenue                  | int  |           | Market revenue for a specific period.         |
+| ~~periodRevenue~~              | int  |           | **Removed on Velocity.** The on-chain `FundingRateRecord` no longer carries this field. |
 | baseAssetAmountWithAmm         | int  |           | Total base asset in the AMM pool.             |
-| baseAssetAmountWithUnsettledLp | int  |           | Unsettled base asset with LPs.                |
+| ~~baseAssetAmountWithUnsettledLp~~ | int  |           | **Removed on Velocity.** vAMM LP shares were removed, and the on-chain `FundingRateRecord` no longer carries this field. |
 
 ### Funding Payments
 

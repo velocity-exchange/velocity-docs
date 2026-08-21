@@ -9,7 +9,7 @@ Velocity Builder Codes establish the financial infrastructure layer on Solana, b
 This Builder Code system makes Velocity an on-chain DEX on Solana that offers **per order monetization** for third-party frontends, setting the stage for a permissionless ecosystem of apps, bots, and aggregators all aligned with Velocity and Solana's liquidity growth.
 
 <Callout type="info">
-Builder fees are denominated in **tenths of a basis point** throughout the protocol (e.g. `100` = 10 bps ÷ 10 = 0.01%). Fields like `builderFeeTenthBps`, `feeTenthBps`, and `maxFeeTenthBps` all use this unit.
+Builder fees are denominated in **tenths of a basis point** throughout the protocol (1 unit = 0.001%, so `100` = 10 bps = 0.1%, and `1_000` = 100 bps = 1%). Fields like `builderFeeTenthBps`, `feeTenthBps`, and `maxFeeTenthBps` all use this unit.
 </Callout>
 
 ### Getting started with VBC
@@ -18,7 +18,7 @@ Builder fees are denominated in **tenths of a basis point** throughout the proto
 In order to receive fees, builders are required to have an existing Velocity account, as well as set up a `RevenueShareAccount` (via the `initializeRevenueShare` instruction).
 
 - **User Onboarding:**
-Before placing any orders, users must approve the builder and the maximum allowed builder fee, via the `changeApprovedBuilder` instruction (builder pubkey, `maxFeeTenthBps`). This approval is stored directly inside the user's `RevenueShareEscrow` account.
+Before approving any builder, users must first create a `RevenueShareEscrow` account with the `initializeRevenueShareEscrow` instruction (`numOrders` must be at least 1). Then, before placing any orders, users approve the builder and the maximum allowed builder fee via the `changeApprovedBuilder` instruction (builder pubkey, `maxFeeTenthBps`). This approval is stored directly inside the user's `RevenueShareEscrow` account.
 
 ### How Builder Codes Work
 
@@ -27,15 +27,35 @@ Before placing any orders, users must approve the builder and the maximum allowe
    The builder's app places an order (e.g. `placePerpOrder`) with `builderIdx` and `builderFeeTenthBps` set in the order params. The `RevenueShareEscrow` account is included in the transaction so the program can validate and record the order.
 
 #### Fee Accrual (Per Order)
-When an order is filled, the fee is credited to the user's `RevenueShareEscrow` as a `RevenueShareOrder`:
-   - This tracks the builder index (`builderIdx`), `feesAccrued`, `orderId`, `feeTenthBps`, market index and type, and completion status.
+When an order is filled, the fee is credited to the user's `RevenueShareEscrow` as a `RevenueShareOrder`, unless the taker is below initial margin at fill time (or a required oracle is invalid), in which case the fee is waived for that fill. The fill itself still goes through; the builder simply is not paid for it.
+   - The accrued row tracks the builder index (`builderIdx`), `feesAccrued`, `orderId`, `feeTenthBps`, market index and type, and completion status.
    - Fees remain in escrow until settlement.
 
 #### Settlement
-   On `settlePnl`, any accrued fees in the escrow are swept to the builder's `RevenueShareAccount`.
+   Accrued fees in the escrow are swept to the builder's `RevenueShareAccount` when the user calls `settlePnl`. They can also be swept permissionlessly via the `settleRevenueShare` instruction, without the user settling PnL. Rows that can never be paid (for example, a delisted market) are cleared with `forfeitRevenueShareOrder`.
 </Steps>
 
 Code examples can be found in [Builder Codes (SDK)](/developers/velocity-sdk/builder-codes).
+
+### A builder-coded order cannot be modified
+
+`modifyOrder` (and `modifyOrderByUserOrderId`) reject any order that carries a builder code, with `CannotModifyBuilderOrder` (error `6366` / `0x18de`, "Cannot modify a builder-coded order; cancel and re-place instead").
+
+The reason is that the fee attribution for a builder-coded order lives in a `RevenueShareEscrow` row keyed to that order's `orderId`. A modify cancels and re-places under a new order id, which would leave the row behind and silently drop the builder fee. To change a builder-coded order, cancel it and place a new order with the builder params set again. The SDK's `cancelAndPlaceOrders` does both in one transaction.
+
+### Payout paths for accrued fees
+
+Three instructions move an accrued row out of escrow and into the builder's `RevenueShare` account. All three pay out of the perp market's PnL pool.
+
+| Instruction | Who can call it | What it does |
+| --- | --- | --- |
+| `settlePnl` | The escrow owner | Runs the sweep after it settles the owner's PnL on that market. Only sweeps while the owner still has PnL to settle. |
+| `settleRevenueShare` | Anyone | Pays the accrued builder and referrer rows in one escrow for one perp market, without the owner settling PnL. Takes `marketIndex` and the number of owner sub-accounts to pass. Rejects a delisted market, and requires builder codes to be enabled and settle-PnL not paused. |
+| `forfeitRevenueShareOrder` | Anyone | Writes off one row the program cannot pay, so `PerpMarket.pendingRevenueShare` can reach zero and the delist is not blocked. Moves no tokens. |
+
+`settleRevenueShare` exists because `settlePnl` is not a reliable payout path for a builder: once the escrow owner closes the position and stops trading, nobody can collect through PnL settlement, and `pendingRevenueShare` holds PnL-pool value against the claim indefinitely. Builders and keepers should treat `settleRevenueShare` as their own collection path rather than waiting on the user.
+
+`forfeitRevenueShareOrder` needs proof that the row is unpayable, and the market must be in settlement or delisted. One of these must hold: the beneficiary has no payout `User` account, the closed pool is smaller than the row, or the row names no beneficiary the program can reach. A row that can still be paid is rejected with `RevenueShareOrderNotForfeitable`.
 
 ### Notes on builder codes for MMs
 
@@ -51,10 +71,16 @@ Code examples can be found in [Builder Codes (SDK)](/developers/velocity-sdk/bui
 A: Yes. Each builder entry in `approvedBuilders` has its own `maxFeeTenthBps`.
 
 **Q: How are builder fees capped?**
-A: The protocol enforces the user-approved max fee per builder. Attempts to go over will result in a transaction failure.
+A: Two caps apply. The user-approved max fee per builder (`maxFeeTenthBps`) is the first. The protocol also enforces a global ceiling of `MAX_BUILDER_FEE_TENTH_BPS` (1000 tenth-bps, i.e. 1% of notional), independent of the user's approval. Attempts to exceed either cap result in a transaction failure.
 
 **Q: Do MMs or fillers need to know the builder/referrer accounts for every order?**
 A: No, but including the `RevenueShareEscrow` is required to process reward accrual and settlement.
 
+**Q: Is a builder fee charged on every fill?**
+A: No. The fee is charged only when the taker meets **initial** margin at fill time, under strict oracle rules (each price is the more conservative of the live price and the TWAP, and every liability oracle must be valid). Below that, and on liquidation fills, the fill still happens and still reports the builder in its `OrderActionRecord`, but the builder fee for that fill is zero. A builder fee is a transfer out of the taker's account, so it clears the same gate a withdrawal clears.
+
+**Q: Can I modify a builder-coded order?**
+A: No. `modifyOrder` rejects it with `CannotModifyBuilderOrder` (`6366` / `0x18de`). Cancel the order and place a new one with the builder params set.
+
 **Q: When are builder rewards paid?**
-A: On the user's `settlePnl` call (which sweeps escrowed fees to the builder).
+A: On the user's `settlePnl` call, or permissionlessly via `settleRevenueShare`, which any caller can send without the user. Both sweep escrowed fees to the builder. Unpayable rows in a settlement or delisted market are written off with `forfeitRevenueShareOrder`.

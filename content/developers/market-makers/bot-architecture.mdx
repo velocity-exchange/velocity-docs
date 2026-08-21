@@ -74,10 +74,14 @@ Solana transactions compete for block space via priority fees. During congestion
 import { ComputeBudgetProgram } from "@solana/web3.js";
 import { PriorityFeeSubscriber } from "@velocity-exchange/sdk";
 
-// Subscribe to priority fee data
+// Subscribe to priority fee data. maxFeeMicroLamports caps every
+// getCustomStrategyResult() return value after priorityFeeMultiplier
+// is applied, so the subscriber enforces the ceiling itself.
 const priorityFeeSubscriber = new PriorityFeeSubscriber({
   connection,
   frequencyMs: 5000,
+  maxFeeMicroLamports: 100_000,
+  priorityFeeMultiplier: 1.0,
 });
 await priorityFeeSubscriber.subscribe();
 
@@ -226,8 +230,9 @@ async function sendWithRetry(
         return null; // don't retry, need to top up
       }
 
-      // Order would cross (post-only rejection), price moved, skip
-      if (errMsg.includes("PostOnlyOrderWouldBeFilled")) {
+      // Order would cross (post-only rejection), price moved, skip.
+      // Related errors: MakerOrderMustBePostOnly, InvalidOrderIOCPostOnly.
+      if (errMsg.includes("PlacePostOnlyLimitFailure")) {
         console.log("Post-only order would cross, skipping");
         return null;
       }
@@ -247,18 +252,20 @@ async function sendWithRetry(
 
 For JIT and SWIFT flows, apply these filters before filling to avoid adverse selection and stay within risk limits.
 
-**Oracle validation**: Reject if oracle is stale, invalid, or confidence is too wide. `MMOraclePriceData` has no `isValid` field -- use `isOracleValid` (the same AMM-fill-oriented gate the program uses) against the market and the state's oracle guard rails:
+**Oracle validation**: Reject if oracle is stale, invalid, or confidence is too wide. `MMOraclePriceData` has no `isValid` field -- use `isOracleValid` (the same AMM-fill-oriented gate the program uses) against the market and the state's oracle guard rails. Pass the live slot to both calls: `getMMOracleDataForPerpMarket` needs it to classify a staged slot-duration switch correctly (omitting it falls back to a best-effort observed slot that can stall while a market is idle), and `isOracleValid` needs it plus the state's configured slot duration for its staleness window, so the threshold matches the on-chain check once a shorter slot duration is staged:
 
 ```js
-import { isOracleValid } from "@velocity-exchange/sdk";
+import { isOracleValid, activeSlotDurationFromState } from "@velocity-exchange/sdk";
 
 const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
-const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+const currentSlot = new BN(slotSubscriber.getSlot());
+const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex, currentSlot.toNumber());
 const oracleIsValid = isOracleValid(
   perpMarket,
   oracle,
   velocityClient.getStateAccount().oracleGuardRails,
-  slotSubscriber.getSlot()
+  currentSlot.toNumber(),
+  activeSlotDurationFromState(velocityClient.getStateAccount(), currentSlot)
 );
 if (!oracleIsValid) return;
 if (oracle.confidence.gt(maxConfidence)) return; // confidence is a BN, PRICE_PRECISION
@@ -345,7 +352,7 @@ The [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/ap
 ## Gotchas
 
 - **WebSocket silent failures**: Solana WebSocket connections can stop delivering updates without disconnecting. The `resyncIntervalMs` on `OrderSubscriber` catches this, but also monitor your last-update timestamp and force-reconnect if stale for >60s.
-- **Priority fee spikes**: during congestion, priority fees can spike 100x. Set a hard cap (`maxPriorityFee`) to avoid draining your SOL balance on fees. The `PriorityFeeSubscriber` gives you the data, but you must enforce the cap.
+- **Priority fee spikes**: during congestion, priority fees can spike 100x. Construct `PriorityFeeSubscriber` with `maxFeeMicroLamports` (and, if needed, `priorityFeeMultiplier`) so it enforces the cap itself before returning a strategy result, instead of draining your SOL balance on fees.
 - **Transaction size limits**: Velocity transactions reference many accounts. Without Address Lookup Tables (ALTs), you'll hit the 1232-byte transaction limit. Always fetch and use ALTs (see the ALT section above).
 - **Blockhash expiry**: Solana blockhashes expire after ~60 seconds. If your transaction is stuck in a queue, it will silently fail. Use `getLatestBlockhash` with `commitment: "confirmed"` and set `lastValidBlockHeight` for reliable expiry detection.
 - **Rate limits**: even paid RPC providers have limits. Batch reads where possible (e.g., `getMultipleAccounts`) and avoid redundant subscriptions.

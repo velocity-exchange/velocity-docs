@@ -149,6 +149,7 @@ const META = {
           "risk-parameters": "",
           "contract-tiers": "",
           "block-conditions": "",
+          "bankruptcy-resolution": "",
           "delisting-process": "",
           "protocol-guard-rails": "",
           "audits": "",
@@ -180,6 +181,7 @@ const META = {
           "index": "",
           "program-structure": "",
           "account-model": "",
+          "slot-duration": "Slot Duration",
           "optimizations": "",
           "program-vault-addresses": ""
         }
@@ -200,6 +202,7 @@ const META = {
           "swaps": "",
           "swift": "",
           "builder-codes": "",
+          "transactions": "",
           "sdk-internals": "",
           "autogen": {
             "display": displayWip,
@@ -240,8 +243,16 @@ const META = {
         "title": "Vault Managers",
         "items": {
           "quickstart": "",
+          "manager-operations": "",
           "trusted-vaults": "",
           "multisig-ops": "Multisig Ops"
+        }
+      },
+      "vault-depositors": {
+        "title": "Vault Depositors",
+        "items": {
+          "deposit-and-withdraw": "",
+          "tokenized-shares": ""
         }
       },
       "trading-automation": {

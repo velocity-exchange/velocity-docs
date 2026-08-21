@@ -3,8 +3,25 @@
 The DLOB (Decentralized Limit Order Book) server powers the UI orderbook and trades feed. It provides both a websocket interface for real-time updates and REST endpoints for snapshots.
 
 <Callout type="warning">
-**Provisional endpoint.** Velocity's hosted DLOB server host is not yet finalized. This page uses `dlob.velocity.exchange` as a placeholder pattern (mirroring Drift's `dlob.drift.trade`) — confirm the real host before shipping against it.
+**Provisional endpoint.** Velocity's hosted DLOB server host is not yet finalized. This page uses `dlob.velocity.exchange` as a placeholder pattern (mirroring Drift's `dlob.drift.trade`). Confirm the real host before shipping against it.
 </Callout>
+
+## Endpoint summary
+
+| Endpoint | Returns |
+|---|---|
+| `GET /l2` | Aggregated orderbook for one market |
+| `GET /batchL2`, `GET /batchL2Cache` | Aggregated orderbooks for many markets in one request |
+| `GET /l3` | Individual resting orders for one market |
+| `GET /topMakers` | User accounts resting at the top of one side of the book |
+| `GET /priorityFees` | Priority fee levels for one market |
+| `GET /batchPriorityFees` | Priority fee levels for many markets in one request |
+| `GET /unsettledPnlUsers` | Top unsettled gainers and losers on a perp market |
+| `GET /auctionParams` | Server-derived auction parameters for a market order |
+| `GET /pythLazer` | Latest Pyth Lazer price payloads (restricted) |
+| `GET /health`, `GET /startup`, `GET /` | Liveness and readiness |
+
+Most read endpoints are served from a Redis cache that the DLOB publishers keep current, so responses are cheap but reflect the last published slot rather than the live chain tip. Each response carries the `slot` it was built at. Use it, not wall-clock time, to judge staleness.
 
 ## REST endpoints (recommended starting point)
 
@@ -13,15 +30,17 @@ Before wiring up websockets, you can fetch orderbook snapshots via simple HTTP r
 ### L2 orderbook (aggregated by price level)
 
 ```
-GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true
+GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeIndicative=true
 ```
 
 Query parameters:
-- `marketName` ,  Market symbol (e.g. `SOL-PERP`, `BTC-PERP`, `SOL`)
-- `depth` ,  Number of price levels per side (default: all)
-- `includeVamm` ,  Include AMM liquidity in the book (`true`/`false`)
-- `includeIndicative` ,  Include indicative (non-firm) quotes (`true`/`false`)
-- `grouping` ,  Price grouping in ticks (e.g. `10` for 0.01 increments)
+- `marketName`: Market symbol (e.g. `SOL-PERP`, `BTC-PERP`, `SOL`). Alternatively, pass `marketIndex` and `marketType` (`perp`/`spot`) directly.
+- `depth`: Number of price levels per side (default: `100`, capped at `100`)
+- `includeIndicative`: Include indicative (non-firm) quotes (`true`/`false`)
+
+<Callout type="info">
+`includeVamm` and `grouping` are accepted by the `/batchL2` batch endpoint and the websocket channel builder, but the `/l2` REST endpoint does not read them.
+</Callout>
 
 Response shape (from a live response, trimmed):
 ```json
@@ -58,16 +77,162 @@ Response shape (from a live response, trimmed):
 ```
 
 <Callout type="warning">
-Prices and sizes are **raw fixed-precision integer strings**, not decimals: prices are in `PRICE_PRECISION` (1e6, so `"81114210"` = $81.11) and sizes in `BASE_PRECISION` (1e9). Each level's `sources` object splits the size by origin (`dlob`, `vamm`, `indicative`) — it is an object, not a string. See [Precision & Types](/developers/velocity-sdk/precision-and-types) for conversions.
+Prices and sizes are **raw fixed-precision integer strings**, not decimals: prices are in `PRICE_PRECISION` (1e6, so `"81114210"` = $81.11) and sizes in `BASE_PRECISION` (1e9). Each level's `sources` field splits the size by origin (`dlob`, `vamm`, `indicative`), and it is an object, not a string. See [Precision & Types](/developers/velocity-sdk/precision-and-types) for conversions.
 </Callout>
+
+### Batch L2 orderbooks
+
+```
+GET https://dlob.velocity.exchange/batchL2?marketName=SOL-PERP,BTC-PERP&depth=10,10&includeIndicative=true,true
+```
+
+Use this instead of N separate `/l2` calls. Every parameter is a comma-separated list, and the lists are read position by position: the first value of each list describes the first market, the second value the second market, and so on.
+
+Accepted lists: `marketName`, `marketIndex`, `marketType`, `depth`, `includeVamm`, `includePhoenix`, `includeOpenbook`, `includeOracle`, `includeIndicative`.
+
+`/batchL2Cache` is registered on the same handler and behaves identically.
+
+Response is a single object wrapping the per-market books, in request order:
+
+```json
+{ "l2s": [ { "bids": [], "asks": [] } ] }
+```
+
+<Callout type="warning">
+All lists must have the same length. If they do not, the server responds `400` with `Bad Request: all params for batch request must be the same length`.
+
+If a market has no cached book, the entry is not an error: you get an empty `bids`/`asks` book carrying the live oracle data and the current slot. Check for `bids.length === 0` rather than assuming a non-empty book.
+</Callout>
+
+`depth` defaults to `100` and is capped at `100` per market, as on `/l2`.
 
 ### L3 orderbook (individual orders)
 
 ```
-GET https://dlob.velocity.exchange/l3?marketName=SOL-PERP&includeVamm=true
+GET https://dlob.velocity.exchange/l3?marketName=SOL-PERP&includeIndicative=true
 ```
 
-Returns every individual order with maker address and order ID ,  useful for building order-level analytics or matching simulations.
+Returns every individual order with maker address and order ID, useful for building order-level analytics or matching simulations. If no L3 snapshot is cached for that market, the server responds `500` with `No L3 found`.
+
+### Top makers
+
+```
+GET https://dlob.velocity.exchange/topMakers?marketName=SOL-PERP&side=bid&limit=4&includeAccounts=false
+```
+
+Returns the user account addresses resting at the top of one side of the book. This is what a filler needs to pick maker counterparties for a taker order.
+
+Query parameters:
+- `marketName`, or `marketIndex` plus `marketType`: the market. Required.
+- `side`: `bid` or `ask`. Required. Anything else responds `400` with `Bad Request: side must be either bid or ask`.
+- `limit`: How many makers to return. Must parse as a number, otherwise `400`. Defaults to `4`.
+- `includeAccounts`: `true` returns the decoded user accounts instead of just their addresses.
+
+The response is a bare JSON array. Served from the cached best-makers snapshot when one exists, otherwise computed by walking the live resting limit orders on that side.
+
+### Priority fees
+
+```
+GET https://dlob.velocity.exchange/priorityFees?marketType=perp&marketIndex=0
+```
+
+Returns the cached priority fee levels for that market, plus the `marketType` and `marketIndex` you asked for. Levels use the same percentile buckets as Helius (`min`, `low`, `medium`, `high`, `veryHigh`, `unsafeMax`), in micro-lamports per compute unit. If nothing is cached for the market, the server responds `404` with `Not found`.
+
+```
+GET https://dlob.velocity.exchange/batchPriorityFees?marketType=perp,perp,spot&marketIndex=0,1,2
+```
+
+The batch form takes the same comma-separated, position-matched lists as `/batchL2` and returns an array with one entry per requested market. Mismatched list lengths respond `400` with `Bad Request: all params for batch request must be the same length`.
+
+This is the endpoint behind the SDK's `PriorityFeeMethod.VELOCITY` and `PriorityFeeSubscriberMap`. See [Transactions](/developers/velocity-sdk/transactions) if you would rather let the SDK poll it for you.
+
+### Unsettled PnL users
+
+```
+GET https://dlob.velocity.exchange/unsettledPnlUsers?marketIndex=0
+```
+
+Returns the top 20 unsettled gainers and the top 20 unsettled losers on a perp market, from the cached ranking:
+
+```json
+{ "marketIndex": 0, "gainers": [], "losers": [] }
+```
+
+`marketIndex` is required and must parse as a number, otherwise the server responds `400` with `Bad Request: must include a marketIndex`.
+
+### Auction params
+
+```
+GET https://dlob.velocity.exchange/auctionParams?marketIndex=0&marketType=perp&direction=long&amount=1000000000&assetType=base
+```
+
+This is the hosted equivalent of the SDK's auction-parameter construction: you describe the market order you want, and the server returns concrete order params plus the price estimates it derived them from. Use it when you do not want to reimplement auction-price derivation client side. See [Auction parameters](/protocol/trading/auction-parameters) for what the program does with these values.
+
+Required parameters:
+
+| Parameter | Values |
+|---|---|
+| `marketIndex` | Market index. Must parse as a number. |
+| `marketType` | `perp` or `spot` |
+| `direction` | `long` or `short`. Anything else responds `400`. |
+| `amount` | Order size, as a raw precision integer string |
+| `assetType` | `base` or `quote`. Anything else responds `400`. |
+
+Optional parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `reduceOnly` | Boolean. Order may only reduce the existing position. |
+| `slippageTolerance` | Number, or the literal `dynamic` to let the server compute it. |
+| `allowInfSlippage` | Boolean. Skip the slippage bound entirely. |
+| `forceUpToSlippage` | Boolean. Push the auction end price out to the full slippage tolerance. |
+| `isOracleOrder` | Boolean. Derive an oracle-offset order instead of a fixed-price one. |
+| `auctionDuration` | Requested auction duration in slots. |
+| `auctionStartPriceOffset` | Number, or the literal `marketBased` to derive the offset from current book conditions. |
+| `auctionEndPriceOffset` | Number. |
+| `auctionStartPriceOffsetFrom` | Reference price the start offset is measured from. Also accepts `marketBased`. |
+| `auctionEndPriceOffsetFrom` | Reference price the end offset is measured from. |
+| `additionalEndPriceBuffer` | Extra buffer added past the auction end price, as a raw precision string. |
+| `maxLeverageSelected` | Boolean. The size came from a max-leverage action. |
+| `maxLeverageOrderSize` | The max-leverage size, as a raw precision string. |
+| `userOrderId` | Client order id to stamp on the params. |
+| `version` | API version. Defaults to `1`. `2` and above additionally weigh recent taker fill quality versus oracle for that market. |
+
+Successful responses wrap everything under `data`:
+
+| Field | Meaning |
+|---|---|
+| `params` | The derived order params. `BN` values are serialized as decimal strings and enums as their string variant. |
+| `entryPrice` | Estimated average fill price |
+| `bestPrice` | Best price the order is expected to touch |
+| `worstPrice` | Worst price the order is expected to touch |
+| `oraclePrice` | Oracle price used in the derivation |
+| `markPrice` | Mark price used in the derivation |
+| `priceImpact` | Estimated price impact, as a number |
+| `slippageTolerance` | The tolerance actually applied |
+| `generatedAt` | Server timestamp in milliseconds |
+
+<Callout type="warning">
+Auction params go stale. `generatedAt` exists so you can decide to re-fetch before signing: prices, spreads, and the derived auction start and end move with the book. Treat a quote you have held for more than a few slots as unusable.
+</Callout>
+
+Derivation failures respond `400` with a JSON body of the form `{ "error": "..." }`, unlike the plain-text `400`s from the parameter checks above.
+
+### Pyth Lazer prices
+
+```
+GET https://dlob.velocity.exchange/pythLazer?feedIds=1,2,3
+```
+
+Returns the latest Pyth Lazer payloads (`price`, `bestAskPrice`, `bestBidPrice`, `exponent`) for the requested feed ids under a `data` key.
+
+<Callout type="info">
+This endpoint is restricted. Requests must either present the server's internal secret in the `Authorization` header, or arrive with an `Origin`/`Referer` on a `velocity.exchange` subdomain over HTTPS. Anything else responds `403` with `{ "error": "Forbidden: Invalid origin" }`. A missing `feedIds` responds `400`.
+</Callout>
+
+### Health and readiness
+
+`GET /health` and `GET /` return `200` with the body `OK`, or `500` with `NOK` when the server's slot source has stalled. `GET /startup` is the readiness probe: it returns `200` with `OK` once the slot subscriber has a slot and every Redis client is connected, otherwise `500` with `Not ready`.
 
 ## WebSocket connection
 
@@ -77,7 +242,9 @@ For real-time streaming, connect to the DLOB websocket:
 
 ### Subscribe to channels
 
-Supported channels: `orderbook`, `trades`
+Supported channels: `orderbook`, `orderbook_indicative`, `trades`, `priorityfees`. Channel names are matched case-insensitively, so `priorityFees` works too.
+
+Every subscribe and unsubscribe message needs `channel`, `market` (the symbol, matched case-insensitively), and `marketType` (`perp` or `spot`). The orderbook channels also accept `grouping`, which must be one of `1`, `10`, `100`, `500`, or `1000`. An absent or unrecognized grouping falls back to `1`.
 
 <SDKDoc>
   <TypeScript name="WebSocket" type="class">
@@ -85,15 +252,22 @@ Supported channels: `orderbook`, `trades`
 const ws = new WebSocket("wss://dlob.velocity.exchange/ws");
 
 ws.onopen = () => {
-  // Subscribe to orderbook updates with full liquidity
+  // Subscribe to orderbook updates
   ws.send(JSON.stringify({
     type: "subscribe",
     channel: "orderbook",
     marketType: "perp",
     market: "SOL-PERP",
-    grouping: 10,            // Price grouping (0.01 increments)
-    includeVamm: true,       // Include AMM liquidity
-    includeIndicative: true  // Include indicative quotes
+    grouping: 10              // Price grouping (0.01 increments)
+  }));
+
+  // Subscribe to indicative (non-firm) quotes on the same market
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "orderbook_indicative",
+    marketType: "perp",
+    market: "SOL-PERP",
+    grouping: 10
   }));
 
   // Subscribe to trades
@@ -103,10 +277,21 @@ ws.onopen = () => {
     marketType: "perp",
     market: "SOL-PERP"
   }));
+
+  // Subscribe to that market's priority fee levels
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "priorityFees",
+    marketType: "perp",
+    market: "SOL-PERP"
+  }));
 };
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
+
+  // Heartbeats arrive every 5 seconds.
+  if (message.channel === "heartbeat") return;
 
   // The channel in responses includes market info, e.g.:
   //   "orderbook_perp_0_grouped_10"
@@ -132,11 +317,13 @@ ws.onmessage = (event) => {
 // Handle connection lifecycle
 ws.onerror = (error) => console.error("DLOB WS error:", error);
 ws.onclose = () => {
-  console.log("DLOB WS closed ,  implement reconnection logic here");
+  console.log("DLOB WS closed, implement reconnection logic here");
 };
 ```
   </TypeScript>
 </SDKDoc>
+
+To stop a stream, send the same message with `type: "unsubscribe"`.
 
 ### Response channel format
 
@@ -144,10 +331,27 @@ The `channel` field in websocket responses is **not** the same as the channel yo
 
 | Subscribed channel | Response channel format |
 |---|---|
-| `orderbook` | `orderbook_perp_{marketIndex}_grouped_{grouping}` |
-| `trades` | `trades_perp_{marketIndex}` |
+| `orderbook` | `orderbook_{marketType}_{marketIndex}_grouped_{grouping}` |
+| `orderbook_indicative` | `orderbook_{marketType}_{marketIndex}_grouped_{grouping}_indicative` |
+| `trades` | `trades_{marketType}_{marketIndex}` |
+| `priorityfees` | `priorityFees_{marketType}_{marketIndex}` |
 
 For example, subscribing to `orderbook` for `SOL-PERP` with `grouping: 10` produces responses with channel `orderbook_perp_0_grouped_10`.
+
+### Connection lifecycle messages
+
+Besides data messages, the server sends:
+
+| Message | Meaning |
+|---|---|
+| `{ "message": "Subscribe received for channel: ..., market: ..., marketType: ..." }` | Subscribe acknowledgement. It confirms the request was parsed, not that data is flowing yet. |
+| `{ "channel": "heartbeat" }` | Sent every 5 seconds while the socket is open. Use it as your liveness signal. |
+| The latest cached snapshot | On subscribing to an orderbook channel, the server immediately replays the most recent cached book so you do not have to wait for the next update. |
+| `{ "channel": "...", "error": "Error subscribing to channel" }` | The market or market type could not be resolved, but the channel name was recognizable. The socket stays open. |
+| Close code `1003` | Same failure with an unrecognizable channel name. The server closes the connection. |
+| Close code `1008` with reason `Buffer overflow` | Your client fell more than 300,000 buffered bytes behind. Read faster, or subscribe to fewer channels. |
+
+Messages that are not valid JSON, or that carry no `type`, are ignored silently.
 
 ### Double-encoded data field
 
@@ -165,4 +369,4 @@ const book = typeof parsed.data === "string"
 
 ## Map symbols consistently
 
-Market symbols (e.g. `SOL-PERP`) match the UI. The market index in response channels corresponds to the SDK's `marketIndex` ,  keep your market list in sync with the SDK's market metadata to avoid mismatches.
+Market symbols (e.g. `SOL-PERP`) match the UI. The market index in response channels corresponds to the SDK's `marketIndex`, keep your market list in sync with the SDK's market metadata to avoid mismatches.

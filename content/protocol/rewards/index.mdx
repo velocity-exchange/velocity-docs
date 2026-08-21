@@ -5,7 +5,7 @@ Create your own referral link today, and boost your earnings when you refer new 
 - Referrers earn **15%** of the taker fee paid by users they refer (the default `referrerRewardNumerator` on the perp fee tiers).
 - Referred users receive a **5%** discount on their taker fees (the default `refereeFeeNumerator`).
 
-These are the protocol's default fee-tier values and can be changed by governance; check the current `FeeTier` on the fee-structure account for the live numbers.
+These are the protocol's default fee-tier values and can be changed by governance; check the current `perpFeeStructure.feeTiers` on the `State` account for the live numbers. The referrer and referee numerators are the same (15% / 5%) across all three populated tiers, so a referral's economics do not vary with the referred user's volume tier.
 
 This document will walk you through setting up your referral link to begin earning today.
 

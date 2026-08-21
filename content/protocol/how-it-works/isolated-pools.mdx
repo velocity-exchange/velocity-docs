@@ -1,6 +1,10 @@
 # Isolated Pools
 
-Velocity's isolated pools allow users to trade or provide liquidity with specific risks confined to a particular pool. Each isolated pool is segregated, meaning that the risks associated with one pool do not impact other pools on Velocity.
+Velocity's isolated pools allow users to swap or borrow/lend with specific risks confined to a particular pool. Each isolated pool is segregated, meaning that the risks associated with one pool do not impact other pools on Velocity.
+
+<Callout type="important">
+An isolated-pool subaccount cannot place perpetual orders. Perp trading requires the main account (pool ID 0); isolated pools are for swaps and leveraged borrow/lend only.
+</Callout>
 
 <Callout type="info">
 Not to be confused with an [Isolated Insurance Fund](/protocol/insurance-fund) (a per-market insurance backstop){/* HIDDEN: or [isolated positions](/protocol/trading/margin) (per-position perp margin) */}. Isolated pools are segregated collateral pools.
@@ -16,7 +20,7 @@ Cross collateral (default accounts for Velocity) shares a single collateral pool
 | **Account Health** | Determined by total account collateral | Customized per pool |
 | **Liquidation Impact** | All positions at risk if account health fails | Only the affected pool is liquidated |
 | **Margin Efficiency** | High (collateral supports all positions) | Low (collateral is pool-specific) |
-| **Use Case** | Suitable for traders/stakers managing multiple positions and want to optimise capital efficiency | Ideal for stakers/traders who are only focused on one position and containing risk to a limited set of tokens |
+| **Use Case** | Suitable for traders/stakers managing multiple positions and want to optimise capital efficiency | Ideal for users who want to swap or borrow/lend against a single deposit and contain risk to a limited set of tokens (no perp trading) |
 
 <Callout type="info">
 ### Example - Cross Collateral Pool
@@ -30,7 +34,7 @@ Cross collateral (default accounts for Velocity) shares a single collateral pool
 
 <Callout type="info">
 ### Example - Isolated Pool
-1. **Choose an Isolated Pool**: Select an isolated pool for the asset pair you want to trade.
+1. **Choose an Isolated Pool**: Select an isolated pool for the asset pair you want to swap or borrow/lend against.
 2. **Deposit Collateral**: Deposit collateral into the pool.
 3. **Open a Leveraged Position**: Borrow against your deposit and swap into the collateral asset to increase exposure. You can earn higher yield on your initial deposit through this leveraged position.
 4. **Risk Management**:

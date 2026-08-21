@@ -4,13 +4,19 @@ These risk parameters are relevant to perpetual futures. Further risk parameters
 
 ### Price Bands
 
-On Velocity, to prevent market manipulation and protect users during volatile events, markets will prevent users from sending orders if the oracle-mark price breaches the 10% band of the oracle's 5-minute time-weighted average price (TWAP). If the mark and the 5-minute oracle TWAP diverge by 10%, markets will prevent orders from filling until the price reverts back within this band.
+On Velocity, to prevent market manipulation and protect users during volatile events, the protocol runs two separate oracle-divergence bands. Order placement itself is not gated by either band.
+
+**Mark vs 5-minute oracle TWAP.** If the AMM reserve (mark) price and the 5-minute oracle TWAP diverge by more than the greater of the exchange-wide configured threshold or 10% (a protocol-wide floor), the protocol blocks PnL settlement, deficit resolution, PnL-pool fee sweeps, and funding updates until the price reverts back within this band.
+
+**Live oracle vs 5-minute oracle TWAP.** If the live oracle price and the 5-minute oracle TWAP diverge by more than the greater of the exchange-wide configured threshold or 50% (a separate, wider protocol-wide floor), the protocol halts perp order fills until the price reverts back within this band.
 
 These formulas are defined below:
 
 Oracle-mark divergence = `(reference_price - oracle_twap_{5 minutes}) / reference_price`
 
-Oracle-TWAP-mark band = `within the greater of the market's configured divergence threshold or 10% (a protocol-wide floor)`
+Mark/oracle-TWAP band = `within the greater of the exchange-wide configured divergence threshold (State.oracle_guard_rails.price_divergence) or 10%`
+
+Live-oracle/oracle-TWAP band (fills only) = `within the greater of the exchange-wide configured divergence threshold or 50%`
 
 ### Collateral Weight
 
@@ -36,9 +42,9 @@ Market Orders have the possibility of only being partially filled before expirat
 
 -   exceeds its active time limit (for market orders, the Clearinghouse sets this at 30 seconds)
 
--   exceed 2% price impact (set by the market's `max_slippage_ratio` )
+-   exceed the market's per-fill AMM cap, set by `max_fill_reserve_fraction` (default 1% of the AMM's base asset reserves, moving price by roughly 2%), and further capped at half of the available liquidity on that side of the AMM
 
-Within a single transaction, orders can be filled up by the `max_base_asset_amount` against the AMM. This maximum is set per market and calling of multiple fill instructions may work. For example, if the maximum amount was 10,000 SOL, an order for 100,000 SOL can be filled against the AMM in 10 instruction calls.
+Within a single transaction, one fill can only take up to this per-fill AMM cap. Calling multiple fill instructions can still fill a larger order over several transactions. For example, if the per-fill cap was 10,000 SOL, an order for 100,000 SOL can be filled against the AMM across 10 fill instructions.
 
 The following conditions will also expire/cancel the remainder(s) of orders:
 

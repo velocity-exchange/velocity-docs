@@ -18,7 +18,7 @@ Post-Only Orders on the decentralised orderbook (see [Keepers & Decentralised Or
 
 Makers can participate in the JIT auction and provide just-in-time liquidity as Taker flow comes in.  
 
-This will provide Makers with an opportunity to see retail flow five seconds before it hits the market.  
+The JIT window is the taker order's own auction duration, measured in slots (set by the client, subject to a per-market/tier floor). This gives Makers an opportunity to see retail flow before it hits the market; the wall-clock length of that window depends on both the order and the current Solana slot duration.  
 
 Market Makers can participate in the JIT system by running a JIT Maker Bot. For more information, check out [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)
 

@@ -17,6 +17,10 @@ The market immediately enters "reduce only mode" once an expiry date is set.
 
 *   Users cannot settle unrealized P&L prior to expiry
 
+<Callout type="warning">
+Reduce-only applies at **fill** time, not only at placement. An order you placed while the market was still `Active` carries `reduce_only = false`, but the fill path re-derives reduce-only from the live market status for the taker and for every maker in the match, so that order can no longer add exposure. See [Block Conditions](/protocol/risk-and-safety/block-conditions#layer-3-market-status).
+</Callout>
+
 ### Settlement price lock in
 After the expiry date, the market can lock in a settlement price.
 *   Must call the instruction: `settle_expired_market`
@@ -31,7 +35,7 @@ After the expiry date + optional time buffer, users can settle their "expired po
 *   At position closure, the taker fee is applied (so as to encourage close during reduce only mode)
 
 ### PnL Pool Settlement
-Once the number of users in the market reaches zero, the remaining balance PnL Pool can be settled into the quote asset's [Revenue Pool](/protocol/how-it-works/revenue-pool)
+Once the market is in Settlement status, all base exposure is closed out (no users left holding base), the net quote balance is zero, and no bankruptcy claims remain unresolved, the remaining balance in the PnL Pool can be settled into the quote asset's [Revenue Pool](/protocol/how-it-works/revenue-pool)
 </Steps>
 
 ## Spot Markets

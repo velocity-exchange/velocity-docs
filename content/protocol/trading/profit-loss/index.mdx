@@ -90,7 +90,7 @@ Users can claim positive P&L when:
 <Callout type="warning">
 **Automatic P&L Settlement**
 
-Settling a **negative** unrealised P&L is unconditionally permissionless — anyone can settle it for any account at any time. Settling a **positive** unrealised P&L on someone else's behalf, however, is only allowed when the market's P&L Pool has excess funds available, or when the caller is the position owner or their delegate.
+Settling a **negative** unrealised P&L on someone else's behalf requires that account to meet its settle-P&L maintenance margin requirement, and, when the market's oracle is stale for margin purposes, only the position owner or their delegate can settle it. Settling a **positive** unrealised P&L on someone else's behalf is allowed when the market's P&L Pool has excess funds available, when the caller is the position owner or their delegate, or when the account is being liquidated and no longer holds a base position in that market. A market's own status and pause settings can also block settlement either way.
 </Callout>
 
 Settling the P&L will improve the accounts health. 

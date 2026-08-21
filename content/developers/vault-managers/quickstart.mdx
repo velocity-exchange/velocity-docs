@@ -42,7 +42,7 @@ Add `--permissioned` and `--min-deposit-amount <amount>` if you want whitelisted
 
 ### Update parameters and enable trading
 
-After creation you can lower fees, shorten redeem period, or adjust caps (within the one-way constraints described in [Vault Managers](/developers/vault-managers)):
+After creation you can lower fees, shorten the redeem period, or adjust caps immediately (within the one-way constraints described in [Vault Managers](/developers/vault-managers)):
 
 ```bash
 bun run cli -- manager-update-vault \
@@ -52,6 +52,20 @@ bun run cli -- manager-update-vault \
   --management-fee 0 \
   --profit-share 0
 ```
+
+To raise the management fee or profit share, or lower the hurdle rate, queue the change instead. It takes effect only after a timelock of at least `max(7 days, 2x redeem period)`:
+
+```bash
+bun run cli -- admin-init-fee-update \
+  --vault-address <VAULT_ADDRESS>
+
+bun run cli -- manager-update-fees \
+  --vault-address <VAULT_ADDRESS> \
+  --management-fee 3 \
+  --timelock-duration 604800
+```
+
+`admin-init-fee-update` creates the `FeeUpdate` account the queue is stored in (an admin action); `manager-update-fees` then queues the new fee, and calling it again after the timelock matures installs it. Use `admin-delete-fee-update` to cancel a pending queue.
 
 To enable margin trading on the vault:
 
@@ -83,15 +97,18 @@ Deposits and withdrawals are otherwise as in the standard flow: request withdraw
 
 Common manager actions:
 
-- Manager deposit/withdraw
-- Apply profit share across depositors
-- View vault state and depositors
+- Manager deposit and withdraw: `manager-deposit`, `manager-request-withdraw`, `manager-withdraw`, `manager-cancel-withdraw`
+- Apply profit share: `manager-apply-profit-share` for one depositor, `apply-profit-share-all` for every depositor
+- View state: `view-vault`, `view-vault-depositor`, `list-vault-depositors`
+- Change the trading delegate or the manager: `manager-update-delegate`, `manager-update-vault-manager`
 
-Run `bun run cli -- --help` from `packages/vaults-sdk` for the full command list and flags.
+Run `bun run cli -- --help` from `packages/vaults-sdk` for the full command list and flags. The SDK-level equivalents, plus borrow/repay, rebases, the queued fee update, and the vault's own insurance-fund stake, are in [Manager operations](/developers/vault-managers/manager-operations).
 
 </Steps>
 
 ## Next steps
 
+- Want the full manager surface beyond the CLI basics? See [Manager operations](/developers/vault-managers/manager-operations).
 - Need manager borrowing or margin beyond the base vault? See [Trusted vaults](/developers/vault-managers/trusted-vaults).
 - Want a multisig (e.g. Squads) as vault manager instead of a single keypair? See [Multisig manager](/developers/vault-managers/multisig-ops).
+- Building a depositor-facing app on top of the vault? See [Vault Depositors](/developers/vault-depositors).

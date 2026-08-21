@@ -60,6 +60,122 @@ const spot = velocityClient.convertToSpotPrecision(0, 100); // 100 quote-asset u
   </TypeScript>
 </SDKDoc>
 
+## BigNum: a value that carries its own precision
+
+`BigNum` wraps a `BN` together with the number of decimal places that `BN` is scaled by, so a value and its precision travel as one object. Use it when you would otherwise hand-roll conversion and formatting: it prints, parses, and does arithmetic without you tracking the exponent by hand.
+
+The second constructor argument is the **exponent**, not the precision constant. Pass `PRICE_PRECISION_EXP` (6), `BASE_PRECISION_EXP` (9), `QUOTE_PRECISION_EXP` (6), and so on, not `PRICE_PRECISION` (1e6).
+
+<SDKDoc>
+  <TypeScript name="BigNum" type="class">
+```js
+import {
+  BN,
+  BigNum,
+  PRICE_PRECISION_EXP,
+  BASE_PRECISION_EXP,
+} from "@velocity-exchange/sdk";
+
+// Raw oracle price (1e6) wrapped with its exponent
+const price = BigNum.from(new BN(150_500_000), PRICE_PRECISION_EXP);
+price.print();        // "150.5"
+price.toFixed(2);     // "150.50"
+price.toNotional();   // "$150.50"
+price.toNum();        // 150.5
+
+// Parse a user-entered string into the right precision
+const size = BigNum.fromPrint("2.5", BASE_PRECISION_EXP);
+size.toString();      // "2500000000"  (the raw BN, 1e9)
+```
+  </TypeScript>
+</SDKDoc>
+
+Useful methods, grouped by what they do:
+
+| Group | Methods |
+|---|---|
+| Create | `BigNum.from(val, exponent)`, `BigNum.fromPrint(string, exponent)`, `BigNum.zero(exponent)`, `BigNum.fromJSON` |
+| Arithmetic | `add`, `sub`, `mul`, `scalarMul`, `div`, `scale(numerator, denominator)`, `abs`, `neg` |
+| Precision | `shift(exponent)`, `shiftTo(targetExponent)` |
+| Compare | `gt`, `lt`, `gte`, `lte`, `eq`, plus the zero checks `gtZero`, `ltZero`, `eqZero`, `gteZero`, `lteZero` |
+| Print | `print`, `printShort`, `prettyPrint`, `toFixed`, `toPrecision`, `toRounded`, `toNotional`, `toMillified`, `toPercentage` |
+| Escape hatches | `toString` (raw BN string), `toNum` (JS number), `toJSON` |
+
+Three behaviors worth knowing before you rely on it:
+
+- `add` and `sub` assert that both operands have the same exponent. Call `shiftTo` first if they do not.
+- `mul` returns a value whose exponent is the **sum** of the two exponents. `scalarMul` shifts the result back down so it stays in the original precision space, which is usually what you want when multiplying a price by a ratio.
+- `toNum` goes through `parseFloat`, so it loses accuracy on very large values. Keep money math in `BigNum` or `BN` and convert only for display.
+
+`BigNum.setLocale(locale)` sets the decimal delimiter and thousands separator used by every printing method, globally for the class.
+
+## Slots Versus Wall Clock
+
+Solana's slot time is moving from 400ms down to 200ms through a feature-gate schedule (400, 350, 300, 250, 200). Because of that, a slot count is **not** a fixed amount of time. The protocol stores durations in milliseconds and converts them to slots using the live slot length, and `math/time.ts` gives you the same conversions off-chain.
+
+The live slot length comes from the state account. Three fields drive it:
+
+| State field | Meaning |
+|---|---|
+| `slotDurationMs` | Current slot length in ms. `0` means unset and resolves to the 400ms baseline. |
+| `pendingSlotDurationMs` | A staged next value. `0` means nothing is staged. |
+| `slotDurationEffectiveSlot` | The slot at which the staged value takes over. |
+
+Read it with `activeSlotDurationFromState(state, currentSlot)`, which applies the staged switch once `currentSlot` reaches the effective slot. `slotDurationFromState(raw)` only resolves the `0` sentinel on the base field, so it keeps returning the pre-switch value across a gate flip.
+
+<SDKDoc>
+  <TypeScript name="activeSlotDurationFromState" type="function">
+```js
+import {
+  BN,
+  activeSlotDurationFromState,
+  millisFromSecs,
+  millisToSlotsCeil,
+  millisFromSlots,
+  msToSlotsCeilNum,
+  slotsToMsNum,
+  SLOT_DURATION_BASELINE,
+} from "@velocity-exchange/sdk";
+
+const state = velocityClient.getStateAccount();
+const currentSlot = new BN(await connection.getSlot());
+
+// The slot length the program itself would use right now
+const slotDuration = activeSlotDurationFromState(state, currentSlot);
+
+// A 10 second window, expressed in actual slots
+const tenSeconds = millisFromSecs(10);
+const slots = millisToSlotsCeil(tenSeconds, slotDuration); // 25 slots at 400ms, 50 at 200ms
+
+// A measured slot delta, back to wall-clock ms
+const elapsedMs = millisFromSlots(new BN(20), slotDuration);
+
+// Plain-number variants for pacing and thresholds
+const auctionSlots = msToSlotsCeilNum(8_000, slotDuration);
+const auctionMs = slotsToMsNum(auctionSlots, slotDuration);
+
+console.log(SLOT_DURATION_BASELINE); // 400, the pre-gate baseline
+```
+  </TypeScript>
+</SDKDoc>
+
+The rounding direction matters and mirrors the program exactly:
+
+| Helper | Rounding | Use for |
+|---|---|---|
+| `millisFromSlots(slots, d)` | exact | Turning a measured slot delta into elapsed time |
+| `millisToSlots(m, d)` | down | Staleness windows, where shorter is the safe direction |
+| `millisToSlotsCeil(m, d)` | up | Windows that protect the user, such as auction lengths and minimum cooldowns |
+| `msToSlotsNum(ms, d)` | down | The same as `millisToSlots`, for plain numbers |
+| `msToSlotsCeilNum(ms, d)` | up | Durations that must not fall below their intended wall-clock length |
+| `slotsToMsNum(slots, d)` | exact | Plain-number version of `millisFromSlots` |
+| `divPeriods(m, period)` | down | How many whole periods fit in a duration, for legacy per-period rates |
+
+Two more things to keep straight:
+
+- `Millis` and `SlotDurationMs` are branded types. A duration in milliseconds cannot be compared against a slot count without converting through the live slot length, and the type system enforces that. Build durations with `millis(ms)` or `millisFromSecs(secs)`.
+- `STORED_UNIT_MS` (400) is a **storage codec** for older admin-set fields that were encoded in units of the historical 400ms slot. Decode those with `millisFromStoredUnits`. Do not use it as a general slots-to-seconds conversion factor.
+
 ## Token Math Helpers
 
 Spot balances are stored as interest-bearing scaled values. These helpers convert them to actual token amounts.

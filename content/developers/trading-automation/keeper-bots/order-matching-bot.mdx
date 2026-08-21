@@ -39,16 +39,17 @@ The matching bot runs a continuous loop: fetch fillable orders from the DLOB, fi
 <Steps>
 ### Get nodes from the DLOB that are ready to be filled
 
-Market orders first go through [JIT Auctions](/protocol/how-it-works/matching-engine). After the auction period ends, they become available for matching bots to fill. The DLOB exposes a `findNodesToFill` method that returns these eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
+Market orders first go through [JIT Auctions](/protocol/how-it-works/matching-engine). Most orders become available to matching bots once the auction period ends, but the AMM can also skip the rest of the auction early when its inventory is low and it has been profitable since the last funding update, so a crossing DLOB maker or the AMM itself can fill an order before the auction ends. The DLOB exposes a `findNodesToFill` method that returns eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
 
 ```typescript copy
 const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;
-
-const oraclePriceData = this.velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 const slot = this.slotSubscriber.getSlot();
 
-const vAsk = calculateAskPrice(market, oraclePriceData);
-const vBid = calculateBidPrice(market, oraclePriceData);
+const oraclePriceData = this.velocityClient.getMMOracleDataForPerpMarket(marketIndex, slot);
+const slotDuration = currentSlotDuration(this.velocityClient, slot);
+
+const vAsk = calculateAskPrice(market, oraclePriceData, new BN(slot), slotDuration);
+const vBid = calculateBidPrice(market, oraclePriceData, new BN(slot), slotDuration);
 
 const nodesToFill = this.dlob.findNodesToFill(
     marketIndex,
@@ -62,6 +63,8 @@ const nodesToFill = this.dlob.findNodesToFill(
     market
 );
 ```
+
+Pass the live `slot` to `getMMOracleDataForPerpMarket`: omitting it falls back to a best-effort observed slot that can stall while a market is idle. Pass `slot` and `slotDuration` to `calculateAskPrice`/`calculateBidPrice` too, so the vAMM is quoted off the projected post-refresh curve, which is what the program uses to route fills.
 
 ### Filter for fillable nodes
 
@@ -84,17 +87,30 @@ if (
 }
 ```
 
-### Call `fillPerpOrder` on `VelocityClient`
+### Call `getFillPerpOrderIx` on `VelocityClient`
 
 Submit the fill transaction. On success, the keeper earns a small reward. Expect occasional failures from competing bots filling the same order — handle errors gracefully and continue to the next node.
 
 ```typescript copy
 const user = this.userMap.get(nodeToFill.node.userAccount.toString());
-const txSig = await this.velocityClient.fillPerpOrder(
+const takerStats = this.userStatsMap.get(user.getUserAccount().authority.toString());
+const takerIsReferred = takerStats ? isBuilderReferral(takerStats.getAccount()) : false;
+
+const ix = await this.velocityClient.getFillPerpOrderIx(
     nodeToFill.node.userAccount,
     user.getUserAccount(),
     nodeToFill.node.order,
-    undefined
+    undefined, // makerInfo
+    undefined, // fillerSubAccountId
+    undefined, // isSignedMsg
+    undefined, // fillerAuthority
+    undefined, // hasBuilderFee, derived from the order's bitflags
+    undefined, // takerEscrow
+    takerIsReferred
 );
+const tx = await this.velocityClient.buildTransaction(ix);
+const { txSig } = await this.velocityClient.sendTransaction(tx);
 ```
+
+The program's fill gate rejects a fill that omits the taker's `RevenueShareEscrow` when the order carries a builder code or the taker is referred (`UserStats.referrerStatus`'s `BuilderReferral` bit). Omitting it when required reverts the transaction with `UnableToLoadRevenueShareAccount`. Pass `takerIsReferred` (via `isBuilderReferral`) so the program can find the escrow it needs; `hasBuilderFee` is otherwise derived automatically from the order.
 </Steps>

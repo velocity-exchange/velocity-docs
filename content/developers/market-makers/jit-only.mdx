@@ -100,6 +100,7 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
+  OrderParamsBitFlag,
 } from "@velocity-exchange/sdk";
 
 // Build your maker order (opposite direction of taker)
@@ -110,6 +111,9 @@ const makerOrderParams = {
   baseAssetAmount: takerOrder.baseAssetAmount,
   price: velocityClient.convertToPricePrecision(myFillPrice),
   postOnly: PostOnlyParams.MUST_POST_ONLY,
+  // Required: the program rejects any place-and-make maker order that
+  // isn't IOC + post-only + limit with InvalidOrderIOCPostOnly.
+  bitFlags: OrderParamsBitFlag.ImmediateOrCancel,
 };
 
 // takerInfo: includes taker's public keys, user account, and the order to fill
@@ -143,6 +147,7 @@ import {
   OrderType,
   PositionDirection,
   PostOnlyParams,
+  OrderParamsBitFlag,
 } from "@velocity-exchange/sdk";
 
 const MAX_POSITION = 100; // max 100 SOL position
@@ -165,7 +170,7 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
 
     const marketIndex = order.marketIndex;
     const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
-    const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
+    const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex, slot);
 
     // Check oracle validity. Note: MMOraclePriceData has no `isValid` field -- use the
     // `isOracleValid` AMM-fill-oriented validity gate against the market's guard rails.
@@ -216,6 +221,7 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
           baseAssetAmount: order.baseAssetAmount.sub(order.baseAssetAmountFilled),
           price: velocityClient.convertToPricePrecision(myFillPrice),
           postOnly: PostOnlyParams.MUST_POST_ONLY,
+          bitFlags: OrderParamsBitFlag.ImmediateOrCancel,
         },
         {
           taker: pubkey,
@@ -273,8 +279,8 @@ Key fields:
 import { convertToNumber, isOracleValid, PRICE_PRECISION } from "@velocity-exchange/sdk";
 
 const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
-const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 const slotSubscriberSlot = slotSubscriber.getSlot(); // don't poll connection.getSlot() per fill
+const oracle = velocityClient.getMMOracleDataForPerpMarket(marketIndex, slotSubscriberSlot);
 
 // Always guard against stale or unhealthy oracle data before quoting off it
 const oracleIsValid = isOracleValid(
@@ -306,13 +312,11 @@ Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-pr
 ```typescript
 import { JitterSniper, PriceType } from "@velocity-exchange/jit-proxy";
 
-// The constructor field is still `driftClient` (typed as `VelocityClient`) --
-// @velocity-exchange/jit-proxy hasn't renamed it yet. `jitProxyClient` (a
-// `JitProxyClient` wrapping the JIT proxy program) is also required; omitted here
-// for brevity.
+// `jitProxyClient` (a `JitProxyClient` wrapping the JIT proxy program) is also
+// required; omitted here for brevity.
 const jitter = new JitterSniper({
   auctionSubscriber,
-  driftClient: velocityClient,
+  velocityClient,
   slotSubscriber,
   jitProxyClient,
 });

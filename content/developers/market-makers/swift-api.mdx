@@ -119,6 +119,7 @@ import {
   isVariant,
   PositionDirection,
   PostOnlyParams,
+  OrderParamsBitFlag,
 } from "@velocity-exchange/sdk";
 import { PublicKey } from "@solana/web3.js";
 
@@ -153,6 +154,9 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
     baseAssetAmount: signedMessage.signedMsgOrderParams.baseAssetAmount,
     price: myFillPrice,
     postOnly: PostOnlyParams.MUST_POST_ONLY,
+    // Required: the signed-msg place-and-make handler rejects any maker order
+    // that isn't IOC + post-only + limit with InvalidOrderIOCPostOnly.
+    bitFlags: OrderParamsBitFlag.ImmediateOrCancel,
   });
 
   // Resolve taker user account (from UserMap or userAccountGetter)
@@ -333,7 +337,7 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey,
 ## Gotchas
 
 - **SWIFT is not guaranteed flow:** not all taker orders go through SWIFT. Takers using the standard SDK flow submit directly onchain. You should subscribe to both SWIFT and `AuctionSubscriber` for complete coverage, using `isSignedMsgOrder()` to deduplicate.
-- **ed25519 instruction ordering:** the ed25519 verification instruction must be the first instruction in the transaction. The SDK handles this, but if building transactions manually, incorrect ordering causes silent verification failures.
+- **ed25519 instruction ordering:** the ed25519 verification instruction must sit at the index the place instruction references, not necessarily first. `placeAndMakeSignedMsgPerpOrder`/`getPlaceAndMakeSignedMsgPerpOrderIxs` accept `precedingIxs` (instructions that will come before these in the final transaction, used only to compute the verify instruction's sysvar index) and `overrideCustomIxIndex` for an explicit override. If you're prepending anything yourself, such as compute-budget instructions, pass `precedingIxs` so the SDK computes the right index; getting this wrong causes silent verification failures.
 - **Latency advantage is perishable:** the 100-500ms head start from SWIFT only helps if your fill transaction lands quickly. With a slow RPC node, the advantage is wasted. Use a dedicated RPC node with staked connections for fastest landing.
 - **UserAccount resolution:** the `userAccountGetter` callback should return quickly. If it requires an RPC call per order, you'll negate the latency advantage. Pre-load user accounts via `UserMap` subscription.
 - **Order expiry:** SWIFT signed orders have a `maxTs` field. If your fill transaction lands after this timestamp, it will fail. Check remaining time before submitting.

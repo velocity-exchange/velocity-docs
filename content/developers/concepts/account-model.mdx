@@ -46,7 +46,7 @@ interface StateAccount {
   numberOfSubAccounts: BN;
   numberOfMarkets: number;
   numberOfSpotMarkets: number;
-  minPerpAuctionDuration: number;      // slots
+  minPerpAuctionDuration: number;      // legacy 400ms slot-duration units, decode with millisFromStoredUnits
   defaultMarketOrderTimeInForce: number; // seconds
   defaultSpotAuctionDuration: number;  // slots
   liquidationMarginBufferRatio: number; // MARGIN_PRECISION (1e4)
@@ -57,7 +57,7 @@ interface StateAccount {
   perpFeeStructure: FeeStructure;
   spotFeeStructure: FeeStructure;
   initialPctToLiquidate: number;       // LIQUIDATION_PCT_PRECISION (1e4)
-  liquidationDuration: number;         // seconds
+  liquidationDuration: number;         // legacy 400ms slot-duration units, decode with millisFromStoredUnits
   maxInitializeUserFee: number;
   featureBitFlags: number;             // bitmask, see FeatureBitFlags
   lpPoolFeatureBitFlags: number;
@@ -154,7 +154,7 @@ Manages spot markets and lending pools with:
 - **Asset/liability weights** - Collateral weights for risk calculations
 
 <Callout type="warning">
-Velocity disabled the **spot DLOB** — `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` no longer exist (calls fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral/borrow-lend and swaps, just not order-book trading. External fulfillment (Serum/Phoenix/OpenBook v2) is also removed entirely.
+Velocity disabled the **spot DLOB**. The SDK methods `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` still exist, but each is now a stub that always throws client-side before building a transaction. The on-chain instruction discriminants are preserved as deprecated stubs too, and would raise `SpotDlobTradingDisabled` if ever called directly. Spot markets still exist for collateral/borrow-lend and swaps, just not order-book trading. External fulfillment (Serum/Phoenix/OpenBook v2) is also removed entirely.
 </Callout>
 
 <details>
@@ -299,6 +299,7 @@ interface UserStatsAccount {
   disableUpdatePerpBidAskTwap: number;
   pausedOperations: number;          // bitmask, see UserStatsPausedOperation
   authority: PublicKey;
+  ifStakedQuoteAssetAmount: BN;
   delegatePermissions: number;
 }
 ```
@@ -360,7 +361,7 @@ interface Order {
 
 ## PDAs (Program Derived Addresses)
 
-Velocity extensively uses PDAs for deterministic address generation. Seed strings are unchanged from Drift, but since the **program ID is new**, every derived address is different from Drift's:
+Velocity extensively uses PDAs for deterministic address generation. Most seed strings are unchanged from Drift, but the State seed became `"velocity_state"`, and since the **program ID is new**, every derived address is different from Drift's:
 
 ```
 State PDA:      ["velocity_state"]
@@ -405,6 +406,23 @@ The SDK handles account passing automatically — you rarely need to manually co
 ## Remaining accounts pattern
 
 Many instructions use "remaining accounts" to dynamically pass oracle, market, and user accounts. This lets a single instruction handle variable market sets without requiring fixed account slots. The SDK builds this list for you (`VelocityClient` does it internally, or use `VelocityCore.remainingAccounts.getRemainingAccounts()` for the stateless/subscription-free path — see [Reading Data](/developers/ecosystem-builders/reading-data)).
+
+## Account sizes can grow
+
+Every account above is a fixed-size, zero-copy struct, so new fields normally go into reserved padding: the size and every field offset stay put. When a struct genuinely runs out of padding, it grows, and existing accounts are physically resized on-chain by the `extend_account` instruction.
+
+`extend_account` reads the target account's discriminator, resolves `8 + size_of::<T>()` for that type from the **deployed** program, transfers the rent shortfall from a payer, and grows the account data. The runtime zero-fills the new tail, so newly added fields read as zero until code writes them. It is:
+
+- **Grow-only.** The target size is compiled in, so the instruction cannot shrink an account or inflate one to an arbitrary size.
+- **Idempotent.** An account already at or beyond target size is a success no-op, so cranking twice is harmless.
+- **Permissioned.** It requires the `AccountExtension` hot role (or the warm/cold admin). Extension never corrupts contents, but growing accounts costs every reader bandwidth, so the timing is the protocol's decision.
+- **Zero-copy only.** Supported types include `User`, `UserStats`, `ReferrerName`, `PerpMarket`, `SpotMarket`, `State`, `InsuranceFundStake`, `PrelaunchOracle`, `PythLazerOracle`, `RevenueShare`, `LPPool`, and `Constituent`. Anything else fails with `InvalidAccountExtension`. Borsh accounts (`SignedMsgUserOrders`, `RevenueShareEscrow`, the LP-pool mapping accounts) version their layouts or ship dedicated resize instructions instead, and are deliberately rejected.
+
+<Callout type="warning">
+**Decode length-tolerantly.** Treat the struct size your client compiled against as the number of bytes to **read**, never as the buffer length to **expect**. Concretely: never assert `data.length === EXPECTED_SIZE`, never derive a slice end from the buffer length, and never filter `getProgramAccounts` by `dataSize`. A `dataSize` filter silently matches nothing the first time a type is extended. Filter by the 8-byte discriminator with a `memcmp` instead.
+</Callout>
+
+The sizes quoted on this page (`PerpMarket` 1304 bytes, `SpotMarket` 808, `User` 4496) are the sizes the current program compiles in, not permanent constants. The TypeScript SDK is already length-tolerant: Anchor's borsh coder and the custom `decodeUser` fast path both read start-relative offsets, so an extended account decodes unchanged. See [Reading Data](/developers/ecosystem-builders/reading-data#decoding-accounts-without-a-subscription-velocitycore) for the decode paths.
 
 ## MarketStatus discriminants
 

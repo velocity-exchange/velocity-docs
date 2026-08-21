@@ -3,7 +3,7 @@
 The Velocity SDK handles onchain interactions, account subscriptions, and transaction construction. Understanding its internals helps you optimize performance, debug issues, and use advanced features.
 
 <Callout type="info">
-The code examples below use the TypeScript SDK (`@velocity-exchange/sdk`), the only SDK Velocity ships. There is no Python SDK. A Rust client (`velocity-rs`) exists in the [monorepo](https://github.com/velocity-exchange/velocity-v1) but is source-only and unpublished — see [SDK Setup](/developers/velocity-sdk/setup) for details.
+The code examples below use the TypeScript SDK (`@velocity-exchange/sdk`). There is no Python SDK. A Rust client (`velocity-rs`) also exists in the [monorepo](https://github.com/velocity-exchange/velocity-v1), under `rust/velocity-rs`.
 </Callout>
 
 ## Core architecture
@@ -188,6 +188,8 @@ const { txSig } = await velocityClient.txSender.sendVersionedTransaction(
 
 Higher-level methods like `placePerpOrder()` do all three steps automatically.
 
+Both layers are injectable. `TxHandler` builds and signs (blockhash resolution, compute-budget instructions, lookup tables), and a `TxSender` broadcasts and confirms. `VelocityClient` defaults to a `RetryTxSender` wrapping its own `TxHandler`. See [Transactions](/developers/velocity-sdk/transactions) for the four sender implementations, their retry and timeout defaults, and the compute-unit and priority-fee parameters.
+
 ## Remaining accounts pattern
 
 Many Velocity instructions need dynamic account lists (oracles, markets, positions). The SDK's `getRemainingAccounts()` method builds this list:
@@ -301,6 +303,31 @@ const position = user.getPerpPosition(0);
 
 UserMap handles subscription lifecycle for all users automatically.
 
+## Subscribers and maps reference
+
+Beyond the account-subscription strategies above, the SDK root exports a set of standalone subscribers (live feeds you start with `subscribe()`) and maps (in-memory caches of many accounts of one kind). Keepers, fillers, and market makers assemble most of their state from these.
+
+| Export | What it tracks | Notes |
+|---|---|---|
+| `SlotSubscriber` | The current slot, via `connection.onSlotChange` | Ignores updates that are not strictly greater than the tracked slot. Optional stall-detection resubscribe. |
+| `SlothashSubscriber` | The newest entry of the `SlotHashes` sysvar (slot plus base58 blockhash) | Fetches once via RPC, then subscribes. Commitment defaults to `processed`. Needed for signed-message and other slothash-dependent flows. |
+| `ClockSubscriber` | The on-chain unix timestamp from the `Clock` sysvar | Gives you "on-chain now" without an RPC round trip, for evaluating time-based order and auction conditions the way the program would. No initial fetch: `currentTs` and `latestSlot` stay `undefined` until the first account-change notification arrives. |
+| `BlockhashSubscriber` | A short history of recent blockhashes | Polls `getLatestBlockhashAndContext` every 1000ms by default, so transaction building needs no blockhash fetch per transaction. Block height is derived from the same response (`lastValidBlockHeight - 150`). Takes either a `connection` or an `rpcUrl`. |
+| `ChainClock` | Latest known block height, slot, and timestamp per commitment level | Used by transaction senders to decide whether a blockhash has expired, without an RPC call. |
+| `AuctionSubscriber` | `User` accounts that currently have an order inside its auction window | A filtered websocket program-account subscription, so fillers react to auction-eligible orders without scanning every user. |
+| `OrderSubscriber` | Every `User` account on the program, and therefore every open order | Polling, websocket, or gRPC depending on `subscriptionConfig.type`. Backs `DLOBSubscriber`. Emits `orderCreated`, `userUpdated`, and `updateReceived`. |
+| `DLOBSubscriber` | A continuously rebuilt DLOB | Built on top of an order source such as `OrderSubscriber`. See [DLOB](/developers/velocity-sdk/dlob). |
+| `UserMap` | `User` accounts, keyed by user account pubkey | The general-purpose account cache, described above. |
+| `UserStatsMap` | `UserStats` accounts, keyed by authority pubkey | One per trading authority, shared across that authority's subaccounts. Uses a shared `BulkAccountLoader` by default. |
+| `ReferrerMap` | Authority to referrer, plus `ReferrerInfo` per referrer | Built by scanning `UserStats` with memcmp filters on the referrer-status byte instead of subscribing to full accounts. The referrer counterpart of `RevenueShareEscrowMap`. |
+| `RevenueShareEscrowMap` | `RevenueShareEscrow` accounts, keyed by authority | The builder and referral fee-accrual escrow. Fillers read it to attach a taker's escrow to a fill. |
+| `ConstituentMap` | LP-pool `Constituent` accounts | Look up by pubkey, spot market index, or constituent index. |
+| `PythLazerSubscriber` | Pyth Lazer price feeds over websocket | Takes endpoints, an auth token, and feed groups; filters out non-stable feeds and handles resubscribe. Feed properties must include `price` and `exponent` for `getPriceFromMarketIndex` to work. Relevant because deployed markets use Pyth Lazer. |
+| `PriorityFeeSubscriber` / `PriorityFeeSubscriberMap` | Recent priority fees for the accounts or markets you care about | Feeds the compute-unit price you attach to transactions. See [Transactions](/developers/velocity-sdk/transactions). |
+| `EventSubscriber` | Program events (see above) | Websocket or polling log provider. |
+
+Each subscriber owns its own connection lifecycle. Call `subscribe()` before reading, and `unsubscribe()` on shutdown so intervals and websocket handles are released.
+
 ## Common patterns
 
 <SDKDoc>
@@ -392,5 +419,6 @@ const tx = await velocityClient.txSender.getVersionedTransaction(
 ## Related
 
 - [SDK Setup](/developers/velocity-sdk/setup) - Getting started with the SDK
+- [Transactions](/developers/velocity-sdk/transactions) - Tx senders, compute units, priority fees
 - [Bot Architecture](/developers/market-makers/bot-architecture) - Production bot patterns
 - [Program Structure](../concepts/program-structure) - onchain accounts the SDK interacts with

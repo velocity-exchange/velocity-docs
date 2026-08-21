@@ -260,7 +260,7 @@ Resting orders you place are picked up by the hosted DLOB server — [`apps/dlob
 
 The [`FloatingPerpMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
 
-- **Slot based cooldown:** waits `MARKET_UPDATE_COOLDOWN_SLOTS` (30 slots) before re quoting a market, avoiding excessive transactions
+- **Wall-clock cooldown:** waits `MARKET_UPDATE_COOLDOWN_MS` (12 seconds), converted to slots at the live slot duration, before re quoting a market, avoiding excessive transactions
 - **Mutex guarded periodic tasks:** uses `async mutex` to prevent overlapping quote updates
 - **Position aware sizing:** adjusts order size based on `MAX_POSITION_EXPOSURE` (percentage of account collateral)
 - **Watchdog timer:** tracks last successful update to detect stale bot state

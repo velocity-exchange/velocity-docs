@@ -17,7 +17,7 @@ An individual perpetual market has two pools:
 The P&L Pool receives the highest priority on claimed funds, in order to give users the best possible experience. Every fill also carves out **protocol** and **insurance-fund** cuts of the fee remainder (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`, protocol = residual) — see [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for the full split. Those two cuts accrue as pending counters in the market's `feeLedger` and are swept out of the P&L Pool's surplus (above live user claims) into the withdrawable `protocol_fee_pool` and the quote spot market's `revenue_pool`, respectively — they never pass through the AMM Fee Pool.
 
 <Callout type="important">
-The streaming sweep reserves `max(net_user_pnl, 0)` in the P&L Pool on every drain so live user claims stay fully backed. The protocol's cut sweeps first and is exempt from the per-market retention buffer (`fee_pool_buffer_target`); the insurance-fund cut and AMM-provision tokenization sweep next, above that buffer.
+Every drain reserves three live claims in the P&L Pool: `max(net_user_pnl, 0)` (users' positive unsettled P&L, valued at the fixed expiry price rather than the live oracle while the market is in Settlement), the floored insurance-fund bankruptcy tranche (frozen entirely while a bankruptcy claim is latched), and any `pending_revenue_share` already accrued and owed to builders or referrers. The protocol's cut sweeps first and is exempt from the per-market retention buffer (`fee_pool_buffer_target`); the insurance-fund cut and AMM-provision tokenization sweep next, above that buffer.
 </Callout>
 
 ### Spot Market

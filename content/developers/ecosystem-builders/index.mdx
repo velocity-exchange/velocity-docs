@@ -4,7 +4,7 @@ asIndexPage: true
 
 # Ecosystem Builders
 
-This section is for teams building apps, analytics, or integrations on top of Velocity. Velocity does not currently ship a higher-level UI kit (Drift's `drift-common`/`drift-ui-template`/`@drift-labs/react` ecosystem has no Velocity equivalent yet) — ecosystem apps build directly against `@velocity-exchange/sdk`'s `VelocityClient`, `User`, and `DLOB` classes.
+This section is for teams building apps, analytics, or integrations on top of Velocity. Beyond the core `@velocity-exchange/sdk` (`VelocityClient`, `User`, and `DLOB` classes), Velocity publishes `@velocity-exchange/common` for shared order/auction math and swift-order construction, and `@velocity-exchange/react` for React hooks/providers/wallet glue. Ecosystem apps can build directly against the SDK, or pull in these packages for the same building blocks the Velocity UI uses.
 
 ## Setup
 
@@ -48,7 +48,7 @@ See [Reading Data](/developers/ecosystem-builders/reading-data) for the full set
 
 ### React apps
 
-There is no dedicated `@velocity-exchange/react` package yet. Wrap `VelocityClient` construction and subscription lifecycle in your own hook/provider (e.g. a `useEffect` that constructs the client on wallet connect and calls `subscribe()`/`unsubscribe()`), and store the derived state (positions, orders, margin) in your own state manager (Zustand, Redux, React context, etc). See [Reading Data](/developers/ecosystem-builders/reading-data) for the read APIs to wire up.
+`@velocity-exchange/react` provides hooks, providers, and Zustand stores for wallet and client lifecycle. If you'd rather not depend on it, wrap `VelocityClient` construction and subscription lifecycle in your own hook/provider (e.g. a `useEffect` that constructs the client on wallet connect and calls `subscribe()`/`unsubscribe()`), and store the derived state (positions, orders, margin) in your own state manager (Zustand, Redux, React context, etc). See [Reading Data](/developers/ecosystem-builders/reading-data) for the read APIs to wire up.
 
 ## Next steps
 
@@ -62,7 +62,3 @@ There is no dedicated `@velocity-exchange/react` package yet. Wrap `VelocityClie
 - [GitHub: velocity-v1](https://github.com/velocity-exchange/velocity-v1) — the monorepo containing the program, SDK, vaults, and keeper bots; watch releases for SDK breaking changes
 - [Migration guide](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) — full list of differences from Drift Protocol v2, if you're porting an existing Drift integration
 - [Data API playground](/developers/data-api)
-
-<Callout type="warning">
-Open question for this guide: Velocity currently has no announced equivalent to Drift's `drift-common` shared UI package or `drift-ui-template` starter kit. If/when one ships, this page should link to it instead of the raw SDK setup above.
-</Callout>

@@ -24,7 +24,7 @@ This gradual, throttled unwind applies to **cross-margin** positions only. {/* H
   - If the price keeps moving **against** the user, the system **accelerates** liquidation.
   - If the price moves **in favor** of the user, liquidation **slows down**, since the position is recovering naturally.
 
-  > This happens over a slot-based window that is admin-configurable (`State.liquidation_duration`).
+  > This happens over a wall-clock window that is admin-configurable (`State.liquidation_duration`, stored in legacy 400ms units and converted to slots at the live slot duration), so the ramp stays constant in seconds even as Solana's slot time changes.
 
   From empirical data, even a few slots of delay can prevent unnecessary liquidations during a temporary wick. The goal isn’t to pause liquidation, but to make it responsive, reacting quickly when needed and backing off when conditions improve.
 
@@ -35,7 +35,7 @@ This gradual, throttled unwind applies to **cross-margin** positions only. {/* H
 
 ## Insurance Fund as a safety net
 
-Even with all these protections, extreme events can still create negative balances. Velocity's **Insurance Fund** is the protocol's first backstop against this insolvency — it draws on the fund up to its available balance to cover spot and perp bankruptcies, with any remainder handled by socialized loss. See [Insurance Fund](/protocol/insurance-fund) for the coverage rules, funding sources, and the full bankruptcy resolution waterfall.
+Even with all these protections, extreme events can still create negative balances. Velocity pays down a bankruptcy in order, tranche by tranche, before any loss is socialized. For a spot bankruptcy, the market's own revenue pool is drawn first, then the shared Insurance Fund vault. For a perp bankruptcy, the market's own pending insurance fee is drawn first, then the Insurance Fund vault, then a clawback of the AMM's fee provision, with any remainder handled by socialized loss. See [Bankruptcy Resolution](/protocol/risk-and-safety/bankruptcy-resolution) for the full tranche order, the standing first-loss floor, and the claim freeze, and [Insurance Fund](/protocol/insurance-fund) for the coverage rules and funding sources.
 
 ## Liquidators
 

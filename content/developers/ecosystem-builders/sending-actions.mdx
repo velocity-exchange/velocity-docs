@@ -236,8 +236,7 @@ const tx = await velocityClient.txSender.getVersionedTransaction(
     bidIx,
     askIx,
   ],
-  [],
-  velocityClient.wallet.publicKey
+  []
 );
 
 const signature = await velocityClient.txSender.sendVersionedTransaction(

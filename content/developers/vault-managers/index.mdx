@@ -28,19 +28,62 @@ Velocity's UI/listing process is not yet finalized as public documentation — c
 | Parameter | Notes |
 | --------- | ----- |
 | **`name`** | Unique identity for the vault. |
-| **`management fee`** | Annualized; after initialization can only be **lowered**. |
-| **`performance fee`** (profit share) | On realized gains; after initialization can only be **lowered**. |
+| **`management fee`** | Annualized. `update_vault` can only **lower** it immediately; raising it goes through the timelocked `manager_update_fees` path (see below). |
+| **`performance fee`** (profit share) | On realized gains. `update_vault` can only **lower** it immediately; raising it goes through the timelocked `manager_update_fees` path. |
+| **`hurdle_rate`** | Profit share is only charged on returns above this rate. `update_vault` can only **raise** it immediately; lowering it goes through the timelocked `manager_update_fees` path. |
 | **`redemption period`** | Withdrawal cooldown in seconds; after initialization can only be **shortened**. |
-| **`permissioned`** | If set, only the manager can initialize new vault depositor accounts. |
-| **`max_deposits`** / **`max-tokens`** | Capacity limit; can be raised or lowered after init (applies to new deposits only). |
-| **`min_lp_deposit`** / **`min-deposit-amount`** | Minimum deposit size; can be changed after init (applies to new deposits only). |
+| **`permissioned`** | If set, only the manager can initialize new vault depositor accounts. Can be flipped after initialization. |
+| **`max_tokens`** / **`max-tokens`** | Capacity limit; can be raised or lowered after init (applies to new deposits only). |
+| **`min_deposit_amount`** / **`min-deposit-amount`** | Minimum deposit size; can be changed after init (applies to new deposits only). |
 
-**Fees:** Fee parameters use percentage precision (e.g. 1e6 scale) and are annualized. Management fees apply only when there are non-manager deposits and are charged across the vault; they compound on actions, so more frequent depositor activity slightly reduces the effective annualized fee. Performance fees are calculated per depositor with **watermarks** so drawdowns don't cause double-charging; once charged, this fee is not reclaimed.
+**Fees:** Fee parameters use percentage precision (1e6 = 100%) and are annualized. Management fees apply only when there are non-manager deposits and are charged across the vault; they compound on actions, so more frequent depositor activity slightly reduces the effective annualized fee. Performance fees are calculated per depositor with **watermarks** so drawdowns don't cause double-charging; once charged, this fee is not reclaimed.
 
 **Security and guardrails:**
 
-- Managers **cannot** withdraw user funds directly; withdrawals are governed by **redeem period** and **share accounting**.
-- Managers can **decrease** (but not increase) the redeem period and can only **lower** fees after initialization.
+- In a Normal-class vault, managers **cannot** withdraw user funds directly; withdrawals are governed by **redeem period** and **share accounting**. In a Trusted-class vault, the manager can move assets out via `manager_borrow`, tracked only as `manager_borrowed_value` against the vault's equity (see [Trusted vaults](/developers/vault-managers/trusted-vaults)).
+- Managers can **decrease** (but not increase) the redeem period immediately, and can only **lower** fees (or raise the hurdle rate) immediately. Raising fees or lowering the hurdle rate requires the timelocked `manager_update_fees` path, described in [Changing vault fees](#changing-vault-fees).
+
+## Changing vault fees
+
+There are two fee-change paths, and which one applies depends on the direction of the change.
+
+### One-way changes that apply at once
+
+`update_vault` (CLI `manager-update-vault`) applies immediately, but only in the direction that favours depositors. Each field is checked with a strict inequality, so a no-op value is rejected too:
+
+| Field | `update_vault` accepts | Error on the wrong direction |
+| --- | --- | --- |
+| `management_fee` | strictly lower than the current fee | `InvalidVaultUpdate` |
+| `profit_share` | strictly lower than the current share | `InvalidVaultUpdate` |
+| `hurdle_rate` | strictly higher than the current rate | `InvalidVaultUpdate` |
+| `redeem_period` | shorter than the current period | `InvalidVaultUpdate` |
+
+A raised hurdle rate counts as depositor-friendly because profit share is only charged above the hurdle, so a higher hurdle means less fee.
+
+### Raises go through a timelock
+
+To raise the management fee or the profit share, or to lower the hurdle rate, the manager queues the new policy with `manager_update_fees`. The queue lives in a separate `FeeUpdate` account, which an admin must create first with `admin_init_fee_update`.
+
+Rules the program enforces on the queue:
+
+- `timelock_duration` must be greater than 0 and at least `max(1 week, 2 x redeem_period)`. A shorter duration fails with `InvalidVaultUpdate`.
+- The queued values are bounds-checked with the same rules as vault initialization: management fee below 100% and profit share below 100%. Protocol vaults must queue `hurdle_rate == 0`.
+- Only one update can be pending at a time, and the vault must not be in liquidation (`OngoingLiquidation`).
+- Any field left unset in the params keeps its current value.
+
+Nothing changes when the queue is created. The new policy installs when `manager_update_fees` is called again after `incoming_update_ts` has passed. That second call settles the management fee up to the current instant at the **old** rate first, then installs the new policy and clears the queue. Because installation needs a settled vault, other share-moving instructions (deposit, withdraw, request withdraw, tokenize, share transfer) also install a matured update as a side effect.
+
+The manager can withdraw a pending queue with `manager_cancel_fee_update`. An admin can delete the `FeeUpdate` account with `admin_delete_fee_update`, and can force a matured update through `manager_update_fees` when one is already pending.
+
+### Hurdle rate
+
+`hurdle_rate` is a return threshold on the depositor's cost basis, in percentage precision (1e6 = 100%). Profit share is charged only when a depositor's unrealized profit exceeds `cost_basis x hurdle_rate / 1e6`, where cost basis is the depositor's net deposits plus its cumulative profit-share amount. Below that threshold the manager takes no profit share. A hurdle rate of 0 means every gain above the high-water mark is charged.
+
+### Grandfathering
+
+Each depositor records the profit share and hurdle rate that were in force when its high-water mark was last set. The policy actually applied to a depositor's unpriced gain is `min(vault profit share, depositor's stored profit share)` and `max(vault hurdle rate, depositor's stored hurdle rate)`, so a queued raise never prices gain earned before it existed, and a depositor-friendly change applies at once.
+
+A depositor moves onto the vault's current policy only when its gain is realized at the old policy. The manager can force that with `apply_profit_share`, described in [Manager operations](/developers/vault-managers/manager-operations).
 
 ## Accounting
 
@@ -56,9 +99,12 @@ Velocity's UI/listing process is not yet finalized as public documentation — c
 
 <Cards>
   <Cards.Card title="Quickstart: create and run a vault" href="/developers/vault-managers/quickstart" />
+  <Cards.Card title="Manager operations" href="/developers/vault-managers/manager-operations" />
   <Cards.Card title="Trusted vaults" href="/developers/vault-managers/trusted-vaults" />
   <Cards.Card title="Multisig manager" href="/developers/vault-managers/multisig-ops" />
 </Cards>
+
+Building the depositor side of a vault instead? See [Vault Depositors](/developers/vault-depositors).
 
 ## Related Resources
 

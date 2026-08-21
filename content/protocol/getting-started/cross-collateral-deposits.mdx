@@ -19,11 +19,11 @@ Initial Asset Weights are also scaled lower based on notional value of total dep
 
 The IMF Factor acts as a discount on account size:
 
-`Initial Asset Weight` on 2000 SOL Collateral (using above) would be:
+`Initial Asset Weight` on 2000 SOL Collateral, using SOL's IMF factor of 0.00125, would be:
 
-`weight = min (.80, 1.1 / [ 1 + (0.003 * sqrt(2000)] )`
+`weight = min (.80, 1.1 / [ 1 + (0.00125 * sqrt(2000)] )`
 
-`= min(.80, ~.96987) = .80`
+`= min(.80, ~1.0417) = .80`
 
 An asset's liability weight can be converted into an LTV ratio using:
 
