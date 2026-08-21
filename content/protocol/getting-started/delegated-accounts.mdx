@@ -12,7 +12,7 @@ Delegated authorities on Velocity can **ONLY**:
 
 -   swap assets;
 
--   place and cancel orders.
+-   place, modify and cancel orders.
 
 Delegation is set per subaccount, so a delegate only has access to the specific subaccount it's assigned to. It's important to note that full control over the account remains with the owner.
 
@@ -26,7 +26,7 @@ A delegated party can **NOT**:
 
 -   change any settings
 
-Delegated authorities are restricted to depositing funds, swapping assets, and placing or canceling orders, therefore limiting their capabilities. All other actions must be carried out by the account owner.
+Delegated authorities are restricted to depositing funds, swapping assets, and placing, modifying or canceling orders, therefore limiting their capabilities. All other actions must be carried out by the account owner.
 
 <Callout type="info">
 **Transfers between subaccounts** are an exception: a delegate can call `transferDepositByDelegate` to move spot deposits between the owner's subaccounts, but only after the owner explicitly opts in with `updateUserAllowDelegateTransfer(true)` (sets the `AllowDelegateTransfer` bit in `UserStats.delegatePermissions`). A delegate can also call `transferPerpPosition` to move perp position value between the owner's own subaccounts at any time, without that opt-in. Without the opt-in, a delegate still cannot move spot deposits out to an external wallet, and no opt-in ever allows moving funds to a subaccount the owner doesn't control.
