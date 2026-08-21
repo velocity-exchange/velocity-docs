@@ -34,7 +34,6 @@ const META = {
           "cross-collateral-deposits": "",
           "managing-subaccounts": "",
           "delegated-accounts": "",
-          "versioned-transactions": "",
           "withdraw-and-close-account": ""
         }
       },
