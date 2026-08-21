@@ -14,17 +14,9 @@ Large withdrawals may additionally be throttled by a spot market's rolling withd
 Fully **deleting** a subaccount is stricter than withdrawing: an account can only be deleted once it holds no open positions, no open borrows, no unsettled PnL, and no remaining balances (see [Recovering Funds](#recovering-funds) below).
 </Callout>
 
-<Callout type="warning">
-Do not delete your account or subaccounts if you're staking at Insurance Vaults. This may cause difficulty unstaking.
-</Callout>
-
 <Callout type="error">
 If you have referred other users (you are a referrer), your **main account (subaccount 0)** cannot be deleted, because it anchors your referral relationships (`validate_user_deletion`). Your other subaccounts can still be deleted.
 </Callout>
-
-### Dynamic rent reclaiming
-
-Every account incurs a base account rent of ~0.035 SOL. During periods of high sign-ups (sybil activity), Velocity's program adds an excess fee on top of this base rent. For example, a user might pay 0.035 SOL (base rent) + 0.1901 SOL (excess fee) = 0.2251 SOL to create an account.
 
 ### Idle Account Deletion
 
@@ -32,24 +24,8 @@ A keeper holding the `UserFlag` hot-admin role periodically triggers the cleanup
 
 ### Recovering Funds
 
-**Excess Fee**
+To reclaim your account rent, delete your Velocity account via the [Accounts Page](https://velocity.exchange/portfolio/accounts).
 
-Users can reclaim the excess fee after a 13-day waiting period. Visit the [Accounts Page](https://velocity.exchange/portfolio/accounts) in your portfolio. Look for the "Reclaimable Rent" section and click "Claim" to retrieve any excess fees paid during account creation. 
-
-<img src="/assets/withdraw-and-close-account-1.png" alt="" width="800" height="auto"></img>
-
-**Base Rent**
-
-To reclaim the base rent (0.035 SOL in the example above), you'll need to delete your Velocity account via the [Accounts Page](https://velocity.exchange/portfolio/accounts)
-
-Click the trash button next to your main account. This will permanently delete your account history and instantly redeem your base account rent. No further steps are required.
+Click the trash button next to your main account. This instantly redeems your account rent, and no further steps are required.
 
 <img src="/assets/withdraw-and-close-account-2.png" alt="" width="800" height="auto"></img>
-
-<Callout type="important">
-Ensure you have no open borrows, unsettled PnL, open positions, or any remaining balances before deleting your account. Withdraw any balances from Velocity before proceeding.
-</Callout>
-
-
-
-
