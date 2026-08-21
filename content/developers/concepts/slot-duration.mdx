@@ -1,0 +1,124 @@
+# Slot Duration and Wall-Clock Time
+
+Solana's slot time is dropping from 400ms to 200ms in steps (400, 350, 300, 250, 200), one per IBRL feature gate. A slot count is therefore no longer a stable unit of time. Velocity handles this by storing the current slot length on chain and converting every wall-clock rule through it at the point of use.
+
+<Callout type="warning">
+Do not convert slots to seconds with a hardcoded 400ms. Read the live value from `State` instead. Anything you time off a fixed constant (auction lengths, oracle staleness, liquidation ramps, expiry, per-slot rate limits) drifts by up to 2x as the gates activate.
+</Callout>
+
+## Where the live slot length lives
+
+Three fields on the `State` account hold it:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `slotDurationMs` | `u16` | The current base slot length in milliseconds. `0` means unset and resolves to the 400ms baseline. |
+| `pendingSlotDurationMs` | `u16` | A staged next value. `0` means nothing is staged. |
+| `slotDurationEffectiveSlot` | `u64` | The slot at which the staged value takes effect. `0` when nothing is staged. |
+
+The pair of a staged value plus an effective slot means `State` switches itself at the boundary. Once the chain reaches `slotDurationEffectiveSlot`, the live value is `pendingSlotDurationMs`; before it, the live value is `slotDurationMs`. No second transaction is needed at the switch, and no off-chain restart.
+
+So there are two questions with two different answers, and you almost always want the second:
+
+- What is the base value stored right now? `slotDurationMs`, with `0` meaning 400.
+- What is the slot length actually in force at a given chain slot? The staged value if that slot has been reached, otherwise the base.
+
+## Reading it from the SDK
+
+`packages/sdk/src/math/time.ts` mirrors the program exactly, including its rounding. It is exported from the SDK root.
+
+```ts
+import {
+  activeSlotDurationFromState,
+  slotDurationFromState,
+  SLOT_DURATION_BASELINE,
+  millisFromSecs,
+  millisFromSlots,
+  millisToSlots,
+  millisToSlotsCeil,
+  msToSlotsNum,
+  msToSlotsCeilNum,
+  slotsToMsNum,
+} from '@velocity-exchange/sdk';
+
+const state = velocityClient.getStateAccount();
+const currentSlot = new BN(await connection.getSlot());
+
+// The slot length in force right now. Use this one.
+const slotDuration = activeSlotDurationFromState(state, currentSlot);
+
+// The stored base value only, ignoring any staged switch.
+const baseSlotDuration = slotDurationFromState(state.slotDurationMs);
+```
+
+`activeSlotDurationFromState` takes the whole state object (it reads `slotDurationMs`, `pendingSlotDurationMs`, and `slotDurationEffectiveSlot`) plus the current slot as a `BN`. It tolerates older or hand-built state objects that omit the staging fields, treating an absent pending value as "nothing staged".
+
+`SLOT_DURATION_BASELINE` is the 400ms baseline, for tests and for code paths that have no `State` account to read (those paths also run on default guard rails).
+
+### Converting
+
+Durations are milliseconds; slot counts are plain numbers or `BN`s. The conversion always goes through the slot duration.
+
+| Helper | Direction | Rounding |
+| --- | --- | --- |
+| `millisFromSlots(slots, d)` | slots to ms | exact |
+| `millisToSlots(m, d)` | ms to slots | floor |
+| `millisToSlotsCeil(m, d)` | ms to slots | ceil |
+| `msToSlotsNum(ms, d)` | ms to slots, plain numbers | floor |
+| `msToSlotsCeilNum(ms, d)` | ms to slots, plain numbers | ceil |
+| `slotsToMsNum(slots, d)` | slots to ms, plain numbers | exact |
+| `millis(ms)` / `millisFromSecs(secs)` | build a duration | exact |
+| `divPeriods(m, period)` | whole periods in a duration | floor |
+
+The rounding choice is not cosmetic, and the program makes the same choice in the same places:
+
+- **Floor** for risk ceilings such as oracle staleness windows. Flooring makes the window marginally tighter, which is the safe direction.
+- **Ceil** for user-protection minima such as auction durations, liquidation ramps, and cooldowns. Flooring would cut them below their intended wall-clock length.
+
+```ts
+// A 48 second oracle staleness window, in actual slots (risk ceiling: floor).
+const stalenessSlots = millisToSlots(millisFromSecs(48), slotDuration);
+
+// A 20 second minimum auction, in actual slots (user protection: ceil).
+const auctionSlots = millisToSlotsCeil(millisFromSecs(20), slotDuration);
+
+// How old, in wall-clock ms, is an oracle price from `oracleSlot`?
+const ageMs = millisFromSlots(currentSlot.sub(oracleSlot), slotDuration);
+```
+
+### Legacy stored fields
+
+Some admin-set on-chain fields keep a compact encoding in units of 400ms, the historical slot length. `STORED_UNIT_MS` is that quantum and `millisFromStoredUnits(units)` decodes such a field into milliseconds. This is a storage codec, not the live slot length: never interpret one of those fields using the current slot duration. `MILLIS_UNIT` is the same 400ms value where it appears as the calibration period of a legacy per-period rate.
+
+`SLOT_TIME_ESTIMATE_MS` still exists in the SDK constants and is deprecated. Replace any use of it with a read of `State`.
+
+## How the value changes
+
+The admin instruction is `updateStateSlotDurationMs` (`AdminClient.updateStateSlotDurationMs(slotDurationMs)`), which requires warm admin. It stages rather than applies:
+
+1. **Only the exact next value on the schedule is accepted.** From 400 the only valid argument is 350, then 300, then 250, then 200. Skips are rejected, and the value can never go back up, because feature gates do not deactivate. Staging a new value first promotes an already-effective pending value into the base.
+2. **The switch slot comes from the chain, not the caller.** The instruction takes the target IBRL feature-gate account, verifies it is activated, reads its activation slot, and sets `slotDurationEffectiveSlot` to that slot plus one epoch (432,000 slots), which is the gate's warmup. The SDK fills the feature-gate account in from the target value.
+
+The practical effect for an integrator: the value changes at most a handful of times, always by one step, and always at a slot you can read ahead of time from `slotDurationEffectiveSlot`.
+
+## What this affects
+
+Every slot count the protocol derives from a wall-clock rule moves with this value. The ones most likely to matter to an integration:
+
+- **Auction durations.** The minimum auction the program enforces is computed in wall-clock time and only converted to slots at the end, so the same order yields a larger slot count at a shorter slot time. See [Auction Parameters](/protocol/trading/auction-parameters#how-the-program-sanitizes-your-auction).
+- **Oracle staleness windows.** Whether a price is still valid is a wall-clock question converted into slots.
+- **Liquidation ramps and grace periods.** How fast a liquidation is allowed to progress, and how long an account has before an action is permitted.
+- **Per-slot rate limits.** A limit written per slot doubles in throughput if the slot length halves, so these are expressed as wall-clock rates.
+- **Order expiry and idle timers.** Anything you display to a user as a countdown.
+
+<Callout type="info">
+One residual is worth knowing about. A measurement whose interval starts before a switch and ends after it is converted entirely at the new, shorter slot length, so it reads slightly younger than its true wall-clock age. The windows where this matters most (oracle staleness, measured in seconds) are far shorter than the weeks between gate activations, so in practice a measurement spans at most one switch.
+</Callout>
+
+## Checklist for your own code
+
+- Read `State` and resolve the live value with `activeSlotDurationFromState`; do not hardcode 400.
+- Refresh it from your state subscription rather than caching it at startup, so a staged switch is picked up.
+- Keep durations in milliseconds in your own logic and convert to slots only at the boundary where the program expects a slot count.
+- Pick `ceil` for anything the user must not get less of, `floor` for anything that is a safety ceiling.
+- Decode legacy compact fields with `millisFromStoredUnits`, never with the live slot duration.

@@ -153,10 +153,10 @@ Velocity maintains open-source reference bots in [`apps/keeper-bots-v2`](https:/
 
 | Bot | Source | Strategy |
 |---|---|---|
-| **FloatingPerpMaker** | [`src/bots/floatingMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
+| **FloatingPerpMakerBot** | [`src/bots/floatingMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
 | **JitMaker** | [`src/bots/jitMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) | JIT auction fills using `JitterSniper`/`JitterShotgun` |
 
-> **Tip:** The `FloatingPerpMaker` is the best starting point for understanding oracle offset orders in production. The `JitMaker` shows how to use `@velocity-exchange/jit-proxy` for auction participation. That package isn't published to npm yet — build it from `packages/jit-proxy` in the monorepo (see [JIT Auctions](/developers/market-makers/jit-auctions#jit-proxy-library)).
+> **Tip:** The `FloatingPerpMakerBot` is the best starting point for understanding oracle offset orders in production. The `JitMaker` shows how to use `@velocity-exchange/jit-proxy` for auction participation. That package isn't published to npm yet, build it from `packages/jit-proxy` in the monorepo (see [JIT Auctions](/developers/market-makers/jit-auctions#jit-proxy-library)).
 
 ## Related Resources
 

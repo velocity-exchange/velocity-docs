@@ -156,7 +156,7 @@ await velocityClient.unsubscribe();
 |---|---|---|---|
 | `connection` | Solana RPC connection | No | |
 | `wallet` | Wallet used to sign transactions | No | |
-| `env` | `devnet` or `mainnet-beta`, used to derive market accounts | Yes | |
+| `env` | `devnet` or `mainnet-beta`, used to derive market accounts | Yes | `mainnet-beta` |
 | `perpMarketIndexes` | Perp market accounts to subscribe to | Yes | Derived from env |
 | `spotMarketIndexes` | Spot market accounts to subscribe to | Yes | Derived from env |
 | `oracleInfos` | Oracle accounts to subscribe to | Yes | Derived from env |
@@ -164,8 +164,13 @@ await velocityClient.unsubscribe();
 | `activeSubAccountId` | Which subaccount to use initially | Yes | 0 |
 | `subAccountIds` | All subaccount IDs to subscribe to | Yes | [] |
 | `authority` | Authority you're signing for, only set for delegated accounts | Yes | `wallet.publicKey` |
+| `txSender` | Transaction sender used to broadcast and confirm | Yes | `RetryTxSender` |
+| `txHandler` | Builder/signer used for every transaction | Yes | A `TxHandler` on this connection and wallet |
+| `txParams` | Compute-unit limit and priority fee | Yes | `computeUnits: 600000`, `computeUnitsPrice: 0` |
 
 > **Delegated accounts:** When signing on behalf of a delegated account, you must explicitly set `subAccountIds`, `activeSubAccountId`, and `authority`. Omitting any of these will cause the client to subscribe to the wrong accounts.
+
+See [Transactions](/developers/velocity-sdk/transactions) for the four available tx senders, blockhash caching, and the compute-unit and priority-fee options.
 
 ### Account Subscriptions (WebSocket vs Polling)
 

@@ -39,15 +39,25 @@ The trigger bot polls the DLOB for orders whose trigger conditions are now met (
 <Steps>
 ### Get nodes from the DLOB that are ready to be triggered
 
-The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the current oracle price has crossed the trigger threshold — these are ready to be marked on-chain.
+The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the trigger price has crossed the trigger threshold, these are ready to be marked on-chain.
+
+The trigger price is not always the raw oracle price. When the state account's `MedianTriggerPrice` feature bit is on, the program (and `getTriggerPrice`) triggers off a median of the oracle price, the last fill price, and a funding-basis price instead. A bot that passes the raw oracle price directly can both miss real triggers and submit triggers that revert.
 
 ```typescript copy
+const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;
 const oraclePriceData = this.velocityClient.getOracleDataForPerpMarket(marketIndex);
+
+const triggerPrice = getTriggerPrice(
+    market,
+    oraclePriceData.price,
+    new BN(Date.now() / 1000),
+    useMedianTriggerPrice(this.velocityClient.getStateAccount())
+);
 
 const nodesToTrigger = this.dlob.findNodesToTrigger(
     marketIndex,
     this.slotSubscriber.getSlot(),
-    oraclePriceData.price,
+    triggerPrice,
     MarketType.PERP,
     this.velocityClient.getStateAccount()
 );
@@ -55,7 +65,7 @@ const nodesToTrigger = this.dlob.findNodesToTrigger(
 
 ### Call `getTriggerOrderIx` on `VelocityClient`
 
-Submit the trigger transaction for each eligible node. Once triggered on-chain, the order becomes a regular order available for matching bots to fill. Expect competition from other trigger bots — handle errors gracefully and continue to the next node.
+Submit the trigger transaction for each eligible node. Once triggered on-chain, the order becomes a regular order available for matching bots to fill. The transaction can still revert, for example if the market's fill operation is paused. Expect competition from other trigger bots, and handle errors gracefully and continue to the next node.
 
 ```typescript copy
 const user = this.userMap.get(nodeToTrigger.node.userAccount.toString());

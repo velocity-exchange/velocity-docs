@@ -1,8 +1,12 @@
 # Audits
 
 <Callout type="important">
-Velocity is a fork of [Drift Protocol v2](https://github.com/velocity-exchange/velocity-v1) (fork point `0ae3e3b1d`). The audits below were performed on the pre-fork Drift Protocol v2 codebase that Velocity forked from, not on Velocity's own program deployment or its new/changed functionality (the VLP module, the fee redesign, tiered admin keys, and other features added or changed since the fork — see the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md)). A post-fork audit of Velocity's own program deployment is currently being conducted by OtterSec and is expected to be completed in the coming weeks — the report will be published on this page once it is finalised.
+Velocity is a fork of [Drift Protocol v2](https://github.com/velocity-exchange/velocity-v1) (fork point `0ae3e3b1d`). The audits below were performed on the pre-fork Drift Protocol v2 codebase that Velocity forked from, not on Velocity's own program deployment or its new/changed functionality (the VLP module, the fee redesign, tiered admin keys, and other features added or changed since the fork). OtterSec's post-fork review of Velocity's own program deployment has delivered a large set of High and Medium findings, and the fixes for them are already in the codebase. The final report has not been published yet. Until it is, the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) are the interim record of what OtterSec found and how each finding was fixed. The final report will be published on this page once it is finalised.
 </Callout>
+
+The record below is in two parts: two audits of the pre-fork Drift Protocol v2 codebase, and one review of Velocity's own post-fork program.
+
+## Pre-fork (Drift Protocol v2)
 
 ### Trail of Bits
 
@@ -22,7 +26,7 @@ _A summary of outstanding findings is shown below._
 
 A full listing of unresolved or partially resolved findings can be found on page 73 of the TOB Audit Report (Report). The undetermined finding relates to Testing code used in production and is described in further detail on page 77 of the Report.
 
-View the full report [here](https://github.com/velocity-exchange/velocity-v1/blob/master/AUDIT.md).
+View the full report [here](https://github.com/velocity-exchange/audits/blob/master/protocol-v2/tob.pdf).
 
 ### Neodyme
 
@@ -32,4 +36,18 @@ Authored: May 10th 2024
 
 Last Updated: June 27th 2024
 
-View the full report [here](https://cdn.prod.website-files.com/6310e7dee49f0866da8eed4c/6686bbdfe7c6e5a997cc51bc_Neodyme%20-%20Drift%20Security%20Audit.pdf).
+View the full report [here](https://github.com/velocity-exchange/audits/blob/master/protocol-v2/neodyme.pdf).
+
+## Post-fork (Velocity)
+
+### OtterSec
+
+Scope: the Velocity program and the vaults program, as deployed by Velocity after the fork. This is the only review that covers Velocity's own changes, including the VLP module, the fee redesign, the tiered cold/warm/hot/pause admin key model, isolated pools, builder codes, and the signed-message (swift) order path.
+
+**Status**
+
+The review delivered a large set of numbered High and Medium findings across the two programs. Every one of them is fixed in the codebase; the fixes are in the deployed program, not pending. The final report has not been published yet.
+
+**Interim record**
+
+Until the report is published, the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) are the public record: their change log lists the audit-fix work alongside the rest of the fork's changes, and individual findings are cited by number in the program source next to the code that resolves them. The report will be linked from this page once it is finalised.

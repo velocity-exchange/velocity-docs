@@ -149,7 +149,7 @@ Every perp/spot market has an `orderTickSize` (`PerpMarketAccount.orderTickSize`
 If you compute prices client-side (rather than letting the program clamp them), pass the market's tick size through so your numbers match what the program will actually use:
 
 - `getAuctionPrice(order, slot, oraclePrice, tickSize)` (see [JIT Auctions](./jit-auctions#auction-pricing-formula))
-- `getLimitPrice(order, oraclePriceData, slot, tickSize, fallbackPrice)`
+- `getLimitPrice(order, oraclePriceData, slot, fallbackPrice, tickSize)`
 - `DLOBNode.getPrice(oraclePriceData, slot, tickSize)`
 
 All four `tickSize` parameters are optional and default to `ONE` (no effective rounding) for backward compatibility — but on any market with `orderTickSize > 1`, omitting it means your client-computed price can disagree with the program's by up to one tick, which is enough to misjudge whether a maker price is inside or outside the current auction range. Pass `perpMarket.orderTickSize` (or `spotMarket.orderTickSize`) explicitly.
@@ -165,14 +165,15 @@ The hosted DLOB server provides L2 (aggregated price levels) and L3 (individual 
 **L2 orderbook** (aggregated by price level):
 
 ```
-GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true
+GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeIndicative=true
 ```
 
 Parameters:
 - `marketName`: e.g. `SOL-PERP`, `BTC-PERP`, `SOL` (spot)
-- `depth`: number of price levels per side (default 10)
-- `includeVamm=true`: include AMM (vAMM) indicative liquidity in the book
+- `depth`: number of price levels per side (default 100, capped at 100)
 - `includeIndicative=true`: include offchain indicative quotes from market makers
+
+`/l2` serves the server's Redis-cached book; whether vAMM liquidity is included in that cache is decided server-side, not by a query parameter. `includeVamm` (along with `includePhoenix`/`includeOpenbook`/`includeOracle`) is a parameter of the separate `/batchL2`/`/batchL2Cache` endpoints, not `/l2`.
 
 **L2 response structure:**
 
@@ -317,54 +318,54 @@ Use `isSignedMsgOrder(order)` to identify SWIFT-origin orders when subscribed to
 
 ## DLOB matching mechanics
 
-After the JIT auction, remaining order size matches against DLOB using **price-time priority**:
+DLOB resting orders fill in **price-time priority**, same as [How matching works](#how-matching-works) describes: best price wins, ties broken by arrival order. JIT is not an earlier stage that runs before this; JIT maker quotes (and an AMM-JIT quote, gates permitting) compete for each fill *inside* this same walk, purely on price:
 
 <Steps>
 ### Best price wins
-Lowest ask fills buys first; highest bid fills sells first.
+Lowest ask fills buys first; highest bid fills sells first. At each price level, an AMM (or AMM-JIT) quote that beats the level is inserted ahead of it, capped at that level's price.
 
 ### Time priority for tied prices
-Earlier orders fill first (FIFO at each price level).
+Among resting orders at the same price, earlier orders fill first (FIFO).
 
 ### Walk the book
-Continue across price levels until fully filled or liquidity is exhausted.
+Continue across price levels until fully filled or liquidity is exhausted. A final residual AMM fill absorbs whatever is left after the maker list is exhausted.
 </Steps>
 
 **Example** (taker buying 10 SOL):
 - DLOB has: 3 SOL @ $100, 5 SOL @ $100.10, 4 SOL @ $100.20
 - Taker fills: 3 @ $100, 5 @ $100.10, 2 @ $100.20
 
-If DLOB doesn't fully fill, remaining size goes to AMM.
+If the book doesn't fully fill, any remaining size that still crosses the taker's limit fills against the AMM.
 
 ## Matching examples
 
-### Example 1: Market order (long)
+### Example 1: Market order (long), JIT maker wins the best level
 
 <Steps>
-### Order enters JIT auction at oracle + 0.1%
-The taker order starts in auction mode.
+### Order enters the fill plan at oracle + 0.1% (its limit)
+The taker's auction window bounds the acceptable fill price as it interpolates toward this limit.
 
-### Two JIT makers fill 60% at oracle + 0.02%
-Competitive makers provide the first fills.
+### A JIT maker quote beats the DLOB's best level and fills 60% at oracle + 0.02%
+The JIT quote competes purely on price against the resting maker at that level.
 
-### Remaining 40% fills against DLOB at oracle + 0.05%
-Residual size is matched against resting book liquidity.
+### Remaining 40% fills against the next DLOB level at oracle + 0.05%
+Residual size walks to the next price level in the book.
 
 ### AMM not needed (fully filled)
-Order is fully filled before fallback liquidity is required.
+Order is fully filled before the residual AMM fill is required.
 </Steps>
 
-### Example 2: Large market order
+### Example 2: Large market order, book exhausted
 
 <Steps>
-### JIT auction fills 40% at oracle + 0.03%
-Best early pricing comes from active makers.
+### Best level fills 40% at oracle + 0.03% (JIT maker beats the resting order)
+Best available price fills first.
 
-### DLOB fills 30% at oracle + 0.08%
-Next portion matches against resting orders.
+### Next DLOB level fills 30% at oracle + 0.08%
+Matches against the next resting price level.
 
-### AMM fills remaining 30% at oracle + 0.15% (price impact)
-Final size is absorbed by AMM with more slippage.
+### Residual AMM fill absorbs remaining 30% at oracle + 0.15% (price impact)
+After the maker list is exhausted, the AMM fills whatever still crosses the limit, at more slippage.
 </Steps>
 
 ### Example 3: Limit order at DLOB price
@@ -394,7 +395,7 @@ Subscribing directly to onchain UserAccounts (via RPC or gRPC) can be faster tha
 
 ## Gotchas
 
-- **`includeVamm=true` is essential:** without it, the L2 endpoint only shows DLOB resting orders, which may be sparse for smaller markets. The vAMM provides significant depth. Always include it for a realistic view of available liquidity.
+- **`/l2` doesn't take an `includeVamm` parameter:** whether vAMM liquidity is folded into the `/l2` response is decided server-side by the cache it reads from, not by a query flag. `includeVamm` only exists on `/batchL2`/`/batchL2Cache`; if you need to control vAMM inclusion explicitly, use those endpoints instead.
 - **`includeIndicative=true` for full picture:** indicative quotes from market makers (see [Indicative Quotes](./indicative-quotes)) are only included when this flag is set. Without it, you may underestimate available liquidity.
 - **Prices are raw precision:** L2 response prices are in `PRICE_PRECISION` (1e6) and sizes in `BASE_PRECISION` (1e9). Forgetting to divide produces nonsensical numbers.
 - **L2 `sources` is an object, not a string:** each price level's `sources` field maps source names to size strings. Don't try to parse it as a flat value.
@@ -403,7 +404,7 @@ Subscribing directly to onchain UserAccounts (via RPC or gRPC) can be faster tha
 
 ## Related
 
-- [JIT Auctions](./jit-auctions) - How JIT fits before DLOB matching
+- [JIT Auctions](./jit-auctions) - How JIT competes inside DLOB matching
 - [DLOB MM](./dlob-mm) - Market making with resting DLOB orders
 - [JIT-only MM](./jit-only) - Active market making through auctions
 - [Indicative Quotes](./indicative-quotes) - Offchain liquidity signaling

@@ -12,7 +12,7 @@ Subaccounts let you isolate risk and organize trading strategies. Common use cas
 - **Bot separation**: Isolate automated trading bots on separate subaccounts while keeping manual trades separate
 - **Experimentation**: Test new strategies on a subaccount with limited capital, then transfer funds if successful
 
-All subaccounts under the same wallet share cross-margin, but transfers let you explicitly move balances and positions to reorganize your capital.
+Each subaccount is its own cross-margin account: the deposits inside one subaccount back only that subaccount's positions. Collateral is not shared across subaccounts under the same wallet, which is why moving it between them requires an explicit transfer.
 
 ## SDK Usage
 
@@ -95,7 +95,7 @@ await velocityClient.updateUserAllowDelegateTransfer(true);
   </TypeScript>
 </SDKDoc>
 
-Once opted in, a delegate can call `transferDepositByDelegate` with the same arguments as `transferDeposit`:
+Once opted in, a delegate can call `transferDepositByDelegate`. It takes the same first four arguments as `transferDeposit`, plus an `equityFloorDelta` (`BN | 'auto'`, defaults to zero) before the trailing `txParams`, don't pass `txParams` positionally in that fifth slot:
 
 <SDKDoc>
   <TypeScript name="transferDepositByDelegate" type="method" owner="VelocityClient">
@@ -104,7 +104,7 @@ Once opted in, a delegate can call `transferDepositByDelegate` with the same arg
 const marketIndex = 0; // e.g. USDT
 const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
 
-// transferDepositByDelegate(amount, marketIndex, fromSubAccountId, toSubAccountId)
+// transferDepositByDelegate(amount, marketIndex, fromSubAccountId, toSubAccountId, equityFloorDelta?, txParams?)
 await velocityClient.transferDepositByDelegate(amount, marketIndex, 0, 1);
 ```
   </TypeScript>

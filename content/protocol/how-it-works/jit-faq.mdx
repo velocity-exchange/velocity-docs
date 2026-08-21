@@ -49,7 +49,7 @@ Yes, auctions can be partially filled up to a user's slippage tolerance. There a
 
 ### Can auctions be cancelled once initiated? 
 
-Yes, users can cancel the unfilled portion of their order in the auction once they've been initiated. Users will need to pay a network fee in SOL to cancel their ongoing auction, as well as a nominal fee to keepers of \$0.01 USDT.
+Yes, users can cancel the unfilled portion of their order in the auction once they've been initiated. A user cancelling their own order pays only the Solana network fee in SOL. The \$0.01 nominal keeper fee is charged only when a keeper cancels the order on the user's behalf (for example, order expiry or a reduce-only cancellation).
 
 ### Can Makers pull out of an auction once they have filled on the auction?
 
@@ -73,7 +73,7 @@ Yes. Each user will have a different account and each taker order placed will go
 
 ### Will I know the exact price I'll be filled at? 
 
-Exclusive of slippage and fees, the UI will display the price that the Taker will be filled at if they were to be filled against the AMM. This is the worst possible price the Taker can receive. Any Maker that steps in via the JIT auction can only provide the Taker with a better price. 
+Exclusive of slippage and fees, the UI will display the price that the Taker will be filled at if they were to be filled against the AMM. The Taker's actual worst price is bounded by their own auction/limit price, not by this AMM quote: a resting Maker priced worse than the AMM can still fill part of the order, after the AMM's liquidity at that price level is consumed. See [Matching Engine](/protocol/how-it-works/matching-engine) for how fills interleave between the AMM and resting orders.
 
 ---
 
@@ -85,7 +85,7 @@ You can read docs here ([Matching Engine](/protocol/how-it-works/matching-engine
 
 ### Is the same JIT auction mechanism used for liquidations as well?  
 
-No, liquidations do not use autions. Liquidators either take over user positions directly or fill liquidated users against resting liquidity.
+No, liquidations do not use auctions. Liquidators either take over user positions directly, or fill liquidated users against resting maker liquidity or the AMM's own curve.
 
 ### Are there example maker bots? 
 

@@ -10,10 +10,10 @@ For robustness, Velocity's program checks oracle validity. The validity is evalu
 
 <Steps>
 ### Stale(ForAmm/ForMargin)
-Last slot update too far behind the current slot -- 10/120 slots
+Last update too far behind the current time -- default wall-clock windows of ~4s / ~48s (stored as 10/120 slots at a 400ms slot time, converted to actual slots at the live slot duration). `StaleForAMM` splits into an `immediate` and a `low_risk` sub-threshold, and `PythLazerStableCoin` markets get 3x the margin window.
 
-### InvalidPrice
-Negative price (any price field **< 0**)
+### NonPositive
+Non-positive price (any price field **&lt;= 0**)
 
 ### TooVolatile
 TWAP / price ratio out of bounds -- **5x or 1/5x**
@@ -33,74 +33,74 @@ For the duration of the invalid period, on-chain oracle TWAP calculation aims to
 
 ### InsufficientDataPoints
 
-Raised when the incoming `OraclePriceData` reports `has_sufficient_number_of_data_points = false`. On a Pyth push oracle this happens when the number of quoting publishers (`num_qt`) is below `min(num, 3)`; the check only applies on mainnet builds (`get_pyth_price`, `state/oracle.rs:472-482`). Pyth Lazer and the MM oracle path always report sufficient data points (`state/oracle.rs:499-500`, `perp_market.rs:1018`), so in practice this state is a push-oracle-only guard, ordered less severe than `StaleForMargin` but more severe than the `StaleForAMM` states (`math/oracle.rs:33-45`, `390-392`). While flagged, an action is blocked the same way it would be for a stale AMM oracle: `UpdateFunding`, `OracleOrderPrice`, and `SettlePnl` still tolerate it, but `MarginCalc`, `Liquidate`, and AMM fills do not (`math/oracle.rs:158-241`).
+Raised when the incoming `OraclePriceData` reports `has_sufficient_number_of_data_points = false`. On a Pyth push oracle this happens when the number of quoting publishers (`num_qt`) is below `min(num, 3)`; the check only applies on mainnet builds (`get_pyth_price`, `state/oracle.rs`). Pyth Lazer and the MM oracle path always report sufficient data points, so in practice this state is a push-oracle-only guard, ordered less severe than `StaleForMargin` but more severe than the `StaleForAMM` states (`math/oracle.rs`). Only the AMM-fill actions (`FillOrderAmmImmediate`, `FillOrderAmmLowRisk`) reject it outright. `MarginCalc`, `FillOrderMatch`, `Liquidate`, `TriggerOrder`, `UpdateTwap`, and the LP/AMM-cache actions all tolerate it, alongside `UpdateFunding`, `OracleOrderPrice`, and `SettlePnl` (`math/oracle.rs`).
 
 ## MM (Market Maker) Oracle
 
-Alongside the primary market oracle, each perp market tracks an independently-cranked **MM oracle** price ( `market_stats.mm_oracle_price` / `mm_oracle_slot` / `mm_oracle_sequence_id` ) intended to reflect faster off-chain price discovery from designated market makers. It is written by a native (pre-Anchor) instruction handler, `handle_update_mm_oracle_native` (`instructions/admin.rs:3337-3443`), gated by:
+Alongside the primary market oracle, each perp market tracks an independently-cranked **MM oracle** price ( `market_stats.mm_oracle_price` / `mm_oracle_slot` / `mm_oracle_sequence_id` ) intended to reflect faster off-chain price discovery from designated market makers. It is written by a native (pre-Anchor) instruction handler, `handle_update_mm_oracle_native` (`instructions/admin.rs`), gated by:
 
 <Steps>
 ### Feature flag
-The instruction is a no-op unless `FeatureBitFlags::MmOracleUpdate` (bit `0b00000001`) is set on `State.feature_bit_flags` (`instructions/admin.rs:3358-3363`, `state/state.rs:375`). At the time of writing this bit is enabled (`feature_bit_flags = 5`, i.e. `MmOracleUpdate` + `BuilderCodes`).
+The instruction is a no-op unless `FeatureBitFlags::MmOracleUpdate` (bit `0b00000001`) is set on `State.feature_bit_flags` (`instructions/admin.rs`, `state/state.rs`). At the time of writing this bit is enabled (`feature_bit_flags = 5`, i.e. `MmOracleUpdate` + `BuilderCodes`).
 
 ### Authorized signer
-The signer must match the state account's `hot_mm_oracle_crank` key (`instructions/admin.rs:3364-3374`).
+The signer must match the state account's `hot_mm_oracle_crank` key (`instructions/admin.rs`).
 
 ### Monotonic sequence id
-An update is dropped if its `sequence_id` is not strictly greater than the market's last-accepted sequence id (`instructions/admin.rs:3386-3389`).
+An update is dropped if its `sequence_id` is not strictly greater than the market's last-accepted sequence id (`instructions/admin.rs`).
 
-### Slot rate limit
-The update is dropped unless at least `MM_ORACLE_MIN_SLOT_GAP` (2) slots have passed since the last accepted write (`instructions/admin.rs:3403-3419`, `math/constants.rs:232`).
+### Write-gap rate limit
+The update is dropped unless at least `MM_ORACLE_MIN_WRITE_GAP` (800ms, i.e. 2 slots at a 400ms slot time) has passed since the last accepted write. A second bound, `MM_ORACLE_MAX_SOURCE_AGE` (also 800ms), caps how old the observed source slot may be when the write lands (`instructions/admin.rs`, `math/constants.rs`).
 
 ### Step cap
-Once a price has been bootstrapped, an incoming price is dropped if it deviates from the last accepted price by more than `MM_ORACLE_MAX_STEP_PCT_PRECISION` (1%) (`instructions/admin.rs:3421-3436`, `math/constants.rs:233`).
+Once a price has been bootstrapped, an incoming price is dropped if it deviates from the last accepted price by more than `MM_ORACLE_MAX_STEP_PCT_PRECISION` (1%) (`instructions/admin.rs`, `math/constants.rs`).
 </Steps>
 
 ### How the MM oracle is consumed
 
-`PerpMarket::get_mm_oracle_price_data` (`state/perp_market.rs:1004-1045`) builds an `MMOraclePriceData` from the raw MM oracle fields plus the market's primary `OraclePriceData`. `MMOraclePriceData::new` (`state/oracle.rs:279-342`) then decides which price is actually "safe" to use:
+`PerpMarket::get_mm_oracle_price_data` (`state/perp_market.rs`) builds an `MMOraclePriceData` from the raw MM oracle fields plus the market's primary `OraclePriceData`. `MMOraclePriceData::new` (`state/oracle.rs`) then decides which price is actually "safe" to use:
 
-- It computes `mm_exchange_diff_bps`, the absolute price difference between the MM oracle and the primary (exchange) oracle, as a fraction of the primary oracle price (`state/oracle.rs:286-291`).
-- It falls back to the primary oracle's `OraclePriceData` — instead of the MM oracle — whenever **any** of the following hold (`state/oracle.rs:308-317`):
+- It computes `mm_exchange_diff_bps`, the absolute price difference between the MM oracle and the primary (exchange) oracle, as a fraction of the primary oracle price (`state/oracle.rs`).
+- It falls back to the primary oracle's `OraclePriceData`, instead of the MM oracle, whenever **any** of the following hold (`state/oracle.rs`):
   - the primary oracle's own sequence id (or delay, if sequence ids aren't comparable) is more recent than the MM oracle's;
   - the MM oracle price is `0`;
-  - the MM oracle's `OracleValidity` fails `VelocityAction::UseMMOraclePrice` (i.e. `NonPositive` or `TooVolatile`, see `is_oracle_valid_for_action`, `math/oracle.rs:230-233`);
-  - `mm_exchange_diff_bps` exceeds `MM_EXCHANGE_FALLBACK_THRESHOLD` — **1%** of the primary oracle price (`state/oracle.rs:266`, `314-315`).
-- Otherwise it uses the MM oracle price, but widens the reported confidence by adding the raw MM/exchange price difference on top of the primary oracle's confidence (`state/oracle.rs:319-326`), so a price that is close to the exchange oracle but not identical to it doesn't understate uncertainty downstream.
+  - the MM oracle's `OracleValidity` fails `VelocityAction::UseMMOraclePrice` (i.e. `NonPositive` or `TooVolatile`, see `is_oracle_valid_for_action`, `math/oracle.rs`);
+  - `mm_exchange_diff_bps` exceeds `MM_EXCHANGE_FALLBACK_THRESHOLD`, **1%** of the primary oracle price (`state/oracle.rs`).
+- Otherwise it uses the MM oracle price, but widens the reported confidence by adding the raw MM/exchange price difference on top of the primary oracle's confidence (`state/oracle.rs`), so a price that is close to the exchange oracle but not identical to it doesn't understate uncertainty downstream.
 
 <Callout type="info">
-The ~1% divergence check is a fallback safety net, not a validity check: it never raises `OracleValidity::TooUncertain` on its own. If the MM oracle diverges from the primary oracle by more than 1%, the protocol simply ignores the MM oracle price for that read and uses the primary oracle instead (`MMOraclePriceData::get_price`, `state/oracle.rs:344-346`).
+The ~1% divergence check is a fallback safety net, not a validity check: it never raises `OracleValidity::TooUncertain` on its own. If the MM oracle diverges from the primary oracle by more than 1%, the protocol simply ignores the MM oracle price for that read and uses the primary oracle instead (`MMOraclePriceData::get_price`, `state/oracle.rs`).
 </Callout>
 
-The resulting "safe" oracle price data also feeds AMM-fill risk gating: if the MM oracle is enabled, at least as fresh as the primary oracle, and its diff-vs-exchange is high, `PerpMarket::amm_fill_gates_ok` blocks AMM fills as an early-volatility protection, independent of the standard validity checks (`state/perp_market.rs:1066-1079`).
+The resulting "safe" oracle price data also feeds AMM-fill risk gating: if the MM oracle is enabled, at least as fresh as the primary oracle, and its diff-vs-exchange is high, `PerpMarket::amm_fill_gates_ok` blocks AMM fills as an early-volatility protection, independent of the standard validity checks (`state/perp_market.rs`).
 
 ## Pyth Lazer
 
-Pyth Lazer is the oracle source for all live markets at the time of writing (`PythLazer` for perp markets, `PythLazerStableCoin` / `PythLazer` for spot collateral). Unlike the Pyth push oracle, a Lazer price is not written by Pyth's own crank — it is relayed on-chain by a keeper through `handle_update_pyth_lazer_oracle` (`instructions/pyth_lazer_oracle.rs:16-144`):
+Pyth Lazer is the oracle source for all live markets at the time of writing (`PythLazer` for perp markets, `PythLazerStableCoin` / `PythLazer` for spot collateral). Unlike the Pyth push oracle, a Lazer price is not written by Pyth's own crank, it is relayed on-chain by a keeper through `handle_update_pyth_lazer_oracle` (`instructions/pyth_lazer_oracle.rs`):
 
 <Steps>
 ### Signature verification
-The instruction requires an accompanying Ed25519 signature-verify instruction earlier in the same transaction. It reads the current instruction index from the instructions sysvar, requires it to be `> 0` (`ErrorCode::InvalidVerificationIxIndex`), then calls `pyth_lazer::signature::verify_message` against the on-chain Lazer `Storage` account (a fixed, hardcoded `PYTH_LAZER_STORAGE_ID`) to verify the payload was signed by an authorized Lazer publisher (`instructions/pyth_lazer_oracle.rs:20-43`, `state/pyth_lazer_oracle.rs:6`).
+The instruction requires an accompanying Ed25519 signature-verify instruction earlier in the same transaction. It reads the current instruction index from the instructions sysvar, requires it to be `> 0` (`ErrorCode::InvalidVerificationIxIndex`), then calls `pyth_lazer::signature::verify_message` against the on-chain Lazer `Storage` account (a fixed, hardcoded `PYTH_LAZER_STORAGE_ID`) to verify the payload was signed by an authorized Lazer publisher (`instructions/pyth_lazer_oracle.rs`, `state/pyth_lazer_oracle.rs`).
 
 ### Payload decode
-The verified message is deserialized into Lazer's `PayloadData`, which carries one or more feed updates. The number of remaining accounts passed to the instruction must exactly match the number of feeds in the payload (`instructions/pyth_lazer_oracle.rs:45-54`).
+The verified message is deserialized into Lazer's `PayloadData`, which carries one or more feed updates. The number of remaining accounts passed to the instruction must exactly match the number of feeds in the payload (`instructions/pyth_lazer_oracle.rs`).
 
 ### Per-feed PDA check and write
-For each feed, the target `PythLazerOracle` account is derived as a PDA from seeds `[PYTH_LAZER_ORACLE_SEED, feed_id]` and must match the account passed in remaining_accounts (`instructions/pyth_lazer_oracle.rs:63-73`, `state/pyth_lazer_oracle.rs:5`). The handler then extracts price, best bid/ask, exponent, and the feed's update timestamp from the payload properties.
+For each feed, the target `PythLazerOracle` account is derived as a PDA from seeds `[PYTH_LAZER_ORACLE_SEED, feed_id]` and must match the account passed in remaining_accounts (`instructions/pyth_lazer_oracle.rs`, `state/pyth_lazer_oracle.rs`). The handler then extracts price, best bid/ask, exponent, and the feed's update timestamp from the payload properties.
 
-### Monotonic timestamp + staleness skip
-An update is skipped (not errored) if the payload has no `FeedUpdateTimestamp`, or if that timestamp is older than the oracle account's currently stored `publish_time` — Lazer updates for a feed must arrive in order (`instructions/pyth_lazer_oracle.rs:99-111`).
+### Monotonic timestamp + wall-clock bounds
+An update is skipped (not errored) if the payload has no `FeedUpdateTimestamp`, or if that timestamp is not strictly greater than the oracle account's currently stored `publish_time` (an equal timestamp is rejected too, so a keeper cannot re-post the same message to hold the feed slot-fresh). The feed timestamp is also bounded against `Clock::unix_timestamp` in both directions: it is skipped if it lags the wall clock by more than `PYTH_LAZER_MAX_STALENESS_SECONDS` (15s), or leads it by more than `PYTH_LAZER_MAX_FUTURE_SECONDS` (60s). A zero price is rejected outright with `InvalidPythLazerMessage` rather than skipped (`instructions/pyth_lazer_oracle.rs`, `state/pyth_lazer_oracle.rs`).
 
 ### Confidence fallback
-If the payload carries a valid bid and ask, confidence is set to `ask - bid`. Otherwise (one-sided or crossed book) it defaults to 20 bps of price (`price / 500`) (`instructions/pyth_lazer_oracle.rs:121-127`).
+Confidence is the widest of three signals: a 20 bps floor on price (`price / 500`), the absolute distance between the best bid and best ask (a crossed book counts as its magnitude, not a negative), and the message's own signed `Confidence` property, if present (`instructions/pyth_lazer_oracle.rs`).
 </Steps>
 
-The account written by this handler, `PythLazerOracle` (`state/pyth_lazer_oracle.rs:12-22`), stores `price`, `publish_time`, `posted_slot` (the slot the update landed in), `exponent`, and `conf`. It is this account — read through `get_pyth_price` alongside the Pyth push branch, since Lazer shares the same scaling/precision path (`state/oracle.rs:487-500`) — that ultimately produces the `OraclePriceData` used everywhere else in this page, including the `sequence_id` (set from `publish_time`) used by the MM oracle's recency comparison above.
+The account written by this handler, `PythLazerOracle` (`state/pyth_lazer_oracle.rs`), stores `price`, `publish_time`, `posted_slot` (the slot the update landed in), `exponent`, and `conf`. It is this account, read through `get_pyth_price` alongside the Pyth push branch, since Lazer shares the same scaling/precision path (`state/oracle.rs`), that ultimately produces the `OraclePriceData` used everywhere else in this page, including the `sequence_id` (set from `publish_time`) used by the MM oracle's recency comparison above.
 
 <Callout type="info">
-Because the Lazer relay is keeper-driven rather than push-based, `oracle_delay` (slots since `posted_slot`) behaves the same way as for the Pyth push oracle for staleness purposes — it's simply the keeper's crank cadence, not Pyth's, that determines how fresh the on-chain price stays.
+`oracle_delay` (slots since `posted_slot`) still drives on-chain staleness the same way it does for the Pyth push oracle, but the wall-clock bounds above (15s lag, 60s lead) also gate whether a Lazer message is accepted onto the feed in the first place. Freshness is no longer purely a function of keeper crank cadence.
 </Callout>
 
 ## Prelaunch Oracle
 
-Markets that haven't yet listed on Pyth/Pyth Lazer can instead use a self-referential `Prelaunch` oracle source (`OracleSource::Prelaunch`, `state/oracle.rs:170`). `PrelaunchOracle::update` (`state/oracle.rs:668-708`) derives its price from the market's own mark TWAP, capped by an admin-configured `max_price`: it uses `last_mark_price_twap` unless that TWAP has reached or exceeded `max_price`, in which case it clamps to `max_price` (`state/oracle.rs:670-683`). Confidence is set from the wider of the bid/ask TWAP spread and `mark_std` (`state/oracle.rs:687-696`).
+Markets that haven't yet listed on Pyth/Pyth Lazer can instead use a self-referential `Prelaunch` oracle source (`OracleSource::Prelaunch`, `state/oracle.rs`). `PrelaunchOracle::update` (`state/oracle.rs`) derives its price from the market's own mark TWAP, capped by an admin-configured `max_price`: it uses `last_mark_price_twap` unless that TWAP has reached or exceeded `max_price`, in which case it clamps to `max_price` (`state/oracle.rs`). Confidence is set from the wider of the bid/ask TWAP spread and `mark_std` (`state/oracle.rs`).

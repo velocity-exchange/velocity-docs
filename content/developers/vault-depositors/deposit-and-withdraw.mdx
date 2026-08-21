@@ -1,0 +1,134 @@
+# Deposit and Withdraw
+
+Withdrawing from a vault is a two-step flow with a mandatory wait in between. Depositing is one step. This page covers both, the states in between, and the errors each step can return.
+
+## Deposit
+
+```typescript
+import { BN } from '@velocity-exchange/sdk';
+import { getVaultDepositorAddressSync, VAULT_PROGRAM_ID } from '@velocity-exchange/vaults-sdk';
+
+const vaultDepositor = getVaultDepositorAddressSync(VAULT_PROGRAM_ID, vault, authority);
+
+await vaultClient.deposit(
+  vaultDepositor,
+  new BN(1_000_000), // amount in the deposit asset's precision (1e6 for USDC)
+  { authority, vault }, // omit if the VaultDepositor account already exists
+  txParams,
+  userTokenAccount // omit to derive the associated token account, or wrap SOL
+);
+```
+
+Passing `initVaultDepositor` prepends the account-creation instruction, so a first-time deposit is a single transaction. If you need the transaction rather than a signature, `createDepositTx` returns a `VersionedTransaction` and `prepDepositTx` returns the resolved accounts and pre/post instructions to compose yourself.
+
+The program checks, in this order:
+
+| Condition | Error |
+| --- | --- |
+| Vault equity plus the deposit would exceed `maxTokens` (when non-zero) | `VaultIsAtCapacity` |
+| Amount is below `minDepositAmount` (when non-zero) | `InvalidVaultDeposit` |
+| Vault has shares outstanding but zero equity | `InvalidVaultForNewDepositors` |
+| A withdraw request is pending on this depositor | `WithdrawInProgress` |
+| The deposit is too small to mint even one share | `InvalidVaultDeposit` |
+
+That last one is worth surfacing in a UI. Shares are priced off the current share price, and a deposit smaller than one share's worth would round to zero shares and become pure appreciation for existing holders. The program rejects it rather than accept it.
+
+Depositing also settles the vault: it charges accrued management fee, installs a matured fee update if one exists, and applies the depositor's profit share before minting new shares.
+
+## Request a withdrawal
+
+```typescript
+import { WithdrawUnit } from '@velocity-exchange/vaults-sdk';
+
+await vaultClient.requestWithdraw(
+  vaultDepositor,
+  new BN(1_000_000),
+  WithdrawUnit.SHARES_PERCENT
+);
+```
+
+`WithdrawUnit` picks how `amount` is read:
+
+| Unit | `amount` means |
+| --- | --- |
+| `WithdrawUnit.SHARES` | A raw share count. |
+| `WithdrawUnit.TOKEN` | An amount in the deposit asset, converted to shares at the current price. |
+| `WithdrawUnit.SHARES_PERCENT` | A fraction of the depositor's shares in percentage precision, so `1_000_000` is 100% and `500_000` is 50%. Above `1_000_000` fails with `SharesPercentTooLarge`. |
+
+The request does two things. It starts the redeem-period clock, and it **freezes an exit value**: the request records both the share count and the value those shares were worth at request time. The frozen value is capped at one unit below the vault's equity.
+
+Requesting fails with:
+
+| Condition | Error |
+| --- | --- |
+| The amount converts to zero shares | `InvalidVaultWithdrawSize` |
+| The share count exceeds the depositor's balance | `InvalidVaultWithdrawSize` |
+| A request is already pending | `VaultWithdrawRequestInProgress` |
+
+<Callout type="warning">
+While a request is pending, the depositor account is frozen for everything except `withdraw` and `cancelRequestWithdraw`. Deposits, share transfers, tokenizing, redeeming tokens, and a second request all reject.
+</Callout>
+
+## Complete the withdrawal
+
+After `redeemPeriod` seconds have elapsed since the request timestamp:
+
+```typescript
+await vaultClient.withdraw(vaultDepositor);
+```
+
+Calling earlier fails with `CannotWithdrawBeforeRedeemPeriodEnd`. Calling with no pending request fails with `InvalidVaultWithdraw`.
+
+The payout is `min(current value of the requested shares, the frozen request value)`. That asymmetry is the point of the freeze: losses during the redeem period reach you, gains during it do not. The requested shares are burned and the depositor's share balance drops by exactly the share count recorded at request time.
+
+<Callout type="info">
+`withdraw` is CU-heavy because it prices every market that contributes to vault equity. The SDK defaults its compute-unit limit to 850,000. Override it through `txParams` if you are composing a larger transaction.
+</Callout>
+
+The vault's manager or delegate can push a matured withdrawal through on a depositor's behalf with `forceWithdraw(vaultDepositor)`. Any other signer is rejected. The CLI exposes this as `force-withdraw` and `force-withdraw-all`.
+
+## Cancel a request
+
+```typescript
+await vaultClient.cancelRequestWithdraw(vaultDepositor);
+```
+
+Cancelling is allowed at any point before the withdrawal completes, including before the redeem period ends. It returns the depositor to active status and clears the frozen value.
+
+Cancelling is not always free. The program models it as withdrawing at the frozen value and immediately re-staking at the current price. If the vault appreciated during the wait, the frozen value buys back fewer shares than were requested, and the difference is forfeited to the depositors who stayed. If the vault did not appreciate, nothing is forfeited. This is what stops a request from working as a free option on the vault's downside.
+
+Two cases behave specially:
+
+- A depositor who owns **all** the vault's shares forfeits nothing. There is nobody for the forfeiture to accrue to.
+- If the vault appreciated so far that the frozen value would round to less than one share of the post-removal pool, the cancel is rejected with `InvalidVaultSharesDetected` rather than burning the entire claim. Withdraw at the frozen value instead.
+
+<Callout type="warning">
+Cancelling after a gain costs shares. Show the depositor the difference between their equity now and their frozen request value before they confirm.
+</Callout>
+
+## Reading the state
+
+The pending request lives on the depositor account as `lastWithdrawRequest`, with `shares`, `value`, and `ts`. A request is pending when either `shares` or `value` is non-zero.
+
+```typescript
+const depositorAccount = await vaultClient.getVaultDepositor(vaultDepositor);
+const request = depositorAccount.lastWithdrawRequest;
+const pending = !request.shares.isZero() || !request.value.isZero();
+
+const vaultAccount = await vaultClient.getVault(vault);
+const availableAt = request.ts.add(vaultAccount.redeemPeriod);
+```
+
+For live updates, `VaultDepositorAccount` wraps a polling subscriber and exposes `calcProfitShareFeesPct(vaultProfitShare, depositorEquity)`, which gives the fraction of a depositor's equity that would go to profit share.
+
+## Transferring shares
+
+`transferVaultDepositorShares(from, to, amount, withdrawUnit)` moves shares between two depositor accounts of the same vault, without a withdrawal. Both accounts must be free of pending requests, the two addresses must differ, and the amount must be greater than 0. Each failure returns `InvalidVaultDeposit` or `InvalidVaultWithdrawSize`.
+
+A transfer also installs a matured fee update, so shares cannot be moved to reset a cost basis under stale fee terms.
+
+## Related resources
+
+- [Vault Depositors](/developers/vault-depositors), the account model and share accounting
+- [Tokenized shares](/developers/vault-depositors/tokenized-shares), turning shares into a transferable SPL token
+- [Vault Managers](/developers/vault-managers), the manager side and the fee rules

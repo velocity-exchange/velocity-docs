@@ -6,7 +6,7 @@ Velocity uses a **cross-margin** system where all your deposits serve as collate
 
 Each deposit in a spot market earns **interest** from borrowers, while borrows accrue interest charges. Spot balances are tracked with precision (typically 1e6 for the quote asset, 1e9 for SOL) and can be positive (deposits) or negative (borrows). Your total collateral value is calculated by summing all deposits (weighted by asset weights) and subtracting borrows and unrealized perp losses.
 
-Withdrawals require sufficient free collateral, you can't withdraw funds that are backing open positions or would put your account below minimum margin requirements. The SDK handles token account derivation and precision conversion automatically.
+Withdrawals require sufficient free collateral, you can't withdraw funds that are backing open positions or would put your account below minimum margin requirements. Beyond margin, a withdrawal can also fail if the exchange or the market has withdrawals paused, or if the spot market's daily withdraw circuit breaker has been tripped (a market-level guard capping how far deposits can drop below their 24-hour TWAP, 25% by default). Handle these as separate error cases rather than assuming free collateral alone determines success. The SDK handles token account derivation and precision conversion automatically.
 
 Spot markets on Velocity are collateral/borrow-lend only — they no longer support order-book trading (see [Orders](/developers/velocity-sdk/orders)). Deposits, withdrawals, and internal transfers are unaffected by that change.
 

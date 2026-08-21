@@ -19,11 +19,11 @@ Every taker order that enters a JIT auction has three key parameters that define
 
 | Parameter | Description |
 |---|---|
-| `auctionDuration` | Number of slots the auction runs (typically 10 slots ≈ 5 seconds). After this, unfilled size falls through to DLOB/AMM. |
-| `auctionStartPrice` | The price at **slot 0** of the auction. For a long, this is the *best* price for the taker (highest they'd pay). For a short, it's the lowest they'd accept. |
-| `auctionEndPrice` | The price at **slot N** (end of auction). This is the *worst* price for the taker, closer to the limit price or oracle. |
+| `auctionDuration` | Number of slots the auction runs (a caller-requested value can be raised by order sanitization to a market/tier-derived floor; see the gotcha below). After this, unfilled size falls through to DLOB/AMM. |
+| `auctionStartPrice` | The price at **slot 0** of the auction. For a long, this is the *best* price for the taker (lowest they'd pay). For a short, it's the highest they'd receive. |
+| `auctionEndPrice` | The price at **slot N** (end of auction). This is the *worst* price for the taker, at their limit price (closer to, or past, the oracle). |
 
-**The key insight:** The auction starts at the taker's best price and deteriorates toward their worst acceptable price. This creates a **reverse Dutch auction**: early in the auction, makers must offer great prices to fill. As the auction progresses, the bar lowers and more makers can compete.
+**The key insight:** For a long, `auctionStartPrice` must be less than or equal to `auctionEndPrice` (the program rejects the order with `InvalidOrderAuction` otherwise); for a short, `auctionStartPrice` must be greater than or equal to `auctionEndPrice`. The auction starts at the taker's best price and ramps toward their worst acceptable price as slots pass: early in the auction, makers must offer a price close to the taker's best price to win the fill. As the auction progresses, the price moves toward the taker's limit and more makers can compete profitably.
 
 ## Auction timeline
 
@@ -40,13 +40,13 @@ Slot 0          Slot 5          Slot 10 (end)
 
 
 **For a taker going LONG:**
-- Slot 0: auction price = `auctionStartPrice` (e.g., oracle + 0.10%), taker pays above oracle
+- Slot 0: auction price = `auctionStartPrice` (e.g., oracle), taker pays at or near oracle
 - Slot 5: auction price = midpoint (e.g., oracle + 0.05%)
-- Slot 10: auction price = `auctionEndPrice` (e.g., oracle), taker at their limit
+- Slot 10: auction price = `auctionEndPrice` (e.g., oracle + 0.10%), taker at their limit
 
 **For a taker going SHORT:**
-- Slot 0: auction price = `auctionStartPrice` (e.g., oracle - 0.10%), taker sells below oracle
-- Slot 10: auction price = `auctionEndPrice` (e.g., oracle), taker at their limit
+- Slot 0: auction price = `auctionStartPrice` (e.g., oracle), taker sells at or near oracle
+- Slot 10: auction price = `auctionEndPrice` (e.g., oracle - 0.10%), taker at their limit
 
 Makers who fill closer to slot 0 are giving the taker a better price (and taking more risk). Makers who wait until later slots get easier fills but at less favorable prices.
 
@@ -61,13 +61,13 @@ where progress = min(1, (current_slot - auction_start_slot) / auction_duration)
 ```
 
 **Example** (long market order, oracle at $100):
-- `auctionStartPrice`: $100.10 (oracle + 0.1%)
-- `auctionEndPrice`: $100.00 (oracle)
+- `auctionStartPrice`: $100.00 (oracle)
+- `auctionEndPrice`: $100.10 (oracle + 0.1%, the taker's limit)
 - `auctionDuration`: 10 slots
-- At slot 3: price = $100.10 + ($100.00 - $100.10) x 0.3 = $100.07
-- At slot 7: price = $100.10 + ($100.00 - $100.10) x 0.7 = $100.03
+- At slot 3: price = $100.00 + ($100.10 - $100.00) x 0.3 = $100.03
+- At slot 7: price = $100.00 + ($100.10 - $100.00) x 0.7 = $100.07
 
-A maker offering $100.05 would be eligible to fill starting at slot 5 (when the auction price reaches $100.05). Makers offering $100.08 could fill as early as slot 2.
+A maker offering $100.05 would be eligible to fill starting at slot 5 (when the auction price reaches $100.05). Makers offering $100.02 could fill as early as slot 2.
 
 ## Auction lifecycle
 
@@ -82,9 +82,9 @@ await velocityClient.placePerpOrder({
   orderType: OrderType.MARKET,
   direction: PositionDirection.LONG,
   baseAssetAmount: size,
-  auctionDuration: 10,                                          // 10 slots
-  auctionStartPrice: velocityClient.convertToPricePrecision(100.1), // oracle + 0.1%
-  auctionEndPrice: velocityClient.convertToPricePrecision(100),     // oracle
+  auctionDuration: 10,                                            // 10 slots (may be raised by sanitization)
+  auctionStartPrice: velocityClient.convertToPricePrecision(100),   // oracle
+  auctionEndPrice: velocityClient.convertToPricePrecision(100.1),   // limit, oracle + 0.1%
 });
 ```
   </TypeScript>
@@ -180,7 +180,7 @@ This ensures you're credited as the maker (earning rebates) while filling the ta
 <SDKDoc>
   <TypeScript name="placeAndMakePerpOrder" type="method" owner="VelocityClient">
 ```typescript
-import { OrderType, PositionDirection, PostOnlyParams } from "@velocity-exchange/sdk";
+import { OrderType, PositionDirection, PostOnlyParams, OrderParamsBitFlag } from "@velocity-exchange/sdk";
 
 const makerOrderParams = {
   orderType: OrderType.LIMIT,
@@ -189,6 +189,9 @@ const makerOrderParams = {
   price: velocityClient.convertToPricePrecision(myFillPrice),
   baseAssetAmount: auction.order.baseAssetAmount, // fill entire order
   postOnly: PostOnlyParams.MUST_POST_ONLY,
+  // Required: the program rejects any place-and-make maker order that
+  // isn't IOC + post-only + limit with InvalidOrderIOCPostOnly.
+  bitFlags: OrderParamsBitFlag.ImmediateOrCancel,
 };
 
 const takerInfo = {
@@ -210,13 +213,13 @@ Multiple makers can fill the same taker order:
 - Maker B fills 50% at oracle + 0.01%
 - Remaining 20% hits DLOB or AMM
 
-Makers with better prices get priority. This pro-rata allocation ensures best execution for takers.
+Fills are allocated sequentially in price order, not split pro rata: the fill plan walks the price-sorted maker list and fills each maker in turn, with ties broken by DLOB arrival order.
 
 ## Auction vs DLOB
 
 | | JIT Auction | DLOB |
 |---|---|---|
-| **Duration** | 5-10 slots (~2-5 seconds) | Orders rest indefinitely |
+| **Duration** | 5-10 slots (~2-4 seconds at the 400ms baseline slot duration) | Orders rest indefinitely |
 | **Pricing** | Dynamic, interpolates toward oracle | Fixed price set at placement |
 | **Commitment** | None until fill, makers choose per-auction | Onchain, orders are committed |
 | **Best for** | Active makers, flow-selective strategies | Passive makers, committed liquidity |
@@ -233,7 +236,7 @@ JIT runs first, DLOB provides backup liquidity if auction doesn't fully fill.
 - Keep fills under compute budget (400k CU typical)
 
 **For takers**:
-- Auction adds 5-10 slot delay (2-5 seconds) before execution
+- Auction adds a 5-10 slot delay (2-4 seconds at the 400ms baseline slot duration) before execution
 - You get better prices but not instant fills
 - Use market orders for auction participation (limit orders bypass auction if they don't cross spread)
 
@@ -262,25 +265,24 @@ The [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/ap
 import { JitterSniper, JitterShotgun, PriceType } from "@velocity-exchange/jit-proxy";
 
 // Sniper: one precise fill attempt.
-// Note: the constructor field is still named `driftClient` even though it's typed
-// as `VelocityClient` -- @velocity-exchange/jit-proxy hasn't renamed the field yet.
 const jitter = new JitterSniper({
   auctionSubscriber,
-  driftClient: velocityClient,
+  velocityClient,
   // ...
 });
 
 // Shotgun: multiple fill attempts across auction slots
 const jitter = new JitterShotgun({
   auctionSubscriber,
-  driftClient: velocityClient,
+  velocityClient,
   // ...
 });
 ```
 
 ## Gotchas
 
-- **Auction slots ≠ wall-clock time**: auction duration is measured in Solana slots (~400ms each), not seconds. Network congestion can stretch slot times, affecting your timing assumptions.
+- **Auction slots ≠ wall-clock time**: auction duration is measured in Solana slots, not seconds. Slot duration is a configurable `State` field that steps down from a 400ms baseline toward 200ms over time (so 10 slots is roughly 4 seconds today but shortens as the schedule advances), and network congestion can stretch slot times further on top of that.
+- **Requested duration can be raised**: `auctionDuration` you pass is a floor, not a guarantee. Order sanitization can raise it to a market/tier-derived minimum based on the requested price range, so the on-chain value may exceed what you set.
 - **Partial fills are common**: multiple makers compete for the same auction. Your fill may be partial; handle `baseAssetAmountFilled < baseAssetAmount` gracefully.
 - **Compute budget for place-and-make**: these transactions are heavier than simple order placement. Budget 400-800k CU (the `JitMaker` defaults to 800k). Under-budgeting causes silent failures.
 - **Stale `takerInfo`**: if you hold a taker reference too long, the taker's order may already be filled or cancelled. Check `order.baseAssetAmount - order.baseAssetAmountFilled` for remaining size.

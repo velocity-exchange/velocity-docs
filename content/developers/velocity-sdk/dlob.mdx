@@ -141,23 +141,22 @@ await dlobSubscriber.subscribe();
 
 Once subscribed, query the aggregated L2 orderbook (price levels with cumulative size):
 
+<Callout type="warning">
+`dlob.getL2()` on its own returns resting-limit maker liquidity only, it does not include the vAMM. For a book that matches what a taker actually trades against, call `dlobSubscriber.getL2({ ..., includeVamm: true })` instead, or pass `getVammL2Generator(...)` output as `fallbackL2Generators` if you're calling `dlob.getL2()` directly.
+</Callout>
+
 <SDKDoc>
   <TypeScript name="L2 orderbook" type="example">
 ```js
 import { MarketType, PRICE_PRECISION, BASE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
-const dlob = dlobSubscriber.getDLOB();
 const marketIndex = 0; // SOL-PERP
-// For perp markets, use getMMOracleDataForPerpMarket (returns MMOraclePriceData)
-const oraclePriceData = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
-const slot = slotSubscriber.getSlot();
 
-const l2 = dlob.getL2({
+// Includes vAMM liquidity alongside resting-limit makers.
+const l2 = dlobSubscriber.getL2({
   marketIndex,
   marketType: MarketType.PERP,
-  oraclePriceData,
-  slot,
-  depth: 10, // number of price levels per side
+  includeVamm: true,
 });
 
 // l2.bids and l2.asks are arrays of { price: BN, size: BN }
@@ -180,8 +179,8 @@ import { MarketType, PRICE_PRECISION, convertToNumber } from "@velocity-exchange
 
 const dlob = dlobSubscriber.getDLOB();
 const marketIndex = 0;
-const oraclePriceData = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 const slot = slotSubscriber.getSlot();
+const oraclePriceData = velocityClient.getMMOracleDataForPerpMarket(marketIndex, slot);
 
 // Returns BN | undefined (undefined if no orders on that side)
 const bestBid = dlob.getBestBid(marketIndex, slot, MarketType.PERP, oraclePriceData);

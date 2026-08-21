@@ -56,7 +56,7 @@ Do these steps in order. Later steps depend on earlier ones.
 
 ```bash
 npm uninstall @drift-labs/sdk
-npm install @velocity-exchange/sdk   # 0.6.x
+npm install @velocity-exchange/sdk   # 0.13.x
 ```
 
 This also moves Anchor from **0.29 to 1.0**: the SDK depends on `@anchor-lang/core@1.0.1`, installed under the alias `@coral-xyz/anchor`. Transitive Anchor types (`Program`, `BN`, `Wallet`, IDL typing) therefore change — expect type churn wherever you touch Anchor directly.
@@ -91,7 +91,7 @@ There are **NO back-compat aliases**. Every old name below is absent from `@velo
 | Old | New | Notes |
 |---|---|---|
 | `@drift-labs/sdk` | `@velocity-exchange/sdk` | package name |
-| version `2.163.0-beta.0` | `0.6.0` | version reset |
+| version `2.163.0-beta.0` | `0.13.0` | version reset |
 | `@coral-xyz/anchor@0.29.0` | `@anchor-lang/core@1.0.1` (aliased as `@coral-xyz/anchor`) | Anchor 0.29 → 1.0; transitive types change |
 | IDL `drift.json` | `velocity.json` | generated artifact; do not hand-edit |
 | jit-proxy program id (SDK config) | `J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ` | only if you reference jit-proxy |
@@ -215,7 +215,7 @@ Old → new: Drift's spot-market-0 quote/collateral asset was **USDC** (`EPjFWdd
 
 ### 5.2 dlob-server v3 forces fast-fill auctions for all markets
 
-Old → new: previously major/minor markets used different auction start offsets and a ~60-slot default duration; at API `version>=3` every market gets fast-fill: the auction starts at `bestOffer` with a `-0.05` price offset (inside the touch), `auctionDuration = 5` slots (~2s). Affects: MMs quoting off stale prices get run over; fill-timing assumptions break. Check: any code assuming a long auction window or tier-based auction params; re-tune fill logic to the 5-slot window and use the new `generatedAt` response field for staleness checks.
+Old → new: previously major/minor markets used different auction start offsets and a ~60-slot default duration; at API `version>=3` every market gets fast-fill: the auction starts at `bestOffer` with a `-0.05` price offset (inside the touch), and `auctionDuration` is 2000 ms of wall clock converted to slots at the market's active slot duration (5 slots at the 400 ms baseline, more at a shorter slot duration). Affects: MMs quoting off stale prices get run over; fill-timing assumptions break. Check: any code assuming a long auction window, a tier-based auction params, or a hardcoded 5-slot duration; derive the window from `slotDuration` and use the new `generatedAt` response field for staleness checks.
 
 ### 5.3 DLOB prices resting trigger orders at their post-trigger price
 
@@ -225,9 +225,9 @@ Old → new: the old DLOB tagged resting trigger orders with their raw trigger p
 
 Old → new: the old match path always added AMM JIT alongside the DLOB maker; now, when a hard gate (pause / drawdown / MM-vs-oracle volatility / oracle invalidity) fires, the match branch fills DLOB-only. Affects: fills can be capped to the resting maker's size or under-fill during those windows. Check: any filler/MM that assumes AMM JIT backstops a DLOB match; check market pause/drawdown/oracle-validity state before relying on it.
 
-### 5.5 MM-oracle native handler silently no-ops rejected writes
+### 5.5 MM-oracle native handler silently skips rejected writes, and clamps oversized steps instead of skipping them
 
-Old → new: the old `update_mm_oracle_native` wrote unconditionally on a higher sequence id; now a resubmit within 2 slots, a non-monotonic slot, or a `>1%` per-write price step is **silently ignored** (returns Ok, no error). Affects: MM crank bots pushing fast/large price updates now get no-ops with no error signal. Check: MM-oracle push cadence — throttle to `>=2` slots and clamp per-write step to `<=1%`, or updates land as no-ops.
+Old → new: the old `update_mm_oracle_native` wrote unconditionally on a higher sequence id; now a write is **silently skipped** (returns `Ok`, no error) on any of: a non-positive price, a sequence id that has not strictly increased, a slot that has not strictly advanced, a slot gap below the 800 ms minimum write gap, or a source slot more than 800 ms away from the landing slot in either direction. A per-write price step beyond the 1% cap is handled differently and is **not** a skip: it is clamped to the cap and written, so a feed gap larger than the cap converges over a few writes instead of freezing the oracle. Affects: MM crank bots pushing updates faster than 800 ms apart, or with a stale/mismatched source slot, now get silent skips with no error signal; bots pushing a large single-write move get a clamped price on chain, not a no-op. Check: MM-oracle push cadence. Throttle to at least 800 ms between writes and expect an oversized step to land clamped to 1%, not rejected.
 
 ### 5.6 Funding floor raised 7.3% → 10.95% annualized
 
@@ -241,9 +241,9 @@ Old → new: funding premium was the raw mark-vs-oracle spread plus offset; now 
 
 Old → new: no such widening on Drift; a new `AMM.funding_bias_sensitivity` (default 0 = off) widens the paying-side vAMM spread as funding approaches the offset floor once an admin enables it per market. Affects: MMs modeling vAMM quotes / expected fill price once enabled. SDK mirrors it. Check: read `market.fundingBiasSensitivity` per market rather than assuming 0.
 
-### 5.9 Gov-token stake fee discount removed — perp fee tier is 30-day volume only
+### 5.9 Gov-token stake fee discount removed. Perp fee tier is 30-day volume, floored by an admin-set promo tier
 
-Old → new: Drift lowered your perp fee tier for staking the gov token (and short-circuited high-leverage mode to tier 0); Velocity determines the tier from 30-day volume alone. Affects: an MM that staked for a fee discount now pays the un-discounted tiered fee — a real cost increase. Check: any code reading a stake-based discount or the HLM tier path; re-model taker fees with no stake benefit.
+Old → new: Drift lowered your perp fee tier for staking the gov token (and short-circuited high-leverage mode to tier 0); Velocity determines the tier from 30-day volume, then takes the better of that and an admin-set `State.promo_fee_tier` floor (0 means no floor; the account is never downgraded below what the promo tier grants). Affects: an MM that staked for a fee discount now pays the tiered fee for its own volume, or the promo floor if that is higher, a real cost change either way. Check: any code reading a stake-based discount or the HLM tier path, and any fee reconciliation that assumes volume alone; re-model taker fees against volume plus the promo floor.
 
 ### 5.10 Referee discount now applied in `getMarketFees`; fee method renamed and re-rounded
 
@@ -337,4 +337,4 @@ grep -rnE "drift_state" src/                                 # old State PDA see
 
 ## 7. Currency note
 
-This guide reflects `@velocity-exchange/sdk` **0.6.0**, July 2026, and covers the **TypeScript SDK** only. For deeper ABI / Rust-level detail see the [full Drift-to-Velocity migration doc](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md). A human-oriented overview lives at [/developers/migrate-from-drift](/developers/migrate-from-drift). SDK setup basics are at [/developers/velocity-sdk/setup](/developers/velocity-sdk/setup).
+This guide reflects `@velocity-exchange/sdk` **0.13.0**, August 2026, and covers the **TypeScript SDK** only. For deeper ABI / Rust-level detail see the [full Drift-to-Velocity migration doc](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md). A human-oriented overview lives at [/developers/migrate-from-drift](/developers/migrate-from-drift). SDK setup basics are at [/developers/velocity-sdk/setup](/developers/velocity-sdk/setup).

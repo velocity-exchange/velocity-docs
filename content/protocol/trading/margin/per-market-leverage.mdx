@@ -12,7 +12,11 @@ Each perpetual market defines its own maximum leverage through its protocol-set 
 
 On top of the market cap, you can optionally hold yourself to a **lower** limit — either account-wide (`account.max_margin_ratio`) or per position (`position.max_margin_ratio`). These overrides can only make your limit more conservative; they can never raise it above the market's cap.
 
-When evaluating a position, Velocity uses the **largest** (most conservative) applicable margin ratio — equivalently, the **lowest** leverage:
+<Callout type="important">
+Your override only applies to **initial** margin, the check run when you open or increase a position. It does not touch **maintenance** margin, which always uses the market's own `margin_ratio_maintenance` (plus its IMF surcharge on large size). Capping yourself to 10x on a 20x market lowers the size you can open; it does not move your liquidation threshold, which stays wherever the market sets it.
+</Callout>
+
+When evaluating a position for the initial-margin check, Velocity uses the **largest** (most conservative) applicable margin ratio, equivalently, the **lowest** leverage:
 
 ```
 effective_margin_ratio = max(
@@ -29,7 +33,9 @@ effective_margin_ratio = max(
 
 _Illustrative. SOL-PERP's live initial margin ratio is 5% (20x); each market's current values live on-chain._
 
-A higher margin ratio means lower leverage, so the most conservative limit always wins. From this ratio, the protocol derives the **maximum position size** you can open with your available collateral and the **liquidation threshold** for that position.
+The market side of the ratio is itself a max: the protocol-set `margin_ratio_initial` against the IMF size premium for large positions. A market in `Settlement` status is a special case and always uses a margin ratio of 0.
+
+A higher margin ratio means lower leverage, so the most conservative limit always wins for the initial-margin check. From this ratio, the protocol derives the **maximum position size** you can open with your available collateral. The **liquidation threshold**, by contrast, is set separately: it always comes from the market's own maintenance margin ratio and is unaffected by your account or per-position overrides.
 
 ## Risk and Control
 

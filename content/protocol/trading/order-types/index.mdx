@@ -20,7 +20,7 @@ Users can set a maximum **slippage tolerance**. A slippage tolerance sets an upp
 
 For instance, if the mark price of SOL-PERP is \$100.00 and a user goes long, a user can set a maximum slippage tolerance of 0.1%. As such, the worst price that a user can fill at is \$100.10. The order will fail if the quoted price exceeds the limit price (with slippage tolerance) for takers.
 
-Market Orders will trigger a Just-In-Time auction, where market makers will be able to participate in a short (default ~5-second) Dutch auction to fill the user's orders. As the JIT auction finishes, the user's orders will be completed if the price is within their slippage tolerance limit order. If no market maker steps in during the JIT Auction, the remaining order will be filled against Velocity's AMM.
+Market Orders will trigger a Just-In-Time auction, where market makers will be able to participate in a Dutch auction to fill the user's orders. The auction duration is set by the client and floored on-chain: the program takes the wider of the client-requested duration and a spread-derived minimum that scales with the market's contract tier. As the JIT auction finishes, the user's orders will be completed if the price is within their slippage tolerance limit order. If no market maker steps in during the JIT Auction, the remaining order will be filled against Velocity's AMM.
 
 Executing a Market Order does not mean the order will execute at exactly the price displayed as the mark price of an asset may change before the JIT Auction is complete. 
 
@@ -49,5 +49,5 @@ If or when the mark price of an asset moves to cross the Limit Price, the order 
 
 For taker orders, a user's resulting Entry Price is guaranteed to be equal to or better than the Limit Price specified.
 
-If the "Post" order flag is set, then the order will be filled at the specified limit price with a variable rebate. This variable rebate comes from the liquidity surplus from the taker fills that cross after accounting for the filler reward (which is capped at 5bps).
+If the "Post" order flag is set, then the order will be filled at the specified limit price and earn a maker rebate. The rebate is a flat rate set by the maker's fee tier (currently 0.0025% of the filled notional in every tier). It is carved out of the taker's fee on a peer-to-peer match, or out of the AMM's spread surplus when the post-only order fills against the AMM. The filler who submits the fill is separately paid the lesser of 10% of the fee and a reward that grows with the order's age; there is no fixed bps cap on that filler reward.
 

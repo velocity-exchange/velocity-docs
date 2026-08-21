@@ -28,7 +28,7 @@ const swapClient = new UnifiedSwapClient({
   </TypeScript>
 </SDKDoc>
 
-The standalone `JupiterClient` remains available and is accepted directly by `VelocityClient.swap()` for backward compatibility, but new integrations should prefer `UnifiedSwapClient`:
+The standalone `JupiterClient` remains available. Both `JupiterClient` and `TitanClient` implement the same `SwapProvider` interface as `UnifiedSwapClient`, so a raw `JupiterClient` can be passed as `swapClient` for backward compatibility, but new integrations should prefer `UnifiedSwapClient`:
 
 <SDKDoc>
   <TypeScript name="JupiterClient" type="class">
@@ -42,6 +42,50 @@ const jupiterClient = new JupiterClient({ connection });
   </TypeScript>
 </SDKDoc>
 
+## Jupiter Swap API v1 versus v2
+
+`JupiterClient` takes an `apiVersion` of `'v1'` or `'v2'`. It **defaults to `'v1'`**. `UnifiedSwapClient` forwards the same choice as `jupiterApiVersion` (ignored when `clientType` is `'titan'`).
+
+| | `'v1'` (default) | `'v2'` |
+|---|---|---|
+| Endpoints | `GET /swap/v1/quote`, then `POST /swap/v1/swap` | `GET /swap/v2/build` only |
+| Round trips per swap | Two, plus deserializing the returned transaction | One, the quote carries the route instructions |
+| `userPublicKey` on `getQuote` | Optional | **Required**, v2 builds for a named taker |
+| `autoSlippage` | Supported | Rejected, `getQuote` throws |
+| `swapMode` | `'ExactIn'` or `'ExactOut'` | `'ExactIn'` only, anything else throws |
+| `onlyDirectRoutes` | Supported | Rejected, `getQuote` throws |
+
+<SDKDoc>
+  <TypeScript name="apiVersion" type="example">
+```js
+import { JupiterClient, UnifiedSwapClient } from "@velocity-exchange/sdk";
+
+// Opt into v2 on the standalone client
+const jupiterV2 = new JupiterClient({
+  connection,
+  apiKey: "<JUPITER_API_KEY>",
+  apiVersion: "v2",
+});
+
+// Or through the unified client
+const swapClient = new UnifiedSwapClient({
+  clientType: "jupiter",
+  connection,
+  authToken: "<JUPITER_API_KEY>",
+  jupiterApiVersion: "v2",
+});
+```
+  </TypeScript>
+</SDKDoc>
+
+<Callout type="warning">
+The v2 rejections are deliberate. Jupiter's `/swap/v2/build` answers `200` for `autoSlippage`, `onlyDirectRoutes`, and `ExactOut` while ignoring them: auto-slippage comes back with zero slippage tolerance (any adverse move reverts the swap), direct-only still returns multi-hop routes, and `ExactOut` comes back as `ExactIn` with your amount spent as the input, which inverts the trade. The SDK throws instead of passing those through. If you need any of the three, construct the client with `apiVersion: 'v1'`.
+</Callout>
+
+<Callout type="info">
+The Rust SDK (`velocity-rs`) is **v2 only**. Its Jupiter path has no v1 mode and no version toggle: `jupiter_swap_query` has no `swap_mode`, `transaction_config`, or `only_direct_routes` parameters, and it takes `max_accounts: Option<usize>` (defaulting to 50) as the remaining routing lever. Rust consumers get the v2 behavior described above whether or not they opt in.
+</Callout>
+
 ## Getting a quote
 
 Preview the expected output and route before committing. `UnifiedSwapClient.getQuote()` normalizes the request across both providers (Titan additionally requires `userPublicKey`):
@@ -54,7 +98,7 @@ const quote = await swapClient.getQuote({
   outputMint: solMint,    // PublicKey
   amount: velocityClient.convertToSpotPrecision(0, 10), // 10 USDT, BN
   slippageBps: 50,
-  userPublicKey: velocityClient.wallet.publicKey, // required for Titan, ignored by Jupiter
+  userPublicKey: velocityClient.wallet.publicKey, // required for Titan, and for Jupiter's v2 API; ignored by Jupiter v1 (the default)
 });
 console.log(quote);
 ```
@@ -63,7 +107,7 @@ console.log(quote);
 
 ## Executing the swap
 
-`VelocityClient.swap()` accepts a `swapClient` (a `UnifiedSwapClient`, or a raw `JupiterClient` for the deprecated legacy path), fetches/uses the route, and sends the transaction so tokens move in and out of your Velocity spot balances:
+`VelocityClient.swap()` accepts a `swapClient` (a `UnifiedSwapClient`, or a raw `JupiterClient`/`TitanClient` for the deprecated legacy path), fetches/uses the route, and sends the transaction so tokens move in and out of your Velocity spot balances:
 
 <SDKDoc>
   <TypeScript name="swap" type="method" owner="VelocityClient">
@@ -87,8 +131,7 @@ console.log(txSig);
 
 | Parameter | Description | Optional | Default |
 |---|---|---|---|
-| `swapClient` | `UnifiedSwapClient` (preferred) wrapping Jupiter or Titan | No* | |
-| `jupiterClient` | `@deprecated` legacy `JupiterClient` instance; use `swapClient` instead | No* | |
+| `swapClient` | `UnifiedSwapClient` (preferred), or a raw `JupiterClient`/`TitanClient` for the deprecated legacy path | No | |
 | `inMarketIndex` | Velocity spot market index for the input token | No | |
 | `outMarketIndex` | Velocity spot market index for the output token | No | |
 | `amount` | Amount to swap as a BN, spot market precision | No | |
@@ -98,8 +141,6 @@ console.log(txSig);
 | `reduceOnly` | `SwapReduceOnly` — constrain the in/out token balance to reduce-only at swap end | Yes | |
 | `quote` | Pre-fetched quote (from `getQuote()`) to skip an extra round-trip | Yes | |
 | `txParams` | Compute-unit/priority-fee overrides | Yes | |
-
-\* Exactly one of `swapClient` or `jupiterClient` must be provided.
 
 <Callout type="info">
 `TitanClient` itself is an internal implementation detail and is not exported from the SDK root — construct Titan-backed swaps through `new UnifiedSwapClient({ clientType: "titan", ... })` rather than importing `TitanClient` directly.

@@ -9,8 +9,8 @@ Velocity's account model is built around a few key principles:
 
 **Key Design Principles**
 
-- **Cross-margin** - All positions within a wallet share collateral
-- **Subaccounts** - Each wallet can have multiple isolated trading accounts (0, 1, 2...)
+- **Cross-margin** - All positions within a single subaccount share that subaccount's collateral
+- **Subaccounts** - Each wallet can have multiple independent trading accounts (0, 1, 2...), each with its own margin and its own liquidation risk
 - **Interest-bearing** - Spot balances accrue interest via scaled balance mechanism
 - **Inline orders** - Orders are stored directly in UserAccount (no separate order accounts)
 - **Account size limits** - Fixed limits (8 perp, 8 spot, 32 orders) keep transactions predictable
@@ -28,8 +28,8 @@ Tracks long/short exposure in perpetual futures markets.
 - Funding payments: Tracked via `lastCumulativeFundingRate`
 
 **Order locking:**
-- `openBids` - Notional value locked in buy orders
-- `openAsks` - Notional value locked in sell orders
+- `openBids` - Base-asset size (BASE_PRECISION, 1e9) of non-reduce-only bids resting or triggering against this position. Multiply by price to get notional.
+- `openAsks` - Base-asset size (BASE_PRECISION, 1e9) of non-reduce-only asks resting or triggering against this position. Multiply by price to get notional.
 
 {/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
 **Isolated margin:**
@@ -86,11 +86,13 @@ Orders are stored inline in UserAccount (no separate order accounts). Up to **32
 
 ### JIT auctions
 
-Every order goes through a **Just-In-Time (JIT) auction** to improve price:
+Market and oracle orders (and limit orders given auction params) go through a **Just-In-Time (JIT) auction** to improve price:
 - `auctionStartPrice` - Most aggressive price
 - `auctionEndPrice` - Least aggressive price (limit price)
 - `auctionDuration` - Slots for auction to run
 - Price linearly improves from start to end over the duration
+
+Post-only limit orders, and any order with `auctionDuration == 0`, skip the auction and rest immediately at their limit price.
 
 This gives better prices while maintaining MEV resistance. See [JIT Auctions](/developers/market-makers/jit-auctions) for details.
 
@@ -126,19 +128,20 @@ Total Collateral =
 
 ### Margin requirement
 
-Position margin requirements sum across all positions:
+Two separate margin requirements sum across all positions **within one subaccount**, and gate different things:
 
 ```
-Margin Requirement = Σ (position notional x initial margin ratio)
+Initial Margin Requirement = Σ (position notional x initial margin ratio)
+Maintenance Margin Requirement = Σ (position notional x maintenance margin ratio)
 ```
 
 **Initial margin ratio**
-- Determines minimum collateral to open a position
+- Gates opening or increasing risk (new positions, larger positions)
 - Set per market via `PerpMarketAccount.marginRatioInitial` (e.g. 500 = 5% = 20x max leverage)
 - Higher for riskier/less liquid markets
 
 **Maintenance margin ratio**
-- Lower threshold that triggers liquidation (`PerpMarketAccount.marginRatioMaintenance`)
+- The threshold that actually triggers liquidation (`PerpMarketAccount.marginRatioMaintenance`, plus `State.liquidationMarginBufferRatio`)
 - Typically ~half of initial margin
 - Example: 2.5% maintenance if 5% initial
 
@@ -148,31 +151,39 @@ Velocity removed high leverage mode: there is no per-user `marginMode` override 
 
 ### Account health
 
+Liquidation is gated on the **maintenance** margin requirement, not the initial one:
+
 ```
-Health = Total Collateral / Margin Requirement
+Maintenance Health Ratio = Total Collateral / Maintenance Margin Requirement
 ```
 
 **Health states:**
-- **> 1.0** - Healthy, can open new positions
-- **< 1.0** - Liquidation eligible
+- **> 1.0** - Above maintenance requirement, not liquidatable
+- **< 1.0** - Liquidation eligible (subject to `State.liquidationMarginBufferRatio`)
 - **< 0.0** - Underwater (negative collateral)
 
-When health drops below 1.0, liquidators can close your positions to bring the account back to health.
+Opening or increasing a position is gated separately, on the **initial** margin requirement: you need enough total collateral to cover `Σ (position notional x initial margin ratio)` before the new risk is added.
+
+When maintenance health drops below 1.0, liquidators can close your positions to bring the account back to health.
+
+<Callout type="info">
+The SDK's `user.getHealth()` does not return this ratio directly. It computes maintenance margin internally and returns an integer score in `[0, 100]`, where 100 is fully healthy and 0 means the account is already being liquidated or has non-positive collateral.
+</Callout>
 
 ## Cross-margin and subaccounts
 
-All subaccounts under the same wallet **share collateral** for cross-margin benefits:
+Each subaccount is its own independent margin silo. Cross-margin means all positions **within one subaccount** share that subaccount's collateral, not that collateral is shared across subaccounts.
 
 **How it works:**
 - Each wallet can create multiple subaccounts (0, 1, 2, ...)
-- Deposits in subaccount 0 can back positions in subaccount 1
-- Total collateral and margin requirement are calculated across ALL subaccounts
-- Liquidation considers all subaccounts together
+- Deposits in subaccount 0 do **not** back positions in subaccount 1
+- Total collateral and margin requirement are calculated per subaccount, from that subaccount's own spot and perp positions
+- Liquidation is evaluated independently for each subaccount, on its own health
 
 **Benefits:**
-- **Capital efficiency** - Don't need to split funds across accounts
 - **Flexible organization** - Separate strategies in different subaccounts
-- **Shared margin pool** - Winning positions support losing ones
+- **Isolation** - A losing position in one subaccount cannot draw down the collateral of another
+- **Explicit transfers** - Moving collateral between subaccounts requires an explicit `transferDeposit` call, so exposure between strategies stays intentional
 
 **SDK usage (TypeScript, `@velocity-exchange/sdk`):**
 ```typescript
@@ -182,9 +193,9 @@ await velocityClient.placePerpOrder(/* order params */); // Order goes to subacc
 ```
 
 **Important:**
-- Each subaccount has its own positions and orders
-- But they all share the same collateral/margin pool
-- Liquidation affects all subaccounts if total health drops below 1.0
+- Each subaccount has its own positions, orders, and collateral/margin pool
+- Liquidation only affects the specific subaccount whose health drops below 1.0, not the wallet's other subaccounts
+- To move collateral between subaccounts, call `transferDeposit` explicitly
 
 **Delegated transfers:** an authority can opt a delegate into moving deposits between the authority's own subaccounts by calling `updateUserAllowDelegateTransfer(true)` once; the delegate can then call `transferDepositByDelegate(...)`. This does not grant the delegate any withdrawal rights outside the authority's own subaccounts.
 
@@ -294,5 +305,4 @@ Includes both resting orders and trigger orders combined.
 
 **Workaround:**
 - Use multiple subaccounts for more positions
-- Each subaccount has its own 8/8/32 limits
-- Still shares margin across all subaccounts
+- Each subaccount has its own 8/8/32 limits, and its own independent collateral/margin pool

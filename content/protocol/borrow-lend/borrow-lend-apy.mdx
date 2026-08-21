@@ -25,7 +25,7 @@ The interest rate rises gently up to each market's **optimal utilization** point
 
 ### Borrow APY
 
-Users must pay a Borrow APY to the pool when borrowing assets. This interest payment is then distributed to lenders via the Supply APY.
+Users must pay a Borrow APY to the pool when borrowing assets. Each spot market takes two independent cuts off this interest before the rest is distributed to lenders via the Supply APY: an `ifFeeFactor` carveout that goes to that market's Insurance Fund, and a separate `protocolFeeFactor` carveout that goes to a protocol-owned, withdrawable fee pool.
 
 Velocity's interest rate is calibrated to manage liquidity risk and optimise asset utilisation. The formula for the borrow interest rates can be found at [Borrow Interest Rate](/protocol/how-it-works/borrow-interest-rate).  
 

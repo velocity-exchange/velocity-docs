@@ -1,0 +1,138 @@
+# Manager Operations
+
+The [Quickstart](/developers/vault-managers/quickstart) covers creating a vault and changing its parameters. This page covers the rest of the manager surface on `VaultClient` from [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk): profit share, rebases, the queued fee update, manager borrow and repay, and the vault's own insurance-fund stake.
+
+Every method listed here has a matching `get...Ix` (or `create...Ix`) variant that returns instructions instead of sending a transaction, so you can batch operations or route them through a multisig. See [Multisig manager](/developers/vault-managers/multisig-ops).
+
+## Profit share and rebase
+
+### Apply profit share
+
+`applyProfitShare` crystallizes one depositor's profit share at the policy currently in force for that depositor, then advances the depositor onto the vault's current profit share and hurdle rate.
+
+```typescript
+await vaultClient.applyProfitShare(vault, vaultDepositor);
+```
+
+This matters when you have queued a fee change. Each depositor keeps the profit share and hurdle rate that were in force when its high-water mark was last set, so a raised profit share does not price gain earned before the raise. The depositor moves onto the new policy only after that gain is realized. Applying profit share is what realizes it. See [Grandfathering](/developers/vault-managers#grandfathering).
+
+The CLI equivalents are `manager-apply-profit-share` for one depositor and `apply-profit-share-all` for every depositor of a vault.
+
+### Apply rebase
+
+When a vault's equity falls far enough relative to its share count, the program divides every share balance by a rebase divisor and increments the vault's `shares_base`. Depositor accounts are resynced lazily, on their next deposit, withdraw, or share movement.
+
+`applyRebase` resyncs one depositor account without waiting for that:
+
+```typescript
+await vaultClient.applyRebase(vault, vaultDepositor);
+```
+
+For a tokenized depositor, use `applyRebaseTokenizedDepositor` instead. Once a vault has rebased past a tokenized depositor's recorded base, new shares can no longer be tokenized into that mint (`InvalidVaultRebase`); only redemption stays open. See [Tokenized shares](/developers/vault-depositors/tokenized-shares).
+
+## The queued fee update
+
+Raising a fee, or lowering the hurdle rate, is a two-call flow behind a timelock. The rules the program enforces are described in [Changing vault fees](/developers/vault-managers#changing-vault-fees). The SDK surface is:
+
+| Method | Who signs | What it does |
+| --- | --- | --- |
+| `adminInitFeeUpdate(vault)` | admin | Creates the `FeeUpdate` account the queue is stored in. |
+| `managerUpdateFees(vault, params)` | manager | Queues the change, or installs it once matured. |
+| `managerCancelFeeUpdate(vault)` | manager | Withdraws a pending queue. |
+| `adminDeleteFeeUpdate(vault)` | admin | Closes the `FeeUpdate` account. |
+| `getFeeUpdate(feeUpdateAddress)` | anyone | Reads the pending policy and its maturity timestamp. |
+
+```typescript
+import { getFeeUpdateAddressSync } from '@velocity-exchange/vaults-sdk';
+import { BN } from '@velocity-exchange/sdk';
+
+// Queue a profit-share raise to 25%. Percentage precision: 1e6 = 100%.
+await vaultClient.managerUpdateFees(vault, {
+  timelockDuration: new BN(14 * 24 * 60 * 60),
+  newManagementFee: null,
+  newProfitShare: 250_000,
+  newHurdleRate: null,
+});
+
+// Later: read the queue, and install it once matured.
+const feeUpdateAddress = getFeeUpdateAddressSync(vaultClient.program.programId, vault);
+const feeUpdate = await vaultClient.getFeeUpdate(feeUpdateAddress);
+if (feeUpdate.incomingUpdateTs.toNumber() <= Date.now() / 1000) {
+  await vaultClient.managerUpdateFees(vault, {
+    timelockDuration: new BN(0),
+    newManagementFee: null,
+    newProfitShare: null,
+    newHurdleRate: null,
+  });
+}
+```
+
+<Callout type="info">
+`managerUpdateFees` throws before sending if the `FeeUpdate` account does not exist. Ask an admin to run `adminInitFeeUpdate` first.
+</Callout>
+
+<Callout type="warning">
+A `null` field keeps the current value. `timelockDuration` must be at least `max(7 days, 2 x redeem period)` when queueing, so a vault with a 7-day redeem period needs at least 14 days.
+</Callout>
+
+## Manager borrow and repay
+
+These three instructions are **Trusted-class only**. Calling them on a Normal vault fails with `InvalidVaultClass`. An admin promotes a vault with `adminUpdateVaultClass`. See [Trusted vaults](/developers/vault-managers/trusted-vaults) for the CLI flow and the trust assumptions.
+
+```typescript
+// Move USDT out of the vault. Amount must be > 0 (InvalidBorrowAmount).
+await vaultClient.managerBorrow(vault, 0, new BN(10_000_000));
+
+// Send tokens back. repayValue is the value to deduct from manager_borrowed_value,
+// in the vault's deposit asset; pass null to let the program price it.
+await vaultClient.managerRepay(vault, 0, new BN(10_000_000), null);
+
+// Mark the outstanding borrow to its current value without moving tokens.
+await vaultClient.managerUpdateBorrow(vault, new BN(9_500_000));
+```
+
+The borrowed amount stays in vault equity as `manager_borrowed_value`, so depositor share price reflects the full claim on the vault. `managerRepay` requires a repay amount greater than 0 (`InvalidRepayAmount`); use `managerUpdateBorrow` when you want to change the tracked value without a transfer. `managerRepay` returns several instructions from `getManagerRepayIxs`, including token-wrapping instructions when the repay asset is SOL.
+
+## Vault-level insurance-fund staking
+
+A vault can stake its own capital into a spot market's [Insurance Fund](/protocol/insurance-fund) and earn the staker share of revenue settlements. Only the vault manager may call these; the SDK throws locally if the connected wallet is not the manager.
+
+```typescript
+await vaultClient.initializeInsuranceFundStake(vault, 0);
+await vaultClient.addToInsuranceFundStake(vault, 0, new BN(1_000_000));
+await vaultClient.requestRemoveInsuranceFundStake(vault, 0, new BN(500_000));
+await vaultClient.cancelRequestRemoveInsuranceFundStake(vault, 0);
+await vaultClient.removeInsuranceFundStake(vault, 0);
+```
+
+The lifecycle rules are the protocol's, not the vault program's: staking prices shares off the fund's balance, requesting an unstake freezes an exit value and starts a 13-day escrow, and cancelling forfeits any appreciation earned during escrow. Read [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) before staking vault capital, and note that staked capital is at risk of absorbing protocol deficits.
+
+## Other manager and admin operations
+
+| Method | Notes |
+| --- | --- |
+| `updateDelegate(vault, delegate)` | Change the account that trades for the vault. |
+| `updateMarginTradingEnabled(vault, enabled)` | Allow or block margin trading on the vault's user account. |
+| `updateUserPoolId(vault, poolId)` | Move the vault's user account to another pool. |
+| `managerDeposit`, `managerRequestWithdraw`, `managerCancelWithdrawRequest`, `managerWithdraw` | The manager's own capital in the vault, with the same request-then-withdraw shape as a depositor. |
+| `transferVaultDepositorShares(from, to, amount, unit)` | Move shares between two depositor accounts of the same vault. |
+| `adminUpdateVaultClass(vault, class)` | Admin only. Promotes a vault to Trusted. |
+| `liquidate(vaultDepositor)` | Admin only. Takes temporary delegate control to close positions in reduce-only mode so a matured withdrawal can settle. |
+| `getOracleFeedsToCrankIxs(oracleFeedsToCrank)` | Builds Pyth Lazer crank instructions to prepend when a vault instruction needs fresh oracle prices. |
+
+## Reading vault state
+
+```typescript
+const vault = await vaultClient.getVault(vaultAddress);
+const equity = await vaultClient.calculateVaultEquityInDepositAsset({ vault });
+const sharePrice = await vaultClient.calcVaultSharePrice({ vault });
+const depositors = await vaultClient.getAllVaultDepositors(vaultAddress);
+```
+
+`getAllVaultDepositorsWithNoWithdrawRequest` filters to depositors with no pending request, which is the set you can safely apply profit share to without touching a frozen withdrawal value.
+
+## Related resources
+
+- [Vault Managers](/developers/vault-managers), roles, parameters, and the fee rules
+- [Quickstart](/developers/vault-managers/quickstart), creating and configuring a vault
+- [Vault Depositors](/developers/vault-depositors), the depositor side of the same vault

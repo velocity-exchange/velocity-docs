@@ -47,8 +47,10 @@ See [PnL & Risk](/developers/velocity-sdk/pnl-risk) for `getTotalCollateral`, `g
 ### Open orders
 
 ```ts
+import { isVariant } from "@velocity-exchange/sdk";
+
 for (const order of userAccount.orders) {
-  if (order.status !== 1 /* OrderStatus.Open */) continue;
+  if (!isVariant(order.status, "open")) continue;
 
   order.orderId;
   order.marketIndex;
@@ -102,15 +104,26 @@ For account types beyond `User`, build a coder directly against the bundled IDL:
 import { VelocityCore } from "@velocity-exchange/sdk";
 
 const coder = VelocityCore.coder(); // defaults to VelocityCore.defaultIdl()
-const perpMarket = coder.accounts.decode("perpMarket", rawAccountBuffer);
+const perpMarket = coder.accounts.decode("PerpMarket", rawAccountBuffer);
 ```
 
 <Callout type="warning">
-**IDL account names are camelCase in Anchor 1.0.** Any string-keyed coder call must use `'perpMarket'`, `'spotMarket'`, `'user'`, `'userStats'`, `'state'` — not the PascalCase Drift used with Anchor 0.29 (`'PerpMarket'`, `'SpotMarket'`, ...). Passing the old casing throws or silently returns `undefined` depending on the coder version.
+**IDL account names are PascalCase.** Any string-keyed coder call must use `'PerpMarket'`, `'SpotMarket'`, `'User'`, `'UserStats'`, `'State'`, matching `accounts[].name` in `sdk/src/idl/velocity.json`. Passing a lowercase or camelCase name throws `Unknown account: <name>`.
 </Callout>
 
 <Callout type="warning">
 **`MarketStatus` discriminants shifted.** Velocity's surviving `MarketStatus` variants are `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4) — Drift had `ReduceOnly` (6), `Settlement` (7), `Delisted` (8). A raw/cached decoder built against Drift's numbering will silently misread these. Always decode against the current `sdk/src/idl/velocity.json`, never a hardcoded enum copied from a Drift integration. `PerpMarketAccount` is also a different size (1304 bytes vs Drift's 1216) — see [Account Model](/developers/concepts/account-model) for the full layout diff.
+</Callout>
+
+<Callout type="warning">
+**Never validate an account by its exact data length.** Zero-copy account structs (`User`, `PerpMarket`, `SpotMarket`, `State`, `UserStats`, and others) can grow: when a struct runs out of reserved padding, the protocol grows the deployed accounts with the `extend_account` instruction, and the account then holds **more** bytes than an older client expects. Decode length-tolerantly:
+
+- Read exactly the `8 + size_of::<T>()` bytes your client knows and ignore the tail. The SDK already does this: Anchor's borsh coder and the `decodeUser` fast path both use start-relative offsets, so an extended account decodes unchanged.
+- Do not assert `data.length === EXPECTED_SIZE`, and do not derive a slice end from the buffer length.
+- **Do not filter `getProgramAccounts` by `dataSize`.** A hardcoded size silently matches zero accounts after an extension. Filter on the 8-byte discriminator with a `memcmp` instead, which is what every SDK map does.
+- On the Rust side, decode through `velocity-rs`'s `utils::deser_zero_copy` / `try_deser_zero_copy` or `AccountRef`, which trim to `8 + size_of::<T>()` before casting. Do not call Anchor's derived `T::try_deserialize` on a zero-copy type off-chain: it casts the whole tail and panics on any size mismatch.
+
+Extension only ever appends. It never reorders, inserts, widens, or shrinks a field, so offsets you already read stay valid, and newly added bytes read as zero until code writes them. See [Account Model](/developers/concepts/account-model#account-sizes-can-grow).
 </Callout>
 
 ## Market data

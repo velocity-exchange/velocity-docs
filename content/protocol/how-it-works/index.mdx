@@ -1,7 +1,8 @@
 # Understanding Velocity
 
-At the application level, Velocity is a decentralized exchange that supports low slippage, low fees, and minimal price impact on all trades. Velocity offers three primary products:
+At the application level, Velocity is a decentralized exchange that supports low slippage, low fees, and minimal price impact on all trades. Velocity offers:
 
+* Perpetual futures trading - see the rest of this page for how it works
 * Borrow & Lend - [What is Borrow & Lend?](/protocol/borrow-lend)
 
 <Callout type="important">
@@ -53,7 +54,7 @@ Trades on Velocity are supported by three liquidity mechanisms. Each mechanism i
 <Steps>
 ### Just-in-Time (JIT) Auction Liquidity
 
-All perp market orders placed on Velocity are routed through a short-term auction (default is \~ 5 seconds). During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
+All perp market orders placed on Velocity are routed through a short-term auction. The client sets the auction's duration, and the program floors it at a minimum, currently 4 seconds. During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
 
 Auctions are run via a Dutch Auction (where the auction price starts at the better price and linearly moves toward a set worse end price) and market makers compete amongst themselves in speed to fulfil user orders.
 
@@ -66,7 +67,7 @@ Velocity's virtual AMM (AMM) is the backstop designated liquidity provider for t
 1. market orders aren't filled by the JIT and
 2. resting orders hit a trigger price that can be filled by the AMM.
 
-The AMM provides a source of constant liquidity for all traders to **take** from. The AMM is considered constant as liquidity is available based on a constant product formula `x*y=k` balancing the reserves. Velocity's AMM features an inbuilt bid-ask spread that adjusts based on inventory held by the AMM. Users can also LP into the AMM to further collateralize.
+The AMM provides a source of constant liquidity for all traders to **take** from. The AMM is considered constant as liquidity is available based on a constant product formula `x*y=k` balancing the reserves. Velocity's AMM features an inbuilt bid-ask spread that adjusts based on inventory held by the AMM.
 
 This also means that, even without external makers, Velocity can support new markets without dependence on external market makers to bootstrap liquidity (albeit with additional risks on the immediate availability of unsettled PnL).
 

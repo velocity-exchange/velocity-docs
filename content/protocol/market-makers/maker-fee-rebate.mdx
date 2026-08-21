@@ -8,12 +8,15 @@ In order to ensure an order is a maker order, it will need the 'post only' flag.
 
 The current incentive program will be subject to change. All changes will be reflected in this schedule.  
 
-For non-btc/eth perpetuals:
+| **Maker order matched against** | **Maker Fee (flat, regardless of Taker Fee)** |
+| -------------------------------- | ----------------------------------------------- |
+| A user's taker order             | -.25bps                                          |
 
-| **Taker** | **Maker Fee (flat Maker Fee regardless of Taker Fee)** |
-| --------- | ------------------------------------------------------ |
-| AMM       | -.25bps                                                   |
-| User      | -.25bps                                                  |
+The -0.25 bps rebate is uniform across all populated fee tiers. It is scaled only by the market's own `fee_adjustment` parameter, so it can be higher or lower on a specific market.
+
+<Callout type="info">
+When a taker fills against the vAMM instead of a resting user order, there is no user maker to pay a rebate to. The vAMM itself only earns a rebate if the `VammMakerRebate` feature flag is enabled (off by default), and in that case the amount is folded into the AMM's own fee accounting rather than paid out to any user.
+</Callout>
 
 <Callout type="info">
 Velocity does not offer a fee discount for staking a governance token — the legacy gov-token stake fee discount was removed. Maker rebates depend only on the fee tier shown above.

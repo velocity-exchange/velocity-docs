@@ -6,8 +6,8 @@ This enables faster order placement, lower latency, and a gas-free experience fo
 
 This page covers the taker side — signing and submitting Swift orders. For the maker side (receiving and filling signed orders over WebSocket), see the [SWIFT API guide](/developers/market-makers/swift-api).
 
-<Callout type="warning">
-The Swift API host below (`swift.velocity.exchange`) is a **provisional placeholder** — Velocity's production Swift endpoint had not been finalized/verified at the time this page was written. Confirm the real host before shipping against it.
+<Callout type="info">
+The SDK's own defaults are `wss://swift.velocity.exchange/ws` on mainnet and `wss://swift.master.velocity.exchange/ws` on devnet. The HTTP submit endpoint below uses the same mainnet host.
 </Callout>
 
 **Order flow:**
@@ -92,10 +92,8 @@ const response = await fetch(swiftUrl, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    market_index: orderParams.marketIndex,
-    market_type: "perp",
-    message: message.toString("hex"),
-    signature: signature.toString("hex"),
+    message: message.toString(), // already hex-encoded text; do not re-encode
+    signature: signature.toString("base64"),
     taker_authority: velocityClient.wallet.publicKey.toBase58(),
     // signing_authority: delegatePublicKey.toBase58(), // only needed for delegate flows
   }),

@@ -4,6 +4,8 @@
 
 You can withdraw collateral at any time, **including while you hold open positions or borrows**, as long as the withdrawal leaves your account above its **initial margin requirement** (`meets_withdraw_margin_requirement`). Partial withdrawals are fine — you can withdraw up to your available free collateral. To check how much is withdrawable, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://velocity.exchange/portfolio) screen.
 
+If you hold a borrow in a market other than the one you're withdrawing from, that borrow's interest must have accrued recently for the withdrawal to go through (`validate_spot_borrow_interest_fresh_for_margin`); a keeper crank refreshes this automatically during normal activity.
+
 <img src="/assets/withdraw-and-close-account-3.png" alt="" width="800" height="auto"></img>
 
 Large withdrawals may additionally be throttled by a spot market's rolling withdrawal limits, independent of your own margin — see [Withdrawal & Borrow Limits](/protocol/borrow-lend/withdrawal-limits) and [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold).
