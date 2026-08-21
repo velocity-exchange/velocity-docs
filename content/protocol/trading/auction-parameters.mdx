@@ -12,11 +12,36 @@ On the "Trade" tab click "Custom". These settings allow users to customize how o
 Customising auction parameters is recommended for advanced traders only.
 </Callout>
 
+## How auctions work
+
+With Velocity, users can determine the duration of their order in 'slots', and set starting and ending prices based on the keeper network's view of the DLOB.
+
 <Callout type="important">
-You can always review Auction Parameters for a particular order in the Confirmation Modal before submitting.
-(you can expand details with "Advanced" checked)
+The duration you request is a floor, not a fixed value. The program can lengthen it, and can move your start and end prices. See [How the program sanitizes your auction](#how-the-program-sanitizes-your-auction) below.
 </Callout>
 
+For the given specifications above:
+
+-   the user wants the order to start at a price 0.05% better than the estimated fill price.
+
+-   The order will end at a price that's the worst fill, but with a safety buffer of 0.05% slippage.
+
+-   This entire process will take place over 20 slots, roughly 8 seconds at today's 400ms slot time. Do not treat that conversion as fixed: Solana's slot time is shrinking, and the program tracks the live value in `State.slotDurationMs`. See [Slot duration and wall-clock time](/developers/concepts/slot-duration).
+
+-   If the order isn't fully executed within this time, any remaining amount can be filled at a price 0.5% worse than the estimated entry price up to the order's expiry. By default, market orders remain valid for at least 30 seconds; if the auction runs longer, the expiry extends to roughly half the auction's duration plus 10 seconds.
+
+Additionally, user's can specify their auctions as offsets from oracle price. This means during the auction (and at runtime) the auction is dynamically moving with the oracle prices as they update (increasing the chance of fair value fills).
+
+### Auctions for Limit Orders
+
+When submitted limit orders cross the local DLOB and/or AMM, a limit order without post only flag will actually submit an auction first. The limit order uses the user defined rule for start price for its start auction param. It is effectively the same as a market auction order **except the user explicitly overrides the End Price and Slippage Tolerance Limit Price.**
+
+
+### Atomic Fills against Resting Liquidity
+
+When 'Fill against resting liquidity first' is enabled, placed orders will go through the `place_and_take_perp_order` instruction. In Place And Take, a list of makers can be passed in with the user's order and if the auction price at that point in the ramp crosses the makers' limit price(s), the order will match. By default this atomic leg prices at the auction's *end price* (100% of the way through the ramp), but the instruction accepts an optional auction-duration percentage that can price it earlier along the ramp instead, which is more aggressive for the taker. Any remaining amount of the order after this step will go through a typical auction (from start to end), unless IOC is enabled (in which case the order will cancel after attempting to fill vs makers). Note that Velocity's AMM can also participate atomically in this first step alongside the makers, provided the AMM is currently available to fill (e.g. not paused); if the AMM is unavailable at that moment, it is excluded and only the maker orders fill atomically.
+
+Now that you understand how an auction runs, here's how to set one up and the fields you'll see when doing so.
 
 ## Start Price Fields
 
@@ -36,35 +61,6 @@ You can always review Auction Parameters for a particular order in the Confirmat
 <Callout type="info">
 Building your own client? The DLOB server exposes the same derivation over HTTP at `/auctionParams`, including the `marketBased` start price. See [Auction params](/developers/ecosystem-builders/orderbook-and-ws) for its full query surface.
 </Callout>
-
-## How auctions work
-
-With Velocity, users can determine the duration of their order in 'slots', and set starting and ending prices based on the keeper network's view of the DLOB.
-
-<Callout type="important">
-The duration you request is a floor, not a fixed value. The program can lengthen it, and can move your start and end prices. See [How the program sanitizes your auction](#how-the-program-sanitizes-your-auction) below.
-</Callout>
-
-For the given specifications above:
-
--   the user wants the order to start at a price 0.05% better than the estimated fill price.
-
--   The order will end at a price that's the worst fill, but with a safety buffer of 0.05% slippage.
-
--   This entire process will take place over 20 slots, roughly 8 seconds at today's 400ms slot time. Do not treat that conversion as fixed: Solana's slot time is shrinking, and the program tracks the live value in `State.slotDurationMs`. See [Slot duration and wall-clock time](/developers/concepts/slot-duration).
-
--   If the order isn't fully executed within this time, any remaining amount can be filled at a price 0.5% worse than the estimated entry price up to the order's expiry. Note: By default, market orders expire after 60 slots.
-
-Additionally, user's can specify their auctions as offsets from oracle price. This means during the auction (and at runtime) the auction is dynamically moving with the oracle prices as they update (increasing the chance of fair value fills).
-
-### Auctions for Limit Orders
-
-When submitted limit orders cross the local DLOB and/or AMM, a limit order without post only flag will actually submit an auction first. The limit order uses the user defined rule for start price for its start auction param. It is effectively the same as a market auction order **except the user explicitly overrides the End Price and Slippage Tolerance Limit Price.**
-
-
-### Atomic Fills against Resting Liquidity
-
-When 'Fill against resting liquidity first' is enabled, placed orders will go through the `place_and_take_perp_order` instruction. In Place And Take, a list of makers can be passed in with the user's order and if the auction price at that point in the ramp crosses the makers' limit price(s), the order will match. By default this atomic leg prices at the auction's *end price* (100% of the way through the ramp), but the instruction accepts an optional auction-duration percentage that can price it earlier along the ramp instead, which is more aggressive for the taker. Any remaining amount of the order after this step will go through a typical auction (from start to end), unless IOC is enabled (in which case the order will cancel after attempting to fill vs makers). Note that Velocity's AMM can also participate atomically in this first step alongside the makers, provided the AMM is currently available to fill (e.g. not paused); if the AMM is unavailable at that moment, it is excluded and only the maker orders fill atomically.
 
 ## How the program sanitizes your auction
 
