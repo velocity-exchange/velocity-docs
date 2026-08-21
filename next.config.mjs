@@ -54,7 +54,7 @@ const redirects = [
     ["/protocol/trading/perpetuals-trading/auction-parameters", "/protocol/trading/auction-parameters"],
     ["/trading/other-trading-fees", "/protocol/trading/trading-fees/other-trading-fees"],
     ["/trading/fee-pool", "/protocol/how-it-works/fee-pool"],
-    ["/trading/versioned-transactions", "/protocol/trading/versioned-transactions"],
+    ["/trading/versioned-transactions", "/protocol/getting-started/wallet-setup"],
     ["/trading/block-conditions", "/protocol/risk-and-safety/block-conditions"],
     ["/trading/oracles", "/protocol/how-it-works/oracles"],
     ["/profit-loss/profit-loss-intro", "/protocol/trading/profit-loss"],
