@@ -121,7 +121,9 @@ const META = {
           "fee-pool": "",
           "profit-loss-pool": "",
           "borrow-interest-rate": "",
-          "isolated-pools": "",
+          "isolated-pools": {
+            "display": displayWip,
+          },
         }
       },
       "insurance-fund": {
