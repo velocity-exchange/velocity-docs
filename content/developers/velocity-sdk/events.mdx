@@ -39,10 +39,10 @@ Protocol events are emitted in transaction logs. The SDK provides an `EventSubsc
 
 Create an `EventSubscriber` and pass the event types you want to receive. The `newEvent` emitter fires for every incoming event that matches your filter.
 
-```js
-import { EventSubscriber } from "@velocity-exchange/sdk";
+```ts
+import { EventSubscriber, EventSubscriptionOptions } from "@velocity-exchange/sdk";
 
-const options = {
+const options: EventSubscriptionOptions = {
   eventTypes: [
     "DepositRecord",
     "FundingPaymentRecord",

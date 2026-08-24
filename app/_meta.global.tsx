@@ -203,9 +203,6 @@ const META = {
           "builder-codes": "",
           "transactions": "",
           "sdk-internals": "",
-          "autogen": {
-            "display": displayWip,
-          },
         },
       },
       "data-api": {
