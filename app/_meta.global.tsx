@@ -45,7 +45,6 @@ const META = {
           "margin": {
             "title": "Margin",
             "items": {
-              "index": "",
               "per-market-leverage": "",
               "account-health": "",
             },
@@ -53,7 +52,6 @@ const META = {
           "profit-loss": {
             "title": "Profit & Loss (P&L)",
             "items": {
-              "index": "",
               "accounting-settlement": "",
               "unsettled-profit-loss": "",
             }
@@ -61,7 +59,6 @@ const META = {
           "order-types": {
             "title": "Order Types",
             "items": {
-              "index": "",
               "advanced-order-types": "",
               "advanced-orders-faq": "",
             },

@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # Introduction to Profit & Loss
 
 This guide explains how to track your Profit and Loss (P&L or PnL) on Velocity to understand the performance of your open positions in perpetual markets.
@@ -66,7 +70,7 @@ The key difference lies in the availability for withdrawal:
 
 Calling `settlePNL` settles a position's negative unrealised P&L and sends it to the [P&L Pool](/protocol/how-it-works/profit-loss-pool), but **the position itself is unaffected**. Instead, the position's Cost Basis is adjusted so the position stays unchanged even though a portion of its unrealised loss has been realised and settled.
 
-![Velocity Perpetuals P&L Settlement Mechanism](/assets/8bAYsBqUpelsCx7xgTblP_drift-pandl-settlement-mechanism-banner-v2-1.png)
+![Velocity Perpetuals P&L Settlement Mechanism](/assets/8bAYsBqUpelsCx7xgTblP_velocity-pandl-settlement-mechanism-banner-v2-1.png)
 
 The P&L settled this way shows up in the `Unrealised P&L` tab, specifically in the `Realised P&L` column, with the adjusted cost basis reflected in the `Cost Basis` column:
 
@@ -74,10 +78,7 @@ The P&L settled this way shows up in the `Unrealised P&L` tab, specifically in t
 
 ### Claiming Settled P&L
 
-1. On any [trades screen](https://velocity.exchange) navigate to the "Balances" tab.
-2. Select "Claim" for specific positions or "Claim All".
-
-<img src="/assets/profit-loss-2.png" alt="" width="800" height="auto"></img>
+Claim settled P&L from your [balances](https://velocity.exchange/portfolio/balances), either for specific positions or all at once.
 
 Users can claim positive P&L when:
 
