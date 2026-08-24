@@ -53,6 +53,7 @@ Several Drift subsystems were dropped. Their SDK exports are gone (no back-compa
 | Switchboard oracles | `oracles/switchboardClient` and `oracles/switchboardOnDemandClient` are removed; the `OracleSource` Switchboard variants are renamed `DEPRECATED_SWITCHBOARD` / `DEPRECATED_SWITCHBOARD_ON_DEMAND` (discriminants preserved). |
 | Gov-token stake fee discounts | Staking a gov token for a fee discount is gone: `updateUserGovTokenInsuranceStake`, `GOV_SPOT_MARKET_INDEX`, and the delegate variant are removed. Perp fee tier is now based on 30-day volume, floored by an admin-set promo tier (see below). |
 | IF rebalance / protocol-IF shares | Protocol-owned insurance-fund shares and IF rebalancing are removed (the admin IF-withdraw, protocol-IF-share transfer, IF-swap, and IF-rebalance-config instructions). |
+| Legacy referrer-reward fee path | `UserStats.fees.total_referrer_reward`, `UserStats.fees.current_epoch_referrer_reward`, and `UserStats.next_epoch_ts` are deleted; `FeeStructure.referrer_reward_epoch_upper_bound` is now padding. The SDK's `referrerInfo?` param is dropped from `placeAndMakePerpOrder`, `placeAndMakeSignedMsgPerpOrder`, and `fillPerpOrder`. |
 
 ## New on Velocity
 

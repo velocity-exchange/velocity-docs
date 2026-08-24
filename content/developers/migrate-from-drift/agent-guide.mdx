@@ -185,6 +185,9 @@ These symbols and modules are **gone** from `@velocity-exchange/sdk` with no rep
 |---|---|
 | `SERUM_V3`, `PHOENIX`, `OPENBOOK` | remove references from env config reads |
 | `SERUM_LOOKUP_TABLE`, `PYTH_PULL_ORACLE_LOOKUP_TABLE` | remove |
+| `UserStats.fees.total_referrer_reward`, `UserStats.fees.current_epoch_referrer_reward`, `UserStats.next_epoch_ts` | delete; legacy referrer-reward fee path removed |
+| `FeeStructure.referrer_reward_epoch_upper_bound` | now padding; remove any read of it |
+| `referrerInfo?` param on `placeAndMakePerpOrder`, `placeAndMakeSignedMsgPerpOrder`, `fillPerpOrder` | delete call sites passing it; these methods no longer accept it |
 
 ### 4d. Removed program instructions (keeper / trading relevant)
 
@@ -318,6 +321,7 @@ grep -rnE "HighLeverageMode|enableUserHighLeverageMode" src/
 grep -rnE "estimateTps|math/fuel|FuelSeasonRecord|FuelSweepRecord|LPRecord|LPAction" src/
 grep -rnE "GovTokenInsuranceStake|GOV_SPOT_MARKET_INDEX" src/
 grep -rnE "PythSolanaReceiver|WormholeCoreBridgeSolana" src/
+grep -rnE "total_referrer_reward|current_epoch_referrer_reward|referrer_reward_epoch_upper_bound" src/
 ```
 
 **Hardcoded-address sweep**: these must return zero hits (each is a cached/stale address):
