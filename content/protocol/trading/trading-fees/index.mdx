@@ -6,7 +6,7 @@ asIndexPage: true
 
 Velocity offers a highly competitive fee structure with low taker fees and a flat maker rebate, with the potential for even lower fees as trading volume increases. Fees are calculated per trade based on the filled notional position size and are charged in the market's quote asset (USDT), affecting the position's cost basis.
 
-If a user holds only non-USDT assets, a USDT borrow may be triggered upon settlement of a loss in perpetual markets (see [P&L](/protocol/trading/profit-loss)).
+If a user holds only non-USDT assets, a USDT borrow may be triggered upon settlement of a loss in perpetual markets (see [P&L](/protocol/trading/profit-loss)). Trading volume from Swap is excluded from the fee-tier volume calculation.
 
 Velocity's tiered fees for futures markets are based **only** on an on-chain calculation of **30-Day Volume**. There is no governance-token staking discount; any such discount was removed as part of the [fee redesign](#fee-redesign).
 
@@ -16,7 +16,7 @@ Velocity has no spot order book, so there's no maker/taker fee on spot trades. D
 
 ## Perp Market Fees
 
-Tier is selected by the account's trailing 30-day perp volume; the maker rebate is flat across every tier.
+Taker fees are tiered by your trailing 30-day volume and vary by asset. Maker orders earn the same rebate at every tier. Your fee tier updates automatically as your trailing 30-day volume changes, and if you qualify for a higher tier before your first 30 days are complete, the upgrade applies straight away.
 
 <div style={{ marginTop: '1.5em', overflowX: 'auto' }}>
 <table class="fees">
@@ -24,28 +24,32 @@ Tier is selected by the account's trailing 30-day perp volume; the maker rebate 
     <tr>
       <th>Tier</th>
       <th>30D Volume</th>
-      <th>Taker Fee</th>
+      <th>Taker Fee<br />BTC/ETH/SOL</th>
+      <th>Taker Fee<br />Other Markets</th>
       <th>Maker Rebate</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>0 (Regular)</td>
+      <td>Regular User (tier 0)</td>
       <td>&lt; \$5M</td>
-      <td>0.04%</td>
-      <td>-0.0025%</td>
+      <td>0.040% (4 bps)</td>
+      <td>0.055% (5.5 bps)</td>
+      <td>-0.0025% (-0.25 bps)</td>
     </tr>
     <tr>
-      <td>1 (VIP 1)</td>
+      <td>VIP 1 (tier 1)</td>
       <td>\$5M – \$80M</td>
-      <td>0.03%</td>
-      <td>-0.0025%</td>
+      <td>0.030% (3 bps)</td>
+      <td>0.045% (4.5 bps)</td>
+      <td>-0.0025% (-0.25 bps)</td>
     </tr>
     <tr>
-      <td>2 (VIP 2)</td>
-      <td>&ge; \$80M</td>
-      <td>0.02%</td>
-      <td>-0.0025%</td>
+      <td>VIP 2 (tier 2)</td>
+      <td>&gt; \$80M</td>
+      <td>0.020% (2 bps)</td>
+      <td>0.035% (3.5 bps)</td>
+      <td>-0.0025% (-0.25 bps)</td>
     </tr>
   </tbody>
 </table>
@@ -53,25 +57,51 @@ Tier is selected by the account's trailing 30-day perp volume; the maker rebate 
 
 The taker fees and maker rebate shown are the values currently live on-chain (`FeeStructure.feeTiers`); an admin can update them (`updatePerpFeeStructure`), so treat the table as current rather than fixed. The 30-day-volume breakpoints are indicative.
 
+The tier fee itself is the BTC/ETH/SOL column. Markets outside those three reach the higher number through the per-market taker-fee add-on (`takerFeeAddonTenthBps`), currently 15 tenth-bps, that is 1.5 bps on top of the tier fee at every tier. The add-on does not touch the maker rebate, so the rebate is the same on every market. See [Fee Adjustments](#fee-adjustments).
+
 The volume window is evaluated live: crossing a higher-tier threshold applies to your very next fill, and dropping back down also tracks the live trailing 30-day value at each fill rather than a lazily-updated stored sum.
 
-Two admin levers sit on top of the tier table: a global promo tier floor and a per-market taker-fee add-on. Both are described in [Fee Adjustments](#fee-adjustments) below.
+A global promo tier floor can also raise your effective tier; see [Fee Adjustments](#fee-adjustments) below.
 
-Every tier also carries the same **referrer reward** (15% of the taker fee, paid to the referrer) and **referee discount** (5% off the taker fee, for accounts that signed up via a referral). See [Referee Discount / Referrer Reward](#referee-discount--referrer-reward) below.
+Referral rewards apply at every tier: the referrer earns a share of the taker fee, and the referee gets 5% off theirs. See [Referral discounts and rewards](#referral-discounts-and-rewards) below.
+
+## Fee Adjustments
+
+Three levers can move the fee you actually pay away from the published tier fee. Two are per-market, one is global.
+
+**`PerpMarket.feeAdjustment` (per-market, multiplicative).** Longer tail assets can have increased fees to stay in line with external markets' fee schedules. Some markets will periodically have flat discounts applied to all fee tiers. The adjustment scales the whole configured fee, and it is the only one of the three that also scales the maker rebate.
+
+**`PerpMarket.takerFeeAddonTenthBps` (per-market, additive).** An absolute surcharge added to the tier's taker fee, expressed in tenth-bps (`10` = 1 bp). It exists because a multiplicative `feeAdjustment` cannot express the same absolute markup across three different tier fees. The field is unsigned, so it can only raise the taker fee, never cut it below the tier fee. That keeps the maker rebate funded at every tier. The ceiling is `MAX_TAKER_FEE_ADDON_TENTH_BPS = 100`, that is 10 bps. The add-on does not touch the maker rebate.
+
+**`State.promoFeeTier` (global, a tier floor).** While set, every account's effective perp tier is `max(volume tier, promoFeeTier)`, clamped to the highest live tier index (2). Nobody is demoted by it, and there is no per-user state: set it back to `0` (the disabled value) and every account is back on its own volume tier at its next fill.
+
+Putting the per-market pieces together, the taker fee on a fill is:
+
+```
+taker_fee = (tier_fee + notional × taker_fee_addon_tenth_bps / 100_000) × (1 ± fee_adjustment%)
+```
+
+So an observed fee above the published tier number is normally an add-on or a positive `feeAdjustment`, and an observed fee at a better tier than your own 30-day volume implies is normally an active `promoFeeTier`.
+
+## Filler Reward
+
+Filler rewards are the lesser of a size-based component (10% of the fee) and a time-based component that grows with slots since the order was placed, so keepers are incentivized to fill older orders. See [Keeper Incentives](/protocol/how-it-works/keepers/keeper-incentives).
+
+## Referral discounts and rewards
+
+Referral rewards apply at every fee tier, with no volume cap:
+
+- Traders who join through a referral link receive a **5% discount** on their taker fees.
+- **Standard referrers** earn **10%** of the taker fees paid by the traders they refer.
+- **Accelerated referrers** earn **20%**.
+
+Both percentages apply to the effective taker fee paid. The referrer's share accrues to the referrer's `RevenueShareEscrow`, and the referee's discount is never collected in the first place. Maker fills do not generate referral rewards.
+
+These are fee-tier values on-chain (`refereeFeeNumerator` / `referrerRewardNumerator`) and an admin can change them, so check `perpFeeStructure.feeTiers` on the `State` account for the live numbers. See the [Referral Links](/protocol/referrals) page for how the two referrer levels are granted.
 
 ## Builder Fees
 
-Order params can optionally carry a **builder code** (`builderIdx` + `builderFeeTenthBps`, set via `VelocityClient.changeApprovedBuilder`). The builder fee is:
-
-```
-builder_fee = notional × fee_tenth_bps / 100_000
-```
-
-This is charged **on top of** the taker fee (it doesn't reduce the taker's fee tier or the protocol's cut) and accrues to the builder's `RevenueShareEscrow`. Existing order placements are unaffected, the fields are optional.
-
-`fee_tenth_bps` is capped at 1000 tenth-bps (1% of the filled notional); a builder code above that cap is rejected. The fee is only charged when the taker meets its initial margin requirement at fill time; if it doesn't, the fill still happens but the builder fee for that fill is waived. A fill that carries a builder code also requires the taker's `RevenueShareEscrow` to be passed into the instruction, or the fill fails.
-
-Accrued builder and referrer rows are swept out of the escrow by the permissionless `settle_revenue_share` instruction, which anyone can call, or written off by `forfeit_revenue_share_order`; `settlePnl` is not the only exit path.
+Order params can optionally carry a **builder code**, which charges a builder fee on top of the taker fee. It does not change the taker's fee tier or the protocol's cut. See [Builder Codes](/developers/builder-codes) for the fee calculation, the caps, and how accrued fees are settled.
 
 ## Fee Redesign
 
@@ -123,32 +153,6 @@ There's no spot order book (per [Order Types](/protocol/trading/order-types)), s
 
 The VLP hedge LP pool would charge dynamic in/out swap fees (`handle_view_lp_pool_swap_fees`) that vary with the pool's constituent balances relative to target weights, but the LP pool's instruction surface (pool and constituent init/config, swap, add/remove liquidity, and the related admin cranks) is compiled out of mainnet builds pending audit; devnet and test builds keep it live. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
 
-### Referee Discount / Referrer Reward
-
-These apply to accounts that were signed up using a referred account. These percentages are applied to the effective taker fee paid: a 5% discount for the referee, and 15% of the taker fee paid to the referrer's `RevenueShareEscrow`.
-
-### Filler Reward
-
-Filler rewards are the lesser of a size-based component (10% of the fee) and a time-based component that grows with slots since the order was placed, so keepers are incentivized to fill older orders. See [Keeper Incentives](/protocol/how-it-works/keepers/keeper-incentives).
-
-### Fee Adjustments
-
-Three levers can move the fee you actually pay away from the published tier fee. Two are per-market, one is global.
-
-**`PerpMarket.feeAdjustment` (per-market, multiplicative).** Longer tail assets can have increased fees to stay in line with external markets' fee schedules. Some markets will periodically have flat discounts applied to all fee tiers. The adjustment scales the whole configured fee, and it is the only one of the three that also scales the maker rebate.
-
-**`PerpMarket.takerFeeAddonTenthBps` (per-market, additive).** An absolute surcharge added to the tier's taker fee, expressed in tenth-bps (`10` = 1 bp). It exists because a multiplicative `feeAdjustment` cannot express the same absolute markup across three different tier fees. The field is unsigned, so it can only raise the taker fee, never cut it below the tier fee. That keeps the maker rebate funded at every tier. The ceiling is `MAX_TAKER_FEE_ADDON_TENTH_BPS = 100`, that is 10 bps. The add-on does not touch the maker rebate.
-
-**`State.promoFeeTier` (global, a tier floor).** While set, every account's effective perp tier is `max(volume tier, promoFeeTier)`, clamped to the highest live tier index (2). Nobody is demoted by it, and there is no per-user state: set it back to `0` (the disabled value) and every account is back on its own volume tier at its next fill.
-
-Putting the per-market pieces together, the taker fee on a fill is:
-
-```
-taker_fee = (tier_fee + notional × taker_fee_addon_tenth_bps / 100_000) × (1 ± fee_adjustment%)
-```
-
-So an observed fee above the published tier number is normally an add-on or a positive `feeAdjustment`, and an observed fee at a better tier than your own 30-day volume implies is normally an active `promoFeeTier`.
-
-### Disclaimers
+## Disclaimers
 
 _There are risks associated with Insurance Fund Staking. Read more about the [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) and [Risks](/protocol/risk-and-safety/risks))._
