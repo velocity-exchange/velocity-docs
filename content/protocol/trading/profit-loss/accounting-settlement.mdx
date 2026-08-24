@@ -39,9 +39,3 @@ and pays out to:
 (see details of these rules in [Revenue Pool](/protocol/how-it-works/revenue-pool))
 
 The protocol's own cut of these same fee sources goes directly to each market's withdrawable `protocol_fee_pool` instead. It never routes through the Revenue Pool or the Insurance Fund.
-
-### Future Work
-
-Currently, a Perpetuals Market can only pull from the Spot Market Revenue Pool and Insurance Fund for its quote currency.
-
--   In the future, it may be possible for a distressed associative perp market (BTC-PERP) to be able to pull funds from the associated spot market (BTC) revenue/insurance pool and immediately swap for USDT to top off its fee/P&L pool.
