@@ -1,45 +1,43 @@
 # Optimizations
 
-Velocity's AMM acts as the designated market maker to provide a guaranteed liquidity source for traders. To overcome latency arbitrage, adverse selection and toxic flow, a number of optimisations were made within the protocol while following particular constraints such as maximum allowable spread and minimum liquidity depth.
+Velocity's AMM acts as a designated market maker, guaranteeing a liquidity source for traders even when no external maker is quoting. This page covers the mechanisms it uses to manage that liquidity: how it sizes its depth, when it competes for fills, and how it settles the P&L it takes on. Read it if you're building a market maker, filler, or risk model that needs to account for AMM behavior rather than only DLOB makers.
 
+## Size your liquidity assumptions around the concentration factor
 
-> Velocity's AMM essentially bootstraps liquidity in a perpetuals market and offers a competitive lower bound as opposed to relying fully on external liquidity providers which can freely come and go.  
+The AMM's liquidity depth comes from `k`, the constant-product invariant. Increasing `k` while tightening the max/min base reserves lets the AMM provide the same bid/ask liquidity concentrated into a narrower price range. If you're modeling how much size the AMM can absorb at a given price, use the market's current `k` and reserve bounds rather than assuming a fixed depth: both move over time (see the next section).
 
-## Concentration Factor
+## Account for formulaic K adjustments in your liquidity model
 
-The size of k (the constant product invariant) determines the depth of liquidity. By increasing k by a factor of \<X> but making the max/min base reserves tighter, the AMM can provide the same amount of bid and ask liquidity but it is now concentrated with a tighter price range.
+After every funding-rate update, the AMM adjusts `k` based on the funding it just received or paid:
 
-## Formulaic K
+| Condition | Effect on `k` | Direction |
+|---|---|---|
+| Net revenue over the last hour increased | `k` increases | More liquidity depth |
+| AMM paid funding over the last hour | A portion of the payment reduces `k` | Less liquidity depth |
+| Per-step cap | Each adjustment is capped at `sqrt_k / 1000` | Max 0.1% change in `sqrt_k` per step |
 
-After every funding rate update, if the net revenue (in terminal) increased over the hour, the AMM will utilize the funding received to increase k (hence the depth of liquidity provided). Otherwise, if the AMM had to pay funding over the previous hour, a portion of the payment will be utilized to reduce k (decrease liquidity offering). These updates have maximum update amounts of .1% but are used to converge toward an optimal k over time.
+These per-step caps mean `k` converges toward an optimal value over time rather than jumping to it. If your integration reads `k`/reserves and caches them, refresh on a cadence that accounts for this drift rather than treating them as static.
 
-## Participation in the JIT Auction
+<Callout type="info">
+An admin can disable this behavior per market with the `MarketConfigFlag::DisableFormulaicKUpdate` bit. Check the market's config flags rather than assuming formulaic K updates are always active.
+</Callout>
 
-Just as market makers provide active liquidity through the JIT auction process, the AMM may also opt to participate as well in order to reduce inventory.  
+## Expect the AMM to compete in the JIT auction
 
-## P&L Settlement
+Just as market makers provide active liquidity through the JIT auction process, the AMM can also participate in it to reduce its own inventory. If you're a maker bidding in the JIT auction, factor in that the AMM may be quoting alongside you rather than only backstopping unfilled size.
 
-Due to:  
+## Understand how unrealized P&L gets settled
 
-*   Potential market imbalances;
+A user's unrealized P&L against the AMM is, in principle, unbounded (for example, if BTC's price goes toward infinity), because of:
 
-*   Live-oracle based pricing; and  
+- Potential market imbalances
+- Live-oracle-based pricing
+- The maximum allowable spread the AMM enforces
 
-*   Maximum allowable spread set by the AMM,  
+In practice, a winning position can only be settled and withdrawn as collateral once an offsetting loss (or sufficient collected fees) has replenished the P&L settlement pool. Until then, winners may be offered discounted margin on their unrealized gains, and can withdraw their share of the pool as it grows. See [P&L](/protocol/trading/profit-loss) for the full settlement mechanism.
 
-The way unrealised P&L users can lock in from entering and exiting a trade against the AMM is technically unbounded (e.g. if BTC goes toward infinity). 
+If a market's unrealized P&L imbalance exceeds its per-market threshold, the margining system can discount those unrealized gains at the initial-margin stage only, not maintenance. That discount affects new positions being opened; it does not move an existing position's liquidation threshold. These rules are covered in more detail under the Margin subheading in [Cross-Collateral Deposits](/protocol/getting-started/cross-collateral-deposits).
 
-However, whilst a user can achieve this unrealised gain, it is important to note that an offsetting loss (or sufficient fees collected) is necessary before the unrealised gain can be settled in full and withdrawable as collateral.
+## Terminal state has no cost when inventory is flat
 
-Until the P&L pool is replenished by offsetting losses, winners may\* be offered discounted margin on unrealised gains. Winners will have the ability to withdraw their portion from the P&L settlement pool as it increases. Read more about the settlement mechanism in [P&L](/protocol/trading/profit-loss).  
-
-**\***: If the unrealised P&L imbalance exceeds its per-market threshold, those unrealised gains may be discounted by the margining system (initial, not maintenance) to prevent large borrows against it. This initial margin discounting would only impact new positions being opened and would not affect a user's liquidation threshold.
-
-These rules are systemitised and can be read more under the Margin subheading in [Cross-Collateral Deposits](/protocol/getting-started/cross-collateral-deposits).  
-
-## Terminal State Consideration
-
-If the inventory on the AMM is 0, all the repeg and k change operations have no terminal state costs.  
-
-Even so, the AMM is still fully aware of the remaining position imbalance within the market and makes decisions on its spread size and liquidity depth based on that awareness (while following its constraints as a designated market maker).  
-
+When the AMM's inventory is 0, repeg and `k`-change operations carry no terminal state cost. The AMM still tracks the market's remaining position imbalance and uses it to size its spread and liquidity depth, within its constraints as a designated market maker.

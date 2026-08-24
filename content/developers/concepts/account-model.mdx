@@ -219,6 +219,7 @@ Each `UserAccount` stores:
 - **Open orders** - Up to 32 active orders per user, stored inline
 - **Special/status bitmasks** - `status` (`UserStatus`), `specialUserStatus` (`SpecialUserStatus`, e.g. `VammHedger`)
 - **Permissions** - Delegate address and access controls
+- **Equity floor** - `equityFloor` (admin-set minimum cross-margin collateral, 0 = disabled) and `equityFloorBuffer` (extra headroom required by risk-increasing orders, fills, withdrawals, and transfers)
 
 <Callout type="warning">
 Velocity removed high leverage mode: there is no `marginMode` field or `MarginMode` enum. Leverage is governed entirely by each market's `marginRatioInitial`/`marginRatioMaintenance` and the account's `maxMarginRatio` override.
@@ -256,6 +257,8 @@ interface UserAccount {
   hasOpenAuction: boolean;
   poolId: number;
   specialUserStatus: number;         // bitmask, see SpecialUserStatus
+  equityFloor: BN;                   // QUOTE_PRECISION (1e6); admin-set minimum cross-margin collateral; 0 = disabled
+  equityFloorBuffer: BN;             // QUOTE_PRECISION (1e6); extra headroom above equityFloor for risk-increasing actions
 }
 ```
 
@@ -270,6 +273,7 @@ Maintains lifetime statistics:
 - **Volume metrics** - `makerVolume30D` / `takerVolume30D` / `fillerVolume30D` (rolling 30-day windows)
 - **Referral data** - `referrer`, `referrerStatus` (bitmask, `ReferrerStatus`, now including `BuilderReferral`)
 - **Delegate permissions** - `delegatePermissions` (gates `transferDepositByDelegate`)
+- **Equity breaker** - `equityBreakerTripped`, set by the permissionless equity-floor breaker across every subaccount of the authority until the warm admin clears it
 
 <Callout type="warning">
 Fuel (points/incentives) is gone entirely: there is no `fuel` field. The gov-token (DRIFT) stake fee discount was also removed: `ifStakedGovTokenAmount` was replaced by padding and no longer affects fee tiers, which are now determined purely by 30-day volume.
@@ -301,6 +305,7 @@ interface UserStatsAccount {
   authority: PublicKey;
   ifStakedQuoteAssetAmount: BN;
   delegatePermissions: number;
+  equityBreakerTripped: number;      // non-zero once the permissionless equity-floor breaker fires; cleared only by the warm admin
 }
 ```
 
@@ -370,6 +375,7 @@ UserStats PDA:  ["user_stats", authority.key()]
 PerpMarket PDA: ["perp_market", marketIndex as u16 LE]
 SpotMarket PDA: ["spot_market", marketIndex as u16 LE]
 SpotMarketVault PDA: ["spot_market_vault", marketIndex as u16 LE]
+InsuranceFundVault PDA: ["insurance_fund_vault", marketIndex as u16 LE]
 ```
 
 The SDK provides helpers to derive these addresses without onchain calls, e.g. `getUserAccountPublicKey()`, `getPerpMarketPublicKey()`, `getSpotMarketPublicKey()` from `@velocity-exchange/sdk`.
