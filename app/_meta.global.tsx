@@ -94,7 +94,7 @@ const META = {
           },
         }
       },
-      "rewards": "Referral Links",
+      "referrals": "Referral Links",
       "glossary": "",
       "--- how-it-works": {
         "title": "HOW VELOCITY WORKS",
