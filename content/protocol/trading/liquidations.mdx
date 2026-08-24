@@ -70,7 +70,7 @@ Per-market liquidation fee rates are split three ways when a position is liquida
 
 - **`liquidator_fee`**: paid to the liquidator, unchanged from a standard liquidation reward.
 - **`if_liquidation_fee`**: the insurance fund's cut.
-- **`protocol_liquidation_fee`**: a protocol cut, introduced alongside the [fee redesign](/protocol/trading/trading-fees). The combined insurance-side budget (`if_liquidation_fee + protocol_liquidation_fee`) is computed once against the user's margin shortfall, then split **IF-first**: the insurance fund receives exactly what it would have received without the protocol fee, and the protocol only captures margin headroom *beyond* that. This means adding a protocol cut can never push a liquidation into bankruptcy that wouldn't otherwise have happened. It only reduces the excess margin the liquidatee would have kept.
+- **`protocol_liquidation_fee`**: a protocol cut, introduced alongside the [fee redesign](/protocol/trading/trading-fees/fee-mechanics#fee-redesign). The combined insurance-side budget (`if_liquidation_fee + protocol_liquidation_fee`) is computed once against the user's margin shortfall, then split **IF-first**: the insurance fund receives exactly what it would have received without the protocol fee, and the protocol only captures margin headroom *beyond* that. This means adding a protocol cut can never push a liquidation into bankruptcy that wouldn't otherwise have happened. It only reduces the excess margin the liquidatee would have kept.
 
 Perp liquidations accrue the IF and protocol cuts as pending fee-ledger counters (materialized by the fee sweep); spot liquidations credit the liability market's `revenue_pool` and `protocol_fee_pool` directly.
 

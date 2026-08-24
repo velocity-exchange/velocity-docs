@@ -92,7 +92,7 @@ The market's own not-yet-swept `pending_if_fee` is canceled against the remainin
 ### External Insurance Fund
 The Insurance Fund vault covers remaining debt, bounded by the market's insurance-claim caps.
 ### AMM fee-provision clawback
-If the Insurance Fund is insufficient, the market claws back its own AMM fee provision, capped at the cumulative amount the AMM has ever received via the [fee split](/protocol/trading/trading-fees) (`amm_protocol_fees_received`), first the not-yet-tokenized portion, then tokens already swept into the AMM's fee pool. The AMM's own trading/spread capital beyond that provision is never touched.
+If the Insurance Fund is insufficient, the market claws back its own AMM fee provision, capped at the cumulative amount the AMM has ever received via the [fee split](/protocol/trading/trading-fees/fee-mechanics#fee-redesign) (`amm_protocol_fees_received`), first the not-yet-tokenized portion, then tokens already swept into the AMM's fee pool. The AMM's own trading/spread capital beyond that provision is never touched.
 ### Socialized loss
 If all of the above are exhausted, **socialized loss** applies pro rata across all open positions within that market.
 </Steps>

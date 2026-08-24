@@ -14,7 +14,7 @@ An individual perpetual market has two pools:
 
  B. **AMM Fee Pool**: holds only the AMM's own money, its cut of the per-fill fee split plus any spread surplus, taken out of the P&L Pool as fees settle.
 
-The P&L Pool receives the highest priority on claimed funds, in order to give users the best possible experience. Every fill also carves out **protocol** and **insurance-fund** cuts from the remaining fee. See [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for the full split. Those two cuts are swept out of the P&L Pool's surplus, above what is needed to cover live user claims, into the protocol's own balance and the quote spot market's Revenue Pool, respectively. They never pass through the AMM Fee Pool.
+The P&L Pool receives the highest priority on claimed funds, in order to give users the best possible experience. Every fill also carves out **protocol** and **insurance-fund** cuts from the remaining fee. See [Trading Fees](/protocol/trading/trading-fees/fee-mechanics#fee-redesign) for the full split. Those two cuts are swept out of the P&L Pool's surplus, above what is needed to cover live user claims, into the protocol's own balance and the quote spot market's Revenue Pool, respectively. They never pass through the AMM Fee Pool.
 
 <Callout type="important">
 Before any fees are swept out, the P&L Pool always keeps enough aside to cover what is owed to users and other claimants: users' positive unsettled P&L (valued at the fixed expiry price rather than the live oracle while the market is in Settlement), the insurance fund's floored bankruptcy reserve, and any revenue share already accrued and owed to builders or referrers. Only the surplus above those claims is available to be swept out as fees.
