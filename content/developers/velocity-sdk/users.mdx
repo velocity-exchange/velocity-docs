@@ -253,13 +253,13 @@ await velocityClient.updateUserDelegate(new PublicKey("<DELEGATE_PUBKEY>"), 0);
   </TypeScript>
 </SDKDoc>
 
-A delegate can sign most trading instructions (place/cancel orders, etc.) on a subaccount's behalf, but `withdraw` always requires the true owning authority's own signature — delegates can never withdraw funds out of the protocol.
+A delegate can sign most trading instructions (place/cancel orders, etc.) on a subaccount's behalf, but `withdraw` always requires the true owning authority's own signature: delegates can never withdraw funds out of the protocol.
 
 #### Delegate-initiated internal transfers
 
-A delegate can move a subaccount's collateral to another of the *owner's* subaccounts via `transferDepositByDelegate`, but only once the owner has opted in. This opt-in is a single flag on the owner's `UserStats` account (`delegatePermissions`) that gates delegate transfers across *all* of that owner's subaccounts — it does not affect direct deposits/withdrawals or trading, and it is off by default.
+A delegate can move a subaccount's collateral to another of the *owner's* subaccounts via `transferDepositByDelegate`, but only once the owner has opted in. This opt-in is a single flag on the owner's `UserStats` account (`delegatePermissions`) that gates delegate transfers across *all* of that owner's subaccounts: it does not affect direct deposits/withdrawals or trading, and it is off by default.
 
-**Step 1 — the owner opts in** (signed by the owner's own wallet, not the delegate):
+**Step 1: the owner opts in** (signed by the owner's own wallet, not the delegate):
 
 <SDKDoc>
   <TypeScript name="updateUserAllowDelegateTransfer" type="method" owner="VelocityClient">
@@ -270,7 +270,7 @@ await velocityClient.updateUserAllowDelegateTransfer(true);
   </TypeScript>
 </SDKDoc>
 
-**Step 2 — the delegate transfers a deposit between the owner's subaccounts:**
+**Step 2: the delegate transfers a deposit between the owner's subaccounts:**
 
 <SDKDoc>
   <TypeScript name="transferDepositByDelegate" type="method" owner="VelocityClient">

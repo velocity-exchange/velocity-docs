@@ -28,7 +28,7 @@ Note: this dead zone can also be delayed at large oracle divergences (see [Oracl
 
 ## Funding Bias Spread Widening
 
-While the AMM is on the paying side of funding (i.e. its inventory means it owes the offset-floor funding rather than receiving it), each market can widen the AMM's quote on that paying side via `AMM.fundingBiasSensitivity` (`s`, admin-set via `update_perp_market_funding_bias_sensitivity`) — up to `1 + s/100` at the funding offset floor. This makes it costlier to trade further into the side the AMM is already paying funding on. Default is `0` (off); enabling it doesn't change quotes until sensitivity is set above zero.
+While the AMM is on the paying side of funding (i.e. its inventory means it owes the offset-floor funding rather than receiving it), each market can widen the AMM's quote on that paying side via `AMM.fundingBiasSensitivity` (`s`, admin-set via `update_perp_market_funding_bias_sensitivity`), up to `1 + s/100` at the funding offset floor. This makes it costlier to trade further into the side the AMM is already paying funding on. Default is `0` (off); enabling it doesn't change quotes until sensitivity is set above zero.
 
 <Callout type="warning">
 \*If no market trades and/or funding update calls occur within the first ~20 minutes of the hour, the next funding update will be delayed an additional hour.
@@ -50,11 +50,11 @@ While the AMM is on the paying side of funding (i.e. its inventory means it owes
 
 ### Capped Symmetric Funding
 
-Velocity aims to provide a symmetric funding rate to both sides of the market. When there is a long-short imbalance within the AMM, the AMM's own retained equity (`total_fee_minus_distributions` — its accumulated fees and trading PnL net of what it's already paid out) covers the cost delta between longs and shorts.
+Velocity aims to provide a symmetric funding rate to both sides of the market. When there is a long-short imbalance within the AMM, the AMM's own retained equity (`total_fee_minus_distributions`, its accumulated fees and trading PnL net of what it's already paid out) covers the cost delta between longs and shorts.
 
-Each funding period, the AMM can spend at most **1/3 of its retained equity** paying asymmetric funding. If the imbalance would cost more than that, the payout side's funding rate is capped so the AMM's retained equity never goes negative — the receipts for funding will be capped to the available amount. This budget lives entirely inside the AMM's own books; the Insurance Fund is never drawn on to cover a funding shortfall.
+Each funding period, the AMM can spend at most **1/3 of its retained equity** paying asymmetric funding. If the imbalance would cost more than that, the payout side's funding rate is capped so the AMM's retained equity never goes negative: the receipts for funding will be capped to the available amount. This budget lives entirely inside the AMM's own books; the Insurance Fund is never drawn on to cover a funding shortfall.
 
-As the AMM collects more fees over time, its retained equity — and therefore its funding budget — grows, so any existing predicted capped rate should move closer to being balanced.
+As the AMM collects more fees over time, its retained equity (and therefore its funding budget) grows, so any existing predicted capped rate should move closer to being balanced.
 
 <Callout type="info">
 **Example:**

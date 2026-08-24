@@ -2,13 +2,13 @@
 
 ### Withdraw collateral
 
-You can withdraw collateral at any time, **including while you hold open positions or borrows**, as long as the withdrawal leaves your account above its **initial margin requirement** (`meets_withdraw_margin_requirement`). Partial withdrawals are fine — you can withdraw up to your available free collateral. To check how much is withdrawable, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://velocity.exchange/portfolio) screen.
+You can withdraw collateral at any time, **including while you hold open positions or borrows**, as long as the withdrawal leaves your account above its **initial margin requirement** (`meets_withdraw_margin_requirement`). Partial withdrawals are fine. You can withdraw up to your available free collateral. To check how much is withdrawable, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://velocity.exchange/portfolio) screen.
 
 If you hold a borrow in a market other than the one you're withdrawing from, that borrow's interest must have accrued recently for the withdrawal to go through (`validate_spot_borrow_interest_fresh_for_margin`); a keeper crank refreshes this automatically during normal activity.
 
 <img src="/assets/withdraw-and-close-account-3.png" alt="" width="800" height="auto"></img>
 
-Large withdrawals may additionally be throttled by a spot market's rolling withdrawal limits, independent of your own margin — see [Withdrawal & Borrow Limits](/protocol/borrow-lend/withdrawal-limits) and [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold).
+Large withdrawals may additionally be throttled by a spot market's rolling withdrawal limits, independent of your own margin. See [Withdrawal & Borrow Limits](/protocol/borrow-lend/withdrawal-limits) and [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold).
 
 <Callout type="info">
 Fully **deleting** a subaccount is stricter than withdrawing: an account can only be deleted once it holds no open positions, no open borrows, no unsettled PnL, and no remaining balances (see [Recovering Funds](#recovering-funds) below).
@@ -16,11 +16,13 @@ Fully **deleting** a subaccount is stricter than withdrawing: an account can onl
 
 <Callout type="error">
 If you have referred other users (you are a referrer), your **main account (subaccount 0)** cannot be deleted, because it anchors your referral relationships (`validate_user_deletion`). Your other subaccounts can still be deleted.
+
+In the other direction, if you were *referred* by someone, deleting your accounts does not free you to be referred again. Your referrer is recorded once during your first `initialize_user` and is never rewritten. See [Referral Links](/protocol/referrals).
 </Callout>
 
 ### Idle Account Deletion
 
-A keeper holding the `UserFlag` hot-admin role periodically triggers the cleanup of idle accounts in the Velocity program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion must be inactive for ~3 months and hold under ~$0.05 in notional value (`handle_force_delete_user`, `instructions/keeper.rs`). Account history will still available through the UI and the account may be re-created by the user at any time.
+A keeper holding the `UserFlag` hot-admin role periodically triggers the cleanup of idle accounts in the Velocity program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion must be inactive for ~3 months and hold under ~$0.05 in notional value (`handle_force_delete_user`, `instructions/keeper.rs`). Account history is still available through the UI, and the user can create a new subaccount at any time.
 
 ### Recovering Funds
 

@@ -3,16 +3,16 @@
 Keepers **keep** the Velocity network healthy.
 
 <Callout type="info">
-Velocity has no fuel (points/incentives) program — Drift's fuel-based keeper/user rewards were removed entirely. The only keeper incentives on Velocity are the on-chain fee/reward mechanics described below.
+Velocity has no fuel (points/incentives) program; fuel-based keeper/user rewards were removed entirely. The only keeper incentives on Velocity are the on-chain fee/reward mechanics described below.
 </Callout>
 
 ## Keeper Rewards
 
-For matching orders, Keepers receive a portion of the taker fee as a **filler reward** — see [Filler Reward](/protocol/trading/trading-fees/other-trading-fees#definitions).
+For matching orders, Keepers receive a portion of the taker fee as a **filler reward**. See [Filler Reward](/protocol/trading/trading-fees/other-trading-fees#definitions).
 
 For cancelling orders (that can be cancelled, see [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq)), Keepers will receive the `flat_filler_fee` from the exchange-wide perp fee structure (`State.perp_fee_structure.flat_filler_fee`, currently $0.01), paid out via `pay_keeper_flat_reward_for_perps` when a keeper triggers an order expiry or reduce-only cancellation.
 
-Liquidation rewards for keepers are set per-market (`liquidator_fee`) and read directly from each market's on-chain account — check `PerpMarketAccount.liquidatorFee` / `SpotMarketAccount.liquidatorFee` for current values.
+Liquidation rewards for keepers are set per-market (`liquidator_fee`) and read directly from each market's on-chain account: check `PerpMarketAccount.liquidatorFee` / `SpotMarketAccount.liquidatorFee` for current values.
 
 Currently, the USDT reward function for keepers (_f_keeper_) is designed as:
 

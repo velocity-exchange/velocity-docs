@@ -1,16 +1,14 @@
-# Basic Order Types
+---
+asIndexPage: true
+---
+
+# Order Types
 
 <Callout type="important">
-Velocity's order book is **perpetual futures only**. Spot markets exist for collateral/borrow-lend, but the spot DLOB (spot order placement/fills) is disabled on-chain (`SpotDlobTradingDisabled`) — everything below applies to perp orders. Prediction markets have also been removed from the protocol; `initialize_prediction_market` no longer exists.
+Velocity's order book is **perpetual futures only**. Spot markets exist for collateral/borrow-lend, but the spot DLOB (spot order placement/fills) is disabled on-chain (`SpotDlobTradingDisabled`). Everything below applies to perp orders.
 </Callout>
 
-Velocity supports the following order types:
-
-- market orders;
-
-- limit orders; and
-
-- advanced conditional orders.
+Velocity supports [market](#market-orders) and [limit](#limit-orders) orders, the conditional [trigger](#trigger-orders), [oracle limit](#oracle-limit), and [scale](#scale) order types built on top of them, and a set of [order flags](#order-flags) that can be combined with any of them.
 
 ## Market Orders
 
@@ -20,34 +18,125 @@ Users can set a maximum **slippage tolerance**. A slippage tolerance sets an upp
 
 For instance, if the mark price of SOL-PERP is \$100.00 and a user goes long, a user can set a maximum slippage tolerance of 0.1%. As such, the worst price that a user can fill at is \$100.10. The order will fail if the quoted price exceeds the limit price (with slippage tolerance) for takers.
 
-Market Orders will trigger a Just-In-Time auction, where market makers will be able to participate in a Dutch auction to fill the user's orders. The auction duration is set by the client and floored on-chain: the program takes the wider of the client-requested duration and a spread-derived minimum that scales with the market's contract tier. As the JIT auction finishes, the user's orders will be completed if the price is within their slippage tolerance limit order. If no market maker steps in during the JIT Auction, the remaining order will be filled against Velocity's AMM.
+Market Orders trigger a Dutch auction, where the order's price walks from the auction start price to the auction end price over the auction duration. The duration is set by the client and floored on-chain: the program takes the wider of the client-requested duration and a spread-derived minimum that scales with the market's contract tier.
 
-Executing a Market Order does not mean the order will execute at exactly the price displayed as the mark price of an asset may change before the JIT Auction is complete. 
+The auction is not the only way a Market Order gets filled. Both during the auction and after it ends, the order can be filled from any of three sources of liquidity, whichever satisfies the order's price at that moment:
+
+- **Just-in-time (JIT) liquidity**: a market maker places a maker order for the specific purpose of filling your order.
+
+- **Resting liquidity**: a keeper matches your order against limit orders already sitting on the [decentralized orderbook](/protocol/how-it-works/decentralized-orderbook).
+
+- **Backstop liquidity**: Velocity's AMM.
+
+The AMM is not a pure last resort that only steps in when no market maker does. At each price level, the matching engine compares the AMM's quote against the best available maker price and fills against whichever is better, so one Market Order can fill partly against makers and partly against the AMM. See [Matching Engine](/protocol/how-it-works/matching-engine) for the full ordering rules.
+
+Whichever source fills the order, it can only fill at a price within your slippage tolerance.
+
+Executing a Market Order does not mean the order will execute at exactly the price displayed, as the mark price of an asset may change before the order is filled.
 
 <Callout type="warning">
-The fee paid depends on whether the order is a taker order or a maker order.
+  The fee paid depends on whether the order is a taker order or a maker order.
 </Callout>
 
-Maker orders are Limit orders with a 'Post' flag.
+Maker orders can be enforced using Limit orders with a 'Post' flag. See [Trading Fees](/protocol/trading/trading-fees) and [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq) for more information.
 
-See [Trading Fees](/protocol/trading/trading-fees) and [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq) for more information.
+## Limit Orders
 
+A Limit Order is an order to buy or sell a given asset at a price you specify. If or when the mark price crosses your Limit Price, the order partially fills up to that price every time a keeper executes it, and for taker orders your resulting Entry Price is guaranteed to be equal to or better than the Limit Price.
 
-## **Limit Orders**
+These orders are executed by a decentralised network of keepers, see [Decentralised Orderbook FAQ](/protocol/how-it-works/keepers/keepers-dlob-faq), once the mark price crosses the specified trigger or limit price. At fill time, a limit order can be matched peer-to-peer against another resting maker order or filled against Velocity's AMM, whichever the keeper network determines is best for the fill. Execution is **'best effort'**, with economic incentives designed to mimic the execution ordering seen in a Centralised Limit Order Book (CLOB).
 
-Velocity's perp order book supports a number of queued order types.
+With the **Post** flag set, the order fills at your specified limit price and earns a maker rebate: a flat rate set by the maker's fee tier (currently 0.0025% of the filled notional in every tier), carved out of the taker's fee on a peer-to-peer match, or out of the AMM's spread surplus when the post-only order fills against the AMM. The filler who submits the fill is paid separately, the lesser of 10% of the fee and a reward that grows with the order's age, with no fixed bps cap.
 
-These orders are executed by a decentralised network of keepers, see [Decentralised Orderbook FAQ](/protocol/how-it-works/keepers/keepers-dlob-faq), once certain conditions are met (i.e. the mark price crosses the specified trigger/limit price). At fill time, a limit order can be matched peer-to-peer against another resting maker order or filled against Velocity's AMM, whichever the keeper network determines is best for the fill.
+## Trigger Orders
 
-These orders are executed **'best effort'** by the network with special economic incentives designed to mimic the typical execution order seen in a Centralised Limit Order Book (CLOB).
+### Trigger Market
 
-A Limit Order is an order to buy or sell a given asset at a specified price.
+A market order that activates when the trigger price condition is met. Used for Stop Loss (Stop Market) and Take Profit orders.
 
-Users can specify a Limit Price they wish to be filled at.
+- Triggers on the configured reference price (see *trigger mechanics* below).
+- Once triggered, it behaves like a market order.
 
-If or when the mark price of an asset moves to cross the Limit Price, the order will partially fill up to this Limit Price every time a keeper executes it.
+### Trigger Limit
 
-For taker orders, a user's resulting Entry Price is guaranteed to be equal to or better than the Limit Price specified.
+A limit order that activates when the trigger price condition is met. Used for Stop Limit and Take Profit Limit orders.
 
-If the "Post" order flag is set, then the order will be filled at the specified limit price and earn a maker rebate. The rebate is a flat rate set by the maker's fee tier (currently 0.0025% of the filled notional in every tier). It is carved out of the taker's fee on a peer-to-peer match, or out of the AMM's spread surplus when the post-only order fills against the AMM. The filler who submits the fill is separately paid the lesser of 10% of the fee and a reward that grows with the order's age; there is no fixed bps cap on that filler reward.
+- Lets you specify trigger price and limit price separately.
+- Fill is not guaranteed if the market trades through and never touches the limit.
 
+### Trigger Order mechanics
+
+Trigger orders (Stop Market / Stop Limit / Take Profit Market / Take Profit Limit) activate when a **trigger reference price** crosses the trigger price you set.
+
+The trigger reference price is not the raw oracle price. It is the **median** of three values, which keeps a stop or take profit from firing on a move in any single price source:
+
+- **Oracle Price Adjustment**: `Oracle Price + (Mark Price 5min TWAP − Oracle Price 5min TWAP)`
+- **Last Trade Price**, the last fill price, but only while it is fresh (within 5 minutes). If there is no fill yet, or the last fill has gone stale, the oracle price stands in for this leg, so the reference price is always a median of three values.
+- **Oracle Price with Funding Adjustment**, `Oracle Price + Funding Basis`, where the funding basis is derived from the last funding rate (normalized by its oracle TWAP, annualized, and adjusted by the protocol's funding-rate offset), then decayed linearly to zero over the course of one funding period.
+
+For example, if the three values are 100.2, 100.5, and 100.1, the median **100.2** is used. The median is then clamped to a band around the oracle price so it can never drift too far from it: 20 bps for the most volatile contract tiers (A/B), 100 bps for tier C, and 250 bps for all other tiers.
+
+## Oracle Limit
+
+An Oracle Limit Order allows you to specify an offset rather than limit price to execute your order. The offset represents the price above/below the current Oracle Price you want to be filled at. It's important to note that these orders can fill at any time the offset is met, so long as the account collateral is sufficient.
+
+The offset is signed, so its direction sets how aggressive the order is:
+
+| Side | Offset | Effect |
+| -- | -- | -- |
+| Buy | Negative | Bid below the oracle price. |
+| Buy | Positive | Bid above the oracle price, paying a premium to fill sooner. |
+| Sell | Positive | Ask above the oracle price. |
+| Sell | Negative | Ask below the oracle price, accepting a discount to fill sooner. |
+
+### Example
+
+SOL-PERP's oracle price is \$100.00 and you want to go long, but only at \$0.50 below oracle. Instead of a fixed limit price of \$99.50, you place an Oracle Limit buy with an offset of **-\$0.50**.
+
+The order does not store \$99.50. It stores the offset, and the effective limit price is recalculated from the current oracle price on every fill attempt:
+
+| Oracle price at fill attempt | Effective limit price (oracle + offset) |
+| -- | -- |
+| \$100.00 | \$99.50 |
+| \$102.00 | \$101.50 |
+| \$97.00 | \$96.50 |
+
+This is the difference from a fixed limit order. A fixed \$99.50 buy stays at \$99.50, so if the oracle climbs to \$102.00 the order is left far below the market and stops filling until price comes back down. The Oracle Limit order tracks the oracle up to \$101.50 and keeps working, holding your \$0.50 discount to oracle the whole way.
+
+The same property cuts both ways. If the oracle falls to \$97.00, your bid follows it down to \$96.50 rather than filling at \$99.50, so you keep the discount but you are no longer bidding the price you originally saw.
+
+<Callout type="info">
+The effective price is rounded to the market's tick size in the direction of your order, and it can never go below one tick. See [Market Specs](/protocol/trading/market-specs) for per-market tick sizes.
+</Callout>
+
+## Scale
+
+Submit multiple limit orders across a user‑defined price range to build or unwind a position gradually. All of them are placed in one instruction and all of them rest on the book, nothing fills at placement.
+
+- You define the range (start price and end price), the number of orders (minimum 2, maximum 32), and the size distribution.
+- The range must run away from the market in the direction you are scaling: a long ladder needs start price above end price (buying down), a short ladder needs start price below end price (selling up).
+- Prices are spaced evenly across the range, and the last order sits exactly on the end price.
+- Reduce-only, post-only, and expiry settings apply to every order in the ladder.
+
+| Size distribution | Sizes across the ladder |
+| -- | -- |
+| Flat | Equal size for every order. |
+| Ascending | Smallest order at the start price, largest at the end price. |
+| Descending | Largest order at the start price, smallest at the end price. |
+
+The 32-order limit is also the maximum number of open orders an account can hold, so a ladder only fits if the account has that many free order slots. Developers: see [Scale Orders in the SDK](/developers/velocity-sdk/orders) for the exact parameters and precisions.
+
+## Order flags
+
+These flags can be combined with the order types above.
+
+| Flag | Description
+| -- | --
+| Reduce‑Only | Enforces that the order will never increase or reverse the current position (go from long to short, or short to long).
+| Post‑Only | Enforces that the order is a maker order that can provide liquidity to the pool and earns a maker rebate (currently 0.25 bps) instead of paying a taker fee.
+| Immediate‑or‑Cancel (IOC) | An order that is placed and potentially partially filled. The remainder that is not filled immediately is then cancelled.
+| Has Builder | Set when the order carries a builder code (`builderIdx` / `builderFeeTenthBps`). See [Trading Fees](/protocol/trading/trading-fees).
+
+{/* HIDDEN: isolated positions, reinstate this row into the flags table above:
+| Is Isolated Position | Set on orders that risk-increase an [isolated perp position](/protocol/trading/margin) rather than the account's cross-margin position.
+*/}

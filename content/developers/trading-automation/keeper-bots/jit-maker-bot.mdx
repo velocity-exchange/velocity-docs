@@ -15,7 +15,7 @@ The JIT Maker example lives in `apps/keeper-bots-v2` inside the `velocity-v1` mo
 ```
 git clone https://github.com/velocity-exchange/velocity-v1.git
 cd velocity-v1
-bun install   # run once, at the repo root — this is a Bun workspace
+bun install   # run once, at the repo root, this is a Bun workspace
 cd apps/keeper-bots-v2
 ```
 
@@ -60,9 +60,9 @@ bun run dev --config-file=jit-maker-config.yaml
 
 ### Strategy overview
 
-This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy), published to npm as `@velocity-exchange/jit-proxy`) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism.
+This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) as `@velocity-exchange/jit-proxy`, not yet published to npm, build it from source) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism.
 
-The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is deployed under Velocity's own program ID (`J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ`), and the client is built against `@velocity-exchange/sdk`/`VelocityClient` instead of `@drift-labs/sdk`/`DriftClient`.
+The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is deployed under Velocity's own program ID (`J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ`), and the client is built against `@velocity-exchange/sdk`/`VelocityClient`.
 
 ### JIT-able orders
 
@@ -129,6 +129,6 @@ This is a failed tx message from the RPC provider when a transaction is sent. It
 Decoding it further:
 * It is a jit fill attempt on taker `24yfkkuFv849BpCBBo49tV6i6ycfc3aEUY6wWKFsN4SS`'s orderId:`177961`
 * the current slot (that the RPC is simulating the transaction in) is 250667476, the auction lasts for 32 slots, and there are 15 slots left
-* the taker's order is an Oracle order, with an offset of -12100 (-$0.0121) to -200 (-$0.0020)
+* the taker's order is an Oracle order, with an offset of -12100 (-\$0.0121) to -200 (-\$0.0020)
 * the taker's order is a `buy` (since it is comparing with our `ask` price)
-* the taker's price at that slot is 2220700 ($2.2207), which is below our worst ask 2234257 ($2.2343), so the jit-proxy program threw and error to prevent us from sending a failing transaction on chain
+* the taker's price at that slot is 2220700 (\$2.2207), which is below our worst ask 2234257 (\$2.2343), so the jit-proxy program threw and error to prevent us from sending a failing transaction on chain

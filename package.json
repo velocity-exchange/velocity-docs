@@ -7,13 +7,13 @@
     "build": "next build",
     "start": "next start",
     "rust-docs": "ts-node scripts/rustDocs.ts",
-    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap"
+    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap && node scripts/generateLlmsTxt.mjs && node scripts/generateMarkdownPages.mjs"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/velocity-exchange/velocity-docs"
   },
-  "author": "Drift Labs",
+  "author": "Velocity",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/velocity-exchange/velocity-docs/issues"

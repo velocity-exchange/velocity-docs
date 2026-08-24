@@ -1,0 +1,45 @@
+# Referral Links
+
+Create a referral link to earn a portion of the trading fees of users you refer to Velocity.
+
+- Referrers earn **15%** of the taker fee paid by users they refer (the default `referrerRewardNumerator` on the perp fee tiers).
+- Referred users receive a **5%** discount on their taker fees (the default `refereeFeeNumerator`).
+
+These are the protocol's default fee-tier values and can be changed by governance; check the current `perpFeeStructure.feeTiers` on the `State` account for the live numbers. The referrer and referee numerators are the same (15% / 5%) across all three populated tiers, so a referral's economics do not vary with the referred user's volume tier.
+
+This document will walk you through setting up your referral link to begin earning today.
+
+## A few notes:
+
+- Rewards for the referrer accrue only from taker volume.
+- Referral rewards now flow through a per-user `RevenueShareEscrow` account rather than the old epoch-capped `UserStats` path. Fillers must attach a referred taker's escrow account for a fill to succeed. See the [builder codes](/developers/builder-codes) docs for the mechanics if you operate a filler/keeper.
+
+<Callout type="warning">
+The referral link applies solely to *new* Velocity accounts created through your link. For it to apply, users must have clicked the link, connected their wallet, and made a deposit within the same session.
+
+"New" means the wallet has never created a Velocity subaccount. The referrer is recorded once, during the authority's very first `initialize_user`, and is never written again. Deleting every subaccount does not reset this, because the allocation counter the check reads (`number_of_sub_accounts_created`) is never decremented. A wallet that has traded before cannot be referred, even after closing all of its accounts.
+</Callout>
+
+## Setup
+
+Create your referral link at [velocity.exchange/referrals](https://velocity.exchange/referrals).
+
+<Steps>
+### Create a link
+Click "Create my referral link".
+
+<img src="/assets/ref-2.png" alt="" width="500" height="auto"></img>
+
+### Customize
+Customize your referral link in under 32 characters and click "Create". You won't be able to change your referral link after setting it up the first time.
+
+<img src="/assets/ref-3.png" alt="" width="500" height="auto"></img>
+
+### Approve
+Once you've approved the transaction, you will find your rewards under "Total Rewards Earned" and a way to copy your link directly to your clipboard.
+
+<img src="/assets/ref-4.png" alt="" width="500" height="auto"></img>
+
+### Share
+Share your referral link with your friends and community to start earning fees from their trading activity.
+</Steps>

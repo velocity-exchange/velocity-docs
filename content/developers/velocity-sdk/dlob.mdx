@@ -7,7 +7,7 @@ The **Decentralized Limit Order Book (DLOB)** is Velocity's on-chain representat
 When a new order arrives, keepers and market makers query the DLOB to find matching resting orders. Velocity's matching engine then executes fills between the incoming taker and the resting makers on the DLOB, or routes to the AMM as a fallback.
 
 <Callout type="warning">
-Velocity removed **spot DLOB trading** — `place_spot_order`, `place_and_take_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist on-chain (calls now fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral/borrow-lend and for [swaps](/developers/velocity-sdk/swaps), but they can no longer be traded on an order book. In practice the DLOB only ever contains `MarketType.PERP` orders — the APIs below still accept a `marketType` parameter for API compatibility, but pass `MarketType.SPOT` and you'll only ever see an empty book.
+Velocity removed **spot DLOB trading**: `place_spot_order`, `place_and_take_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist on-chain (calls now fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral/borrow-lend and for [swaps](/developers/velocity-sdk/swaps), but they can no longer be traded on an order book. In practice the DLOB only ever contains `MarketType.PERP` orders: the APIs below still accept a `marketType` parameter for API compatibility, but pass `MarketType.SPOT` and you'll only ever see an empty book.
 </Callout>
 
 **When you'd use the DLOB:**

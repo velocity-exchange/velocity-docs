@@ -31,13 +31,13 @@ Tracks long/short exposure in perpetual futures markets.
 - `openBids` - Base-asset size (BASE_PRECISION, 1e9) of non-reduce-only bids resting or triggering against this position. Multiply by price to get notional.
 - `openAsks` - Base-asset size (BASE_PRECISION, 1e9) of non-reduce-only asks resting or triggering against this position. Multiply by price to get notional.
 
-{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
+{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
 **Isolated margin:**
 - `isolatedPositionScaledBalance` - When the `IsolatedPosition` position flag is set, this position is backed by its own ring-fenced collateral instead of drawing on the account's shared cross-margin pool
 */}
 
 <Callout type="info">
-Velocity has no vAMM LP shares — `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields from Drift do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
+Velocity has no vAMM LP shares. `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
 </Callout>
 
 
@@ -59,7 +59,7 @@ Represents deposits (positive) or borrows (negative) in spot markets.
 - Tokens locked in open spot orders tracked separately
 
 <Callout type="warning">
-Spot markets exist for collateral and borrow/lend on Velocity, but the spot DLOB is disabled — `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` were removed. You cannot trade spot on the order book; deposit/withdraw/borrow/repay still work normally.
+Spot markets exist for collateral and borrow/lend on Velocity, but the spot DLOB is disabled: `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` were removed. You cannot trade spot on the order book; deposit/withdraw/borrow/repay still work normally.
 </Callout>
 
 ## Order mechanics
@@ -268,7 +268,7 @@ When health < 1.0, liquidators can:
 
 1. Close perp positions at oracle price
 2. Reduce borrows by seizing collateral
-3. Earn a liquidator fee (`PerpMarketAccount.liquidatorFee`, plus a separate insurance-fund cut and a protocol cut taken from the liquidatee — see `ifLiquidationFee` / `protocolLiquidationFee`)
+3. Earn a liquidator fee (`PerpMarketAccount.liquidatorFee`, plus a separate insurance-fund cut and a protocol cut taken from the liquidatee, see `ifLiquidationFee` / `protocolLiquidationFee`)
 4. Bring account back to health
 5. Remaining positions stay open
 

@@ -31,7 +31,7 @@ When placing limit orders, you can control maker/taker behavior with `postOnly`:
 
 ### `oraclePriceOffset` is a `BN`
 
-`OrderParams.oraclePriceOffset` (and `Order.oraclePriceOffset` on filled orders) is a signed **`BN`** in `PRICE_PRECISION` (1e6) units — it was widened from `number` to `BN` (i64 on-chain). Always wrap raw numbers with `new BN(...)`; passing a plain JS number will fail type-checking (and, if bypassed, will not round-trip correctly through Borsh encoding).
+`OrderParams.oraclePriceOffset` (and `Order.oraclePriceOffset` on filled orders) is a signed **`BN`** in `PRICE_PRECISION` (1e6) units: it was widened from `number` to `BN` (i64 on-chain). Always wrap raw numbers with `new BN(...)`; passing a plain JS number will fail type-checking (and, if bypassed, will not round-trip correctly through Borsh encoding).
 
 ```js
 import { BN, PRICE_PRECISION } from "@velocity-exchange/sdk";
@@ -202,7 +202,7 @@ await velocityClient.placeScaleOrders({
 
 `preparePlaceScaleOrdersTx(params, txParams?, subAccountId?)` returns the unsigned transaction as `{ placeScaleOrdersTx }`, and `getPlaceScaleOrdersIx(params, subAccountId?)` returns the single instruction if you want to batch it with others.
 
-For the trader-facing description of scale orders, see [Advanced Order Types](/protocol/trading/order-types/advanced-order-types).
+For the trader-facing description of scale orders, see [Order Types](/protocol/trading/order-types#scale).
 
 ### Oracle / Auction-Style Orders
 
@@ -240,7 +240,7 @@ await velocityClient.placePerpOrder(orderParams);
 
 ### Builder Codes
 
-`OrderParams` accepts an optional `builderIdx` + `builderFeeTenthBps` pair to attribute an order to an approved builder and charge an extra builder fee (in tenths of a bps, e.g. `100` = 10 bps = 0.1%). The program caps the actual fee charged at `MAX_BUILDER_FEE_TENTH_BPS` (1000, or 1% of notional), regardless of the builder's approved maximum. `builderIdx` indexes into the placing user's `RevenueShareEscrow.approvedBuilders` list, approve a builder first with `changeApprovedBuilder(...)`. Both fields are optional; omit them for ordinary orders.
+`OrderParams` accepts an optional `builderIdx` + `builderFeeTenthBps` pair to attribute an order to an approved builder and charge an extra builder fee (in tenths of a bps, e.g. `100` = 10 bps = 0.1%). The program caps the actual fee charged at `MAX_BUILDER_FEE_TENTH_BPS` (1000, or 1% of notional): an on-chain Rust constant in the velocity program, not an SDK export, so read it as a fixed value rather than something to import. `builderIdx` indexes into the placing user's `RevenueShareEscrow.approvedBuilders` list, approve a builder first with `changeApprovedBuilder(...)`. Both fields are optional; omit them for ordinary orders.
 
 <SDKDoc>
   <TypeScript name="Builder-fee order" type="example">
@@ -262,7 +262,7 @@ await velocityClient.placePerpOrder(orderParams);
   </TypeScript>
 </SDKDoc>
 
-If the taker is referred (their `UserStats.referrerStatus` has the `BuilderReferral` bit) or the order itself carries a builder code, fillers must attach the taker's `RevenueShareEscrow` when filling — see `getFillPerpOrderIx` below — or the fill is rejected with `UnableToLoadRevenueShareAccount`.
+If the taker is referred (their `UserStats.referrerStatus` has the `BuilderReferral` bit) or the order itself carries a builder code, fillers must attach the taker's `RevenueShareEscrow` when filling (see `getFillPerpOrderIx` below) or the fill is rejected with `UnableToLoadRevenueShareAccount`.
 
 ### Cancel Orders
 

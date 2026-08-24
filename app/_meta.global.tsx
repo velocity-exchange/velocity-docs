@@ -40,12 +40,16 @@ const META = {
       "trading": {
         "title": "Trading",
         "items": {
+          "order-types": {
+            "title": "Order Types",
+            "items": {
+              "advanced-orders-faq": "",
+            },
+          },
           "auction-parameters": "",
-          "funding-rates": "",
           "margin": {
             "title": "Margin",
             "items": {
-              "index": "",
               "per-market-leverage": "",
               "account-health": "",
             },
@@ -53,26 +57,18 @@ const META = {
           "profit-loss": {
             "title": "Profit & Loss (P&L)",
             "items": {
-              "index": "",
               "accounting-settlement": "",
               "unsettled-profit-loss": "",
             }
           },
-          "order-types": {
-            "title": "Order Types",
-            "items": {
-              "index": "",
-              "advanced-order-types": "",
-              "advanced-orders-faq": "",
-            },
-          },
-          "liquidations": "",
+          "funding-rates": "",
           "trading-fees": {
             "title": "Trading Fees",
             "items": {
               "other-trading-fees": "",
             }
           },
+          "liquidations": "",
           "market-specs": "",
         }
       },
@@ -94,7 +90,7 @@ const META = {
           },
         }
       },
-      "rewards": "Referral Links",
+      "referrals": "Referral Links",
       "glossary": "",
       "--- how-it-works": {
         "title": "HOW VELOCITY WORKS",
@@ -121,7 +117,9 @@ const META = {
           "fee-pool": "",
           "profit-loss-pool": "",
           "borrow-interest-rate": "",
-          "isolated-pools": "",
+          "isolated-pools": {
+            "display": displayWip,
+          },
         }
       },
       "insurance-fund": {
@@ -203,9 +201,6 @@ const META = {
           "builder-codes": "",
           "transactions": "",
           "sdk-internals": "",
-          "autogen": {
-            "display": displayWip,
-          },
         },
       },
       "data-api": {

@@ -1,8 +1,8 @@
 # SWIFT API
 
-**SWIFT** is Velocity's offchain signed-order protocol: it lets market makers receive signed taker orders over WebSocket before they hit the onchain JIT auction. This enables ultra-low-latency market making. In the SDK, SWIFT orders are called "signed-message" orders (`SignedMsgOrderParams`, `isSignedMsgOrder`, `SwiftOrderSubscriber`) — the "SWIFT" name is the product-facing term for the same feature.
+**SWIFT** is Velocity's offchain signed-order protocol: it lets market makers receive signed taker orders over WebSocket before they hit the onchain JIT auction. This enables ultra-low-latency market making. In the SDK, SWIFT orders are called "signed-message" orders (`SignedMsgOrderParams`, `isSignedMsgOrder`, `SwiftOrderSubscriber`). The "SWIFT" name is the product-facing term for the same feature.
 
-This page covers the maker side — receiving and filling signed orders. For the taker side (how these orders are signed and submitted), see [Swift in the SDK docs](/developers/velocity-sdk/swift).
+This page covers the maker side: receiving and filling signed orders. For the taker side (how these orders are signed and submitted), see [Swift in the SDK docs](/developers/velocity-sdk/swift).
 
 ## How SWIFT works
 
@@ -36,7 +36,7 @@ The tradeoff: you need fast infrastructure (dedicated RPC node, low-latency WebS
 
 ### Basic subscription
 
-> **Endpoint is provisional.** `SwiftOrderSubscriber` defaults `endpoint` based on `velocityEnv` when you don't pass one explicitly: `wss://swift.velocity.exchange/ws` for `mainnet-beta`, `wss://swift.master.velocity.exchange/ws` for `devnet` (both hardcoded in `sdk/src/swift/swiftOrderSubscriber.ts`). These are real values shipped in the SDK today, but the hostnames haven't been confirmed as final/DNS-live production endpoints — check with the team before depending on them in production.
+> **Endpoint is provisional.** `SwiftOrderSubscriber` defaults `endpoint` based on `velocityEnv` when you don't pass one explicitly: `wss://swift.velocity.exchange/ws` for `mainnet-beta`, `wss://swift.master.velocity.exchange/ws` for `devnet` (both hardcoded in `sdk/src/swift/swiftOrderSubscriber.ts`). These are real values shipped in the SDK today, but the hostnames haven't been confirmed as final/DNS-live production endpoints. Check with the team before depending on them in production.
 
 <SDKDoc>
   <TypeScript name="SwiftOrderSubscriber" type="class">

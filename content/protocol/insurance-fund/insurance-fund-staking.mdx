@@ -18,20 +18,20 @@ The Revenue Pool is funded by various aspects of the protocol:
 
 An Insurance Fund Staker's proportionate share is calculated by: `Total Staked Amount / Total Insurance Fund`
 
-The Insurance Fund is **100% staker-owned** on Velocity — there is no protocol-owned share of the fund. Each revenue settlement (by default, at most once per hour per market) accrues entirely to Insurance Fund Stakers as share-price appreciation; the legacy protocol/staker split (and the instructions to withdraw or rebalance a protocol-owned portion) do not exist.
+The Insurance Fund is **100% staker-owned** on Velocity. There is no protocol-owned share of the fund. Each revenue settlement (by default, at most once per hour per market) accrues entirely to Insurance Fund Stakers as share-price appreciation; the legacy protocol/staker split (and the instructions to withdraw or rebalance a protocol-owned portion) do not exist.
 
 <Callout type="important">
 **Example:**
 
 The Insurance Fund is at \$5000 USDT. You decide to stake \$10,000 USDT, bringing the total to \$15,000 USDT. Your proportionate share of the fund is 10000/15000 = 66.6%.
 
-Each hour, as the revenue pool settles fees earned to the Insurance Fund, let's say \$30 is settled — all \$30 accrues to stakers as share-price appreciation, none to the protocol. You will receive 66.6% of that value (\$20) and the remaining Insurance Fund stakers would receive 33.3% (\$10).
+Each hour, as the revenue pool settles fees earned to the Insurance Fund, let's say \$30 is settled. All \$30 accrues to stakers as share-price appreciation, none to the protocol. You will receive 66.6% of that value (\$20) and the remaining Insurance Fund stakers would receive 33.3% (\$10).
 
 All rewards earned accumulate and compound the account's insurance amount staked.
 </Callout>
 
 <Callout type="info">
-A portion of each spot market's deposit-interest gains (the market's `ifFeeFactor`) is also carved out directly to that market's Insurance Fund, on top of revenue-pool settlements — see [What is the Insurance Fund?](/protocol/insurance-fund).
+A portion of each spot market's deposit-interest gains (the market's `ifFeeFactor`) is also carved out directly to that market's Insurance Fund, on top of revenue-pool settlements. See [What is the Insurance Fund?](/protocol/insurance-fund).
 </Callout>
 
 ### Cooldown Period
@@ -43,7 +43,7 @@ A user first requests to unstake a specific amount (denominated in shares). Duri
 *Note: You cannot unstake while the spot market utilization (or 24h utilization TWAP) is above 90%. This does not affect opening/timing on unstake requests.*
 
 <Callout type="warning">
-Your escrowed principal remains at risk during the 13-day cooldown. Requesting an unstake locks in a target payout value, but the amount you actually receive when the cooldown ends is capped at the current value of your shares — `min(current share value, value at request time)`. If the Insurance Fund absorbs a bankruptcy/deficit draw while your request is pending, your payout is reduced accordingly. Submitting an unstake request does not remove your capital from Insurance Fund risk until the withdrawal is completed.
+Your escrowed principal remains at risk during the 13-day cooldown. Requesting an unstake locks in a target payout value, but the amount you actually receive when the cooldown ends is capped at the current value of your shares: `min(current share value, value at request time)`. If the Insurance Fund absorbs a bankruptcy/deficit draw while your request is pending, your payout is reduced accordingly. Submitting an unstake request does not remove your capital from Insurance Fund risk until the withdrawal is completed.
 </Callout>
 
 ## Stake and unstake lifecycle

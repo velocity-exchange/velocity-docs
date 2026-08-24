@@ -6,9 +6,9 @@ Each subaccount's margin and positions are isolated from other subaccounts, mean
 
 Each subaccount has independent positions, balances and margins, and can trade independently. Balances or liquidations from each subaccount will not affect other subaccounts. By default, every position and deposit within a single subaccount is cross-margined.
 
-{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
+{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
 <Callout type="info">
-Don't confuse subaccount-level isolation with **[isolated positions](/protocol/trading/margin)** — a newer feature that lets you segregate a *single perp position's* collateral and liquidation risk from the rest of one subaccount, without needing a separate subaccount for it.
+Don't confuse subaccount-level isolation with **[isolated positions](/protocol/trading/margin)**: a newer feature that lets you segregate a *single perp position's* collateral and liquidation risk from the rest of one subaccount, without needing a separate subaccount for it.
 </Callout>
 */}
 
@@ -41,20 +41,13 @@ You can edit and delete subaccounts from the [accounts screen](https://velocity.
 
 <Steps>
 ### Settle balances
-Make sure your account has zero balances. This includes open borrows, any unsettled pnl's. 
+Make sure your account has zero balances. Withdraw all your deposits and settle your positions. This includes open borrows and any unsettled pnl's. 
 <img src="/assets/managing-subaccounts-4.png" alt="" width="800" height="auto"></img>
-
-### Stop activity
-Make sure your account is idle. Accounts with less than $1000 equity are marked idle after about 1 hour of inactivity; accounts with $1000 or more equity are marked idle after about 1 week of inactivity.
 
 ### Delete
 Click the trash bin icon on the interface.
 <img src="/assets/managing-subaccounts-5.png" alt="" width="800" height="auto"></img>
 </Steps>
-
-<Callout type="important">
-Deleting an account instantly gives you the rent back, there are no additional steps to claim the rent \$SOL. Your account's history is retained and remains visible after deletion.
-</Callout>
 
 ### Switching Subaccounts
 

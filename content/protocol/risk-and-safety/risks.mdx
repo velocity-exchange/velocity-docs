@@ -1,56 +1,56 @@
 # Risks
 
-All DeFi protocols, including Velocity, come with risks, which are important to understand before depositing significant amounts of crypto. Some of the main risks involved in using Velocity are outlined here.
+All DeFi protocols, including Velocity, come with risks, which you should understand before depositing significant amounts of crypto. Some of the main risks you take on using Velocity are outlined here.
 
-Further risk parameters are also set out in [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails) and [Risk Parameters](/protocol/risk-and-safety/risk-parameters).
+You can find further risk parameters in [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails) and [Risk Parameters](/protocol/risk-and-safety/risk-parameters).
 
 **Smart Contract and UI Risk**
 
-There is a risk that the smart contract or UI has a bug or exploit for unexpected behaviour resulting in loss of funds. This risk is inherent to all smart contracts and relies upon the discipline of the development community, core contributors, and auditors.
+The smart contract or UI could have a bug or exploit that causes unexpected behaviour and a loss of your funds. This risk is inherent to all smart contracts and relies on the discipline of the development community, core contributors, and auditors.
 
-Velocity is a fork of Drift Protocol v2. The existing [audit reports](/protocol/risk-and-safety/audits) were performed on the pre-fork codebase, not on Velocity's own deployment or the functionality added since the fork. OtterSec's post-fork review of Velocity's own program has delivered a large set of High and Medium findings, and fixes for them are already in the codebase, but the final report has not been published yet.
+Velocity is a fork of Drift Protocol v2. The existing [audit reports](/protocol/risk-and-safety/audits) were performed on the pre-fork codebase, not on Velocity's own deployment or the functionality added since the fork. OtterSec's post-fork review of Velocity's own program has delivered a large set of High and Medium findings, and fixes for them are already in the codebase, but the final report has not been published yet. See the [migration guide](/developers/migrate-from-drift) for what changed since the fork.
 
 **Blockchain Risk**
 
-The Solana blockchain remains under development, which creates technological, uncertainty and security risks that Velocity has no control over. The cost of transacting on the Solana blockchain is variable and may increase or decrease at any time causing an impact on any activities taking place on the Solana blockchain, which may result in losses, price fluctuations or increased costs.
+The Solana blockchain remains under development, which creates technological, uncertainty and security risks that Velocity has no control over. The cost of transacting on Solana is variable and can increase or decrease at any time, which can affect any activity you take on Solana and may result in losses, price fluctuations, or increased costs.
 
 **Oracle Risk**
 
-Velocity relies on Pyth (via Pyth Lazer) for its price feeds to power liquidations. There is a risk that these oracles report incorrect prices which can result in wrongful liquidations and loss of all funds. 
+Velocity relies on Pyth (via Pyth Lazer) for the price feeds that power liquidations. These oracles could report incorrect prices, which can result in you being wrongfully liquidated and losing all your funds.
 
 **Levered/Social Loss Risk**
 
-In the event of sharp price movements, traders with levered positions can lose more than their collateral value. In the event of the Insurance Fund not being sufficiently capitalised, these losses will be socialised across market participants.
+If you hold a levered position during sharp price movements, you can lose more than your collateral value. If the Insurance Fund is not sufficiently capitalised, these losses are socialised across market participants.
 
 **Liquidation Risk**
 
-Velocity offers both leveraged perpetual swaps and borrow/lend. For perpetual swaps, there is the risk of liquidation when a user's margin ratio poses a stability risk to the exchange. The user's collateral can get liquidated when the value of the user's collateral drops below the user's maintenance margin fraction.
+Velocity offers both leveraged perpetual swaps and borrow/lend. For perpetual swaps, you risk liquidation when your margin ratio poses a stability risk to the exchange: your collateral can get liquidated when its value drops below your maintenance margin fraction.
 
 **Long/Short Imbalance Risk**
 
-Velocity's AMM is the counterparty to all trades taken against the AMM. This means that the AMM itself has delta risk, and this risk is magnified when market conditions skew on either side and the imbalance between longs and shorts increases.
+Velocity's AMM is the counterparty to all trades taken against it. This means the AMM itself has delta risk, and this risk is magnified when market conditions skew on either side and the imbalance between longs and shorts increases.
 
-The AMM has protections in place to prevent the long short imbalance from skewing too heavily to either side. More information on that is here at: [Velocity AMM](/protocol/how-it-works/velocity-amm). Despite these protections, there is still a risk that the AMM will be exposed to delta risk in periods of significant volatility.
+The AMM has protections in place to prevent the long/short imbalance from skewing too heavily to either side. You can read more on that at [Velocity AMM](/protocol/how-it-works/velocity-amm). Despite these protections, the AMM can still be exposed to delta risk in periods of significant volatility.
 
 **No Off-Setting Loss Risk**
 
-The unrealised P\&L users can lock in from entering and exiting a trade against the AMM is technically unbounded (e.g. if BTC goes toward infinity).
+The unrealised P&L you can lock in from entering and exiting a trade against the AMM is technically unbounded (for example, if BTC goes toward infinity).
 
-Whilst a user can achieve this unrealised gain, it is important to note that an offsetting loss (or sufficient fees collected) is necessary before the unrealised gain can be settled in full and withdrawable as collateral by the user.
+While you can achieve this unrealised gain, you need an offsetting loss (or sufficient fees collected) before you can settle it in full and withdraw it as collateral.
 
-Additionally, if the unrealised P\&L imbalance exceeds its per-market threshold, those unrealised gains may be discounted by the margining system (initial, not maintenance) to prevent large borrows against it. This discounting would only impact new positions being opened and would not affect a user's liquidation threshold.
+Additionally, if the unrealised P&L imbalance exceeds its per-market threshold, the margining system may discount those unrealised gains (initial margin, not maintenance) to prevent large borrows against them. This discounting only affects new positions you open; it does not affect your liquidation threshold.
 
-These rules are systemitised and can be read more in [P&L](/protocol/trading/profit-loss) and [Margin](/protocol/trading/margin)
+These rules are systemised, and you can read more on them in [P&L](/protocol/trading/profit-loss) and [Margin](/protocol/trading/margin).
 
 **Untimely Liquidation Risk**
 
-In the event of large-scale liquidations or market turmoil, there is a possibility that positions and balances are not able to be liquidated in time and are unable to cover the losses taken out by the liquidated user. The shortfall "or negative balance" is treated as levered losses.
+During large-scale liquidations or market turmoil, your positions and balances might not be liquidated in time to cover the losses taken out by a liquidated user. The shortfall (or negative balance) is treated as levered losses.
 
-In the past, levered losses in the main pool have been filled via top-ups from the Insurance fund. In the event that the Insurance Fund is depleted, there will be a socialized loss in the system.
+In the past, levered losses in the main pool have been filled via top-ups from the Insurance Fund. If the Insurance Fund is depleted, the resulting loss is socialized across the system.
 
 **100% Utilization Risk**
 
-When an asset is fully utilized (100% of the supply is lent out), there will be no tokens left in the pool, which means withdrawals and borrows will fail. Users will have to wait until the utilization rate goes down, either through some users repaying their loans or depositing new funds before they can withdraw or borrow.
+When an asset is fully utilized (100% of the supply is lent out), there are no tokens left in the pool, so withdrawals and borrows fail. You have to wait until the utilization rate goes down, either through other users repaying their loans or depositing new funds, before you can withdraw or borrow.
 
-A user is more likely to be affected by this if their deposit represents a large share of the pool, or if the asset has extremely high borrow demand.
+You're more likely to be affected by this if your deposit represents a large share of the pool, or if the asset has extremely high borrow demand.
 

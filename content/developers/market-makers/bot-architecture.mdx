@@ -99,7 +99,7 @@ const computeLimitIx = ComputeBudgetProgram.setComputeUnitLimit({
 });
 ```
 
-**Tip:** Place-and-make transactions typically use 200-400k compute units. Set the limit explicitly rather than defaulting to 200k (which may fail) or 1.4M (which overpays).
+**Tip:** Place-and-make transactions typically use 200-400k compute units. Set the limit explicitly rather than defaulting to 200k (which may fail) or 1.4M (which overpays). This is not a hard ceiling: the `JitMaker` bot runs a heavier place-and-make path and defaults to 800k CU, see [JIT Auctions gotchas](./jit-auctions#gotchas).
 
 ## Address Lookup Tables (ALTs) and blockhash
 
@@ -271,7 +271,7 @@ if (!oracleIsValid) return;
 if (oracle.confidence.gt(maxConfidence)) return; // confidence is a BN, PRICE_PRECISION
 ```
 
-**Position limits**: Don't fill if it would exceed your max position or leverage. `perpPositions` is a fixed-size array of position *slots*, not indexed by market index — look it up with `getPerpPosition(marketIndex)` (or `getPerpPositionOrEmpty` if you want a zeroed placeholder instead of `undefined`), and use `BN` arithmetic throughout:
+**Position limits**: Don't fill if it would exceed your max position or leverage. `perpPositions` is a fixed-size array of position *slots*, not indexed by market index: look it up with `getPerpPosition(marketIndex)` (or `getPerpPositionOrEmpty` if you want a zeroed placeholder instead of `undefined`), and use `BN` arithmetic throughout:
 
 ```js
 import { convertToNumber, BASE_PRECISION } from "@velocity-exchange/sdk";
@@ -285,7 +285,7 @@ const newPositionSize = convertToNumber(
 if (Math.abs(newPositionSize) > maxPositionSize) return;
 ```
 
-**Toxic flow**: Skip orders that increase risk (e.g. direction that worsens your inventory) and skip when oracle/index divergence is high. Note the SDK's own `isOrderRiskIncreasing`/`isOrderRiskIncreasingInSameDirection` helpers were removed as dead exports — write this check against your own position/direction, e.g.:
+**Toxic flow**: Skip orders that increase risk (e.g. direction that worsens your inventory) and skip when oracle/index divergence is high. Note the SDK's own `isOrderRiskIncreasing`/`isOrderRiskIncreasingInSameDirection` helpers were removed as dead exports: write this check against your own position/direction, e.g.:
 
 ```js
 function isRiskIncreasing(order, currentPosition) {

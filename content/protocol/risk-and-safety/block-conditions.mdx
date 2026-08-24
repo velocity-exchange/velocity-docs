@@ -2,65 +2,67 @@
 
 ### Deposits
 
-*   User attempting to deposit when the max_deposits for that spot asset would be or has been reached
+Your deposit is blocked if:
 
-*   Spot market is in reduce only mode and deposit does not pay off a borrow
+*   it would reach or exceed `max_deposits` for that spot asset
 
-*   Spot market's deposits are paused
+*   the spot market is in reduce-only mode and your deposit does not pay off a borrow
 
-*   Spot market is still in the `Initialized` status (not yet opened for trading)
+*   the spot market's deposits are paused
 
-*   The user's `pool_id` does not match the spot market's `pool_id`
+*   the spot market is still in the `Initialized` status (not yet opened for trading)
 
-*   Deposit would exceed the spot market's daily deposit cap
+*   your `pool_id` does not match the spot market's `pool_id`
+
+*   it would exceed the spot market's daily deposit cap
 
 ### Withdraws
 
-*   User attempting to withdraw with outstanding liabilities when an oracle is invalid
+Your withdrawal or borrow is blocked if:
 
-*   Attempting to borrow or withdraw when there are outstanding liabilities and any asset or liability's Oracle the user has is deemed invalid ("invalid" in accordance with *`MarginCalc`* action)
+*   you have outstanding liabilities and any oracle on an asset or liability you hold is invalid ("invalid" per the `MarginCalc` action)
 
-*   User attempting to increase the number of liabilities above 1 with an isolated tier liability
+*   it would increase your number of liabilities above 1 while one of them has the isolated asset tier (you can only hold one outstanding liability when that liability has the isolated asset tier)
 
-*   Users can only have one outstanding liability when the liability has the isolated asset tier.
+*   it would put your total collateral (weighted collateral value) below your initial margin requirement
 
-*   Users cannot withdraw assets that would put their total collateral (weighted collateral value) below their initial margin requirement
-
-*   Users cannot withdraw an asset amount that would put that particular asset's protocol liquidity below the rolling limits
-    *   These limits differ based on whether the withdraw would open borrow or not
+*   it would put that asset's protocol liquidity below the rolling limits (these limits differ based on whether the withdraw would open a borrow)
 
 ### Placing Orders
 
-*   Users cannot place orders that are risk-increasing and would put their initial margin requirement above their total collateral
+You cannot place an order if:
 
-*   Users cannot place orders that would increase their number of outstanding liabilities above 1 if the liability has the isolated asset tier
+*   it is risk-increasing and would put your initial margin requirement above your total collateral
+
+*   it would increase your number of outstanding liabilities above 1 while one of them has the isolated asset tier
 
 <Callout type="info">
-Order placement applies to **perpetual** markets only. Spot order placement is removed on Velocity (there is no spot order book) — borrows are instead opened through withdrawals and swaps, which are governed by the withdrawal conditions above.
+Order placement applies to **perpetual** markets only. Spot order placement is removed on Velocity (there is no spot order book). Borrows are instead opened through withdrawals and swaps, which are governed by the withdrawal conditions above.
 </Callout>
 
 ### Filling Orders
 
-*   A user's orders will not fill if it sends them under the margin requirement plus buffer (since they have \`InsufficientCollateral\`)
-    *   Within a match, if either user hits this condition, the match won't go through
+Your order won't fill if it would send you under the margin requirement plus buffer (you'd hit `InsufficientCollateral`). Within a match, if either side hits this condition, the match won't go through.
 
 ### Settle Perp PnL
 
-*   When market's oracle is deemed invalid
+You can't settle perp PnL if:
 
-*   When the user has negative unrealized PnL and their account value is below the maintenance margin requirement (this check does not apply to settling positive unrealized PnL)
+*   the market's oracle is deemed invalid
 
-*   When the market's oracle price diverges too far from its 5-minute TWAP (`validate_market_within_price_band`)
+*   you have negative unrealized PnL and your account value is below the maintenance margin requirement (this check does not apply when you're settling positive unrealized PnL)
 
-*   When a third party (not the user's authority or delegate) tries to settle the user's negative PnL against a margin-invalid oracle
+*   the market's oracle price diverges too far from its 5-minute TWAP (`validate_market_within_price_band`)
 
-*   When the `SettlePnl` (or, for a user with an open position, `SettlePnlWithPosition`) operation is paused for the market
+*   a third party (not your authority or delegate) tries to settle your negative PnL against a margin-invalid oracle
 
-*   When the market has an open position and its status is not `Active`, or has no open position and its status is neither `Active` nor `ReduceOnly`
+*   the `SettlePnl` (or, if you have an open position, `SettlePnlWithPosition`) operation is paused for the market
+
+*   the market has an open position and its status is not `Active`, or has no open position and its status is neither `Active` nor `ReduceOnly`
 
 ## Pause and market-status gating
 
-Every condition above is a rule about *your* account or *your* action. Pauses are different: they are switches an admin flips, and they block an action for everyone. There are three independent layers, and an action must clear all three.
+Every condition above is a rule about your account or your action. Pauses are different: they are switches an admin flips, and they block an action for everyone. There are three independent layers, and your action must clear all three.
 
 ### Layer 1: the exchange-wide breaker (`State.exchangeStatus`)
 

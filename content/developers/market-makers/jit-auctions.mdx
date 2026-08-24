@@ -60,14 +60,14 @@ Auction Price(slot) = start_price + (end_price - start_price) x progress
 where progress = min(1, (current_slot - auction_start_slot) / auction_duration)
 ```
 
-**Example** (long market order, oracle at $100):
-- `auctionStartPrice`: $100.00 (oracle)
-- `auctionEndPrice`: $100.10 (oracle + 0.1%, the taker's limit)
+**Example** (long market order, oracle at \$100):
+- `auctionStartPrice`: \$100.00 (oracle)
+- `auctionEndPrice`: \$100.10 (oracle + 0.1%, the taker's limit)
 - `auctionDuration`: 10 slots
-- At slot 3: price = $100.00 + ($100.10 - $100.00) x 0.3 = $100.03
-- At slot 7: price = $100.00 + ($100.10 - $100.00) x 0.7 = $100.07
+- At slot 3: price = \$100.00 + (\$100.10 - \$100.00) x 0.3 = \$100.03
+- At slot 7: price = \$100.00 + (\$100.10 - \$100.00) x 0.7 = \$100.07
 
-A maker offering $100.05 would be eligible to fill starting at slot 5 (when the auction price reaches $100.05). Makers offering $100.02 could fill as early as slot 2.
+A maker offering \$100.05 would be eligible to fill starting at slot 5 (when the auction price reaches \$100.05). Makers offering \$100.02 could fill as early as slot 2.
 
 ## Auction lifecycle
 
@@ -242,17 +242,17 @@ JIT runs first, DLOB provides backup liquidity if auction doesn't fully fill.
 
 ## AMM as a JIT maker
 
-The AMM isn't only the fallback of last resort (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)) — inside a DLOB match it can also compete as a JIT maker against your resting order for the same fill. Whether it does depends on a set of hard gates checked at fill time:
+The AMM isn't only the fallback of last resort (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)): inside a DLOB match it can also compete as a JIT maker against your resting order for the same fill. Whether it does depends on a set of hard gates checked at fill time:
 
 - `AmmFill` isn't paused for the market (`PerpOperation.AMM_FILL`)
 - the AMM doesn't currently have too much drawdown
 - the oracle (including the MM oracle, when active and recent) is valid and not too volatile vs. the exchange oracle
 
-If any of these gates trips, the AMM is excluded from that DLOB match entirely — you're only competing against other DLOB makers for that fill, not the AMM. This is separate from the auction-timing rules that decide whether the AMM can fill a *fresh* taker order immediately outside of a DLOB match. Practically: don't assume the AMM is always a competing quote inside the auction — during a pause, drawdown, or oracle-stress event it drops out, and DLOB-only makers pick up the full remaining size.
+If any of these gates trips, the AMM is excluded from that DLOB match entirely: you're only competing against other DLOB makers for that fill, not the AMM. This is separate from the auction-timing rules that decide whether the AMM can fill a *fresh* taker order immediately outside of a DLOB match. Practically: don't assume the AMM is always a competing quote inside the auction, during a pause, drawdown, or oracle-stress event it drops out, and DLOB-only makers pick up the full remaining size.
 
 ## JIT Proxy library
 
-**Not yet published to npm.** `@velocity-exchange/jit-proxy` isn't on the npm registry yet — build it from `packages/jit-proxy` in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) until it is. The client is vendored in-repo, ported to Anchor 1.0, and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream.
+**Not yet published to npm.** `@velocity-exchange/jit-proxy` isn't on the npm registry yet. Build it from `packages/jit-proxy` in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) until it is. The client is vendored in-repo, ported to Anchor 1.0, and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream.
 
 The package provides higher-level abstractions for auction participation:
 
@@ -293,4 +293,4 @@ const jitter = new JitterShotgun({
 - [Matching Engine](/protocol/how-it-works/matching-engine) - Full liquidity priority flow
 - [JIT-only MM](./jit-only) - Building a JIT market maker bot
 - [SWIFT API](./swift-api) - See taker orders 100-500ms before they hit the auction
-- [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) - JIT proxy SDK (`@velocity-exchange/jit-proxy`, unpublished — build from source)
+- [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) - JIT proxy SDK (`@velocity-exchange/jit-proxy`, unpublished: build from source)

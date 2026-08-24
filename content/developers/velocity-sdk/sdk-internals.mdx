@@ -170,7 +170,7 @@ const ix = await velocityClient.getPlacePerpOrderIx(orderParams);
 
 // 2. Build transaction
 // getVersionedTransaction(ixs, lookupTableAccounts, additionalSigners?, opts?, blockhash?)
-// — the fee payer/signer is `velocityClient`'s own wallet, not a positional arg.
+// the fee payer/signer is `velocityClient`'s own wallet, not a positional arg.
 const tx = await velocityClient.txSender.getVersionedTransaction(
   [ix],
   [], // lookup tables
@@ -223,8 +223,8 @@ The SDK can subscribe to onchain program events. See [Events](/developers/veloci
 
 <SDKDoc>
   <TypeScript name="Event subscriptions" type="example">
-```js
-import { EventSubscriber, isVariant } from "@velocity-exchange/sdk";
+```ts
+import { EventSubscriber, isVariant, WrappedEvent } from "@velocity-exchange/sdk";
 
 const eventSubscriber = new EventSubscriber(connection, velocityClient.program, {
   commitment: "confirmed",
@@ -234,9 +234,15 @@ await eventSubscriber.subscribe();
 
 // All events come through "newEvent", filter by eventType
 eventSubscriber.eventEmitter.on("newEvent", (event) => {
-  if (event.eventType === "OrderActionRecord" && isVariant(event.action, "fill")) {
-    console.log("Order filled:", event);
-    console.log("  Market:", event.marketIndex);
+  // `event.eventType === "OrderActionRecord"` alone doesn't narrow `event`'s type
+  // (WrappedEvent is generic over EventType, so TS can't correlate the check with
+  // the rest of the shape): cast explicitly once you've checked the discriminant.
+  if (event.eventType === "OrderActionRecord") {
+    const orderEvent = event as WrappedEvent<"OrderActionRecord">;
+    if (isVariant(orderEvent.action, "fill")) {
+      console.log("Order filled:", orderEvent);
+      console.log("  Market:", orderEvent.marketIndex);
+    }
   }
 });
 ```

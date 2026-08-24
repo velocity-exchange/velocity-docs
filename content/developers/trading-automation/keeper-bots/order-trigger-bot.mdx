@@ -41,7 +41,7 @@ The trigger bot polls the DLOB for orders whose trigger conditions are now met (
 
 The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the trigger price has crossed the trigger threshold, these are ready to be marked on-chain.
 
-The trigger price is not always the raw oracle price. When the state account's `MedianTriggerPrice` feature bit is on, the program (and `getTriggerPrice`) triggers off a median of the oracle price, the last fill price, and a funding-basis price instead. A bot that passes the raw oracle price directly can both miss real triggers and submit triggers that revert.
+The trigger price is not always the raw oracle price. When the state account's `MedianTriggerPrice` feature bit is on (it is on mainnet today), the program (and `getTriggerPrice`) triggers off a median of the oracle price, the last fill price, and a funding-basis price instead. Read the bit from the state account rather than assuming either mode. A bot that passes the raw oracle price directly can both miss real triggers and submit triggers that revert.
 
 ```typescript copy
 const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;

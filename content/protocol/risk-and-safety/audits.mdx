@@ -1,7 +1,7 @@
 # Audits
 
 <Callout type="important">
-Velocity is a fork of [Drift Protocol v2](https://github.com/velocity-exchange/velocity-v1) (fork point `0ae3e3b1d`). The audits below were performed on the pre-fork Drift Protocol v2 codebase that Velocity forked from, not on Velocity's own program deployment or its new/changed functionality (the VLP module, the fee redesign, tiered admin keys, and other features added or changed since the fork). OtterSec's post-fork review of Velocity's own program deployment has delivered a large set of High and Medium findings, and the fixes for them are already in the codebase. The final report has not been published yet. Until it is, the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) are the interim record of what OtterSec found and how each finding was fixed. The final report will be published on this page once it is finalised.
+Velocity is a fork of [Drift Protocol v2](https://github.com/velocity-exchange/velocity-v1) (fork point `0ae3e3b1d`). The audits below were performed on the pre-fork Drift Protocol v2 codebase that Velocity forked from, not on Velocity's own program deployment or its new/changed functionality (the VLP module, the fee redesign, tiered admin keys, and other features added or changed since the fork). OtterSec's post-fork review of Velocity's own program deployment has delivered a large set of High and Medium findings, and the fixes for them are already in the codebase. The final report has not been published yet. Until it is, the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) are the interim record of what OtterSec found and how each finding was fixed. The final report will be published on this page once it is finalised. See the [migration guide](/developers/migrate-from-drift) for a developer-facing summary of what changed since the fork.
 </Callout>
 
 The record below is in two parts: two audits of the pre-fork Drift Protocol v2 codebase, and one review of Velocity's own post-fork program.
@@ -12,7 +12,7 @@ The record below is in two parts: two audits of the pre-fork Drift Protocol v2 c
 
 **Overview**
 
-Drift Protocol engaged Trail of Bits (TOB) to audit the security of its decentralized exchange and smart contract. Founded in 2012 and headquartered in New York, TOB provides technical security assessment and advisory services and specializes in software testing and code review projects. TOB is recognized as a Tier-1 security auditor, having worked with notable clients such as Google and Microsoft.
+Drift Protocol engaged Trail of Bits (TOB) to audit the security of its decentralized exchange and smart contract.
 
 From November 7 to December 2, 2022, the TOB team conducted a security audit of Drift Protocol’s decentralized exchange. TOB’s testing efforts were focused on the identification of flaws that could result in a compromise of confidentiality, integrity, or availability of Drift’s decentralized exchange and smart contract. The audit was conducted by TOB with full knowledge of the target system, including access to the source code and documentation. TOB utilized a mix of static and dynamic testing of the target system and its codebase, using both automated and manual processes.
 

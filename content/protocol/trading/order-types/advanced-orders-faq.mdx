@@ -23,7 +23,7 @@ Conditional limit orders are stored on-chain in your account's order slots from 
 
 **What is the difference between a Stop Market and a Stop Limit?**
 
-Both orders are used as downside protection to stop losses. However, where they differ is how the orders are executed. A Stop Market order is immediately sold on the market in full once the trigger price is reached. Stop Limits are slightly different - rather than opening a Market Order, it opens a new limit order which can have a different price to the trigger price used to create the limit order.
+See [Trigger Market vs. Trigger Limit](/protocol/trading/order-types#trigger-orders) for how the two activate and fill.
 
 **What is the difference between Take Profit Market and Take Profit Limit?**
 
@@ -69,11 +69,7 @@ Theoretically, this should also translate to better performance during periods o
 
 **What is reduce-only?**
 
-**Reduce-only** orders guarantee that you will:
-
--   NOT be made longer if you are already long (or shorter if you are already short); and
-
--   NOT be made short if you were previously long (or vice versa).
+See [Order flags](/protocol/trading/order-types#order-flags) for the reduce-only definition.
 
 **What are Keeper bots? How can I participate?**
 

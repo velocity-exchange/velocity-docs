@@ -9,7 +9,7 @@ Trading Automation covers both **trading workflows** (SDK-first integrations) an
 - **Keeper bots**: protocol maintenance (matching, triggers, liquidations).
 - **Trading bots**: profit-seeking strategies (e.g. JIT market making).
 
-The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the velocity-v1 monorepo, and most examples below follow that app's config + entrypoint pattern. Unlike Drift's standalone `keeper-bots-v2` repo, there is no separate devnet/mainnet-beta branch split — the app's `ENV` config value selects the cluster.
+The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the velocity-v1 monorepo, and most examples below follow that app's config + entrypoint pattern. There is no separate devnet/mainnet-beta branch split; the app's `ENV` config value selects the cluster.
 
 <Steps>
 ### Pick your path
@@ -32,7 +32,7 @@ The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://
 | :------------ | :--------- | :---------------- | -------------------------------------------------------------------------------------- |
 | JIT Maker Bot | Advanced   | Yes                | [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot) |
 
-Rewards vary by bot and duty performed — see each bot's tutorial page, or [Keeper Incentives](/protocol/how-it-works/keepers/keeper-incentives) for how the protocol compensates keepers.
+Rewards vary by bot and duty performed. See each bot's tutorial page, or [Keeper Incentives](/protocol/how-it-works/keepers/keeper-incentives) for how the protocol compensates keepers.
 
 ### Prepare environment + wallet
 
@@ -43,7 +43,7 @@ All bots require a funded wallet for fees, and some require collateral. See [Bot
 ```shell copy
 git clone https://github.com/velocity-exchange/velocity-v1.git
 cd velocity-v1
-bun install   # run once, at the repo root — this is a Bun workspace
+bun install   # run once, at the repo root, this is a Bun workspace
 ```
 
 ### Configure the bot
@@ -142,6 +142,6 @@ Solana utilizes a network of [RPC Nodes](https://solana.com/rpc) to serve data t
 
 Some of the commonly used free RPC providers are insufficient for operating Velocity bots because we require some functions that are commonly disabled (i.e. websockets and `getProgramAccounts`). [Helius](https://www.helius.dev/) has a generous free plan that is sufficient for getting started. But consider upgrading to a paid plan as you get more serious with operating bots on Velocity or Solana in general.
 
-Bots also rely on `programSubscribe` and websocket subscriptions to receive timely account updates (for example, the JIT maker bot uses `programSubscribe` to find fillable orders — see [JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)); confirm your provider supports these before committing to a plan.
+Bots also rely on `programSubscribe` and websocket subscriptions to receive timely account updates (for example, the JIT maker bot uses `programSubscribe` to find fillable orders, see [JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)); confirm your provider supports these before committing to a plan.
 
 A more complete list of providers is available [here](https://solana.com/rpc).

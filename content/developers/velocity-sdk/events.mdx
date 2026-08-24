@@ -32,17 +32,17 @@ Protocol events are emitted in transaction logs. The SDK provides an `EventSubsc
 | `TransferFeeAndPnlPoolRecord` | An admin transfer between a perp market's fee pool and PnL pool |
 
 <Callout type="info">
-`CurveRecord` was renamed to `AmmCurveChanged` (the fields also changed). `LPRecord` (vAMM/BAMM LP shares) no longer exists — passive liquidity now flows through the VLP module, whose activity is split across `LPMintRedeemRecord`, `LPSettleRecord`, `LPSwapRecord`, and `LPBorrowLendDepositRecord`. `PerpMarketFeeSweepRecord`, `ProtocolFeeWithdrawRecord`, `RevenueShareSettleRecord`, and `TransferFeeAndPnlPoolRecord` have long been emitted on-chain but were only recently registered in the SDK's event map — older SDK versions silently dropped them from `EventSubscriber`.
+`CurveRecord` was renamed to `AmmCurveChanged` (the fields also changed). `LPRecord` (vAMM/BAMM LP shares) no longer exists: passive liquidity now flows through the VLP module, whose activity is split across `LPMintRedeemRecord`, `LPSettleRecord`, `LPSwapRecord`, and `LPBorrowLendDepositRecord`. `PerpMarketFeeSweepRecord`, `ProtocolFeeWithdrawRecord`, `RevenueShareSettleRecord`, and `TransferFeeAndPnlPoolRecord` have long been emitted on-chain but were only recently registered in the SDK's event map: older SDK versions silently dropped them from `EventSubscriber`.
 </Callout>
 
 ## Subscribing to Events
 
 Create an `EventSubscriber` and pass the event types you want to receive. The `newEvent` emitter fires for every incoming event that matches your filter.
 
-```js
-import { EventSubscriber } from "@velocity-exchange/sdk";
+```ts
+import { EventSubscriber, EventSubscriptionOptions } from "@velocity-exchange/sdk";
 
-const options = {
+const options: EventSubscriptionOptions = {
   eventTypes: [
     "DepositRecord",
     "FundingPaymentRecord",
@@ -146,7 +146,7 @@ Retrieve all stored events of a given type:
 const eventType = "OrderActionRecord";
 const events = eventSubscriber.getEventsArray(eventType);
 
-// Prefer getEventList() when iterating without copying — it returns the
+// Prefer getEventList() when iterating without copying: it returns the
 // live, size-bounded EventList the subscriber inserts into directly.
 const eventList = eventSubscriber.getEventList(eventType);
 ```
