@@ -19,7 +19,7 @@ Markets are identified by a **numeric index** starting from 0. For example:
 
 Each market integrates with an **oracle** that provides real-time price data, Pyth (push), Pyth Lazer, `Prelaunch` (for pre-listing markets), or (for the quote asset) `QuoteAsset`. Switchboard is deprecated (its `OracleSource` variants are retained only as `Deprecated*` stubs), and the Pyth *pull* variants (`PythPull`, `Pyth1KPull`, `Pyth1MPull`, `PythStableCoinPull`) are rejected onchain with `InvalidOracle`. Pyth push and Pyth Lazer sources remain fully supported; deployed markets currently use Pyth Lazer. The SDK lets you read oracle prices, check if they're valid/stale, and use them for quoting or risk calculations. Prices are stored in fixed-point precision (1e6 for PRICE_PRECISION).
 
-Perp markets track funding rates, open interest, and AMM liquidity pools. Spot markets track total deposits, borrows, and utilization rates. When you trade, you're interacting with these market accounts, opening positions on perp markets or borrowing/depositing in spot markets. Spot markets on Velocity are collateral/borrow-lend only — spot orders cannot be placed on the DLOB (see [Orders](/developers/velocity-sdk/orders)).
+Perp markets track funding rates, open interest, and AMM liquidity pools. Spot markets track total deposits, borrows, and utilization rates. When you trade, you're interacting with these market accounts, opening positions on perp markets or borrowing/depositing in spot markets. Spot markets on Velocity are collateral/borrow-lend only: spot orders cannot be placed on the DLOB (see [Orders](/developers/velocity-sdk/orders)).
 
 ## SDK Usage
 

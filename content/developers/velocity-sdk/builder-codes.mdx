@@ -3,13 +3,13 @@
 Builder Codes let integrators earn fees by routing order flow through their application. A builder fee is an extra fee (on top of the taker's normal tiered fee, capped at 1% of notional via `MAX_BUILDER_FEE_TENTH_BPS`) attached to an order via `builderIdx`/`builderFeeTenthBps`, and settled to the builder's revenue-share account when the order fills. The fee is waived (the fill still goes through at zero builder fee) on liquidation fills, and on any fill where the taker does not clear initial margin under the program's strict oracle rules, so builders shouldn't assume every fill pays.
 
 <Callout type="info">
-Builder codes work on **any** perp order — regular on-chain order placement (`placePerpOrder`, `placeAndTakePerpOrder`, `placeAndMakePerpOrder`, `fillPerpOrder`) as well as [Swift](/developers/velocity-sdk/swift) signed-message orders. `builderIdx`/`builderFeeTenthBps` are plain optional fields on `OrderParams`, not a Swift-only mechanism.
+Builder codes work on **any** perp order: regular on-chain order placement (`placePerpOrder`, `placeAndTakePerpOrder`, `placeAndMakePerpOrder`, `fillPerpOrder`) as well as [Swift](/developers/velocity-sdk/swift) signed-message orders. `builderIdx`/`builderFeeTenthBps` are plain optional fields on `OrderParams`, not a Swift-only mechanism.
 </Callout>
 
 The model has three actors and three setup steps:
 
-1. **Builder** initializes a `RevenueShare` account — a one-time, per-authority setup that lets the builder accrue fee-share rewards.
-2. **User** initializes a `RevenueShareEscrow` account — tracks the builders this user has approved and any pending (unsettled) builder-fee orders.
+1. **Builder** initializes a `RevenueShare` account: a one-time, per-authority setup that lets the builder accrue fee-share rewards.
+2. **User** initializes a `RevenueShareEscrow` account: tracks the builders this user has approved and any pending (unsettled) builder-fee orders.
 3. **User** approves the builder in their escrow with a maximum fee cap (`changeApprovedBuilder`).
 
 Only after all three steps can the user's orders carry that builder's fee.
@@ -70,7 +70,7 @@ await builderClient.initializeRevenueShare(builderAuthority);
 
 ### User: Initialize Escrow
 
-Create the user's `RevenueShareEscrow` account used for builder-fee tracking and approvals. `numOrders` sizes the pending-order slot list (it can be grown later with `resizeRevenueShareEscrowOrders`, but never shrunk) — size it to at least the number of concurrently open orders you expect across all of this user's subaccounts:
+Create the user's `RevenueShareEscrow` account used for builder-fee tracking and approvals. `numOrders` sizes the pending-order slot list (it can be grown later with `resizeRevenueShareEscrowOrders`, but never shrunk): size it to at least the number of concurrently open orders you expect across all of this user's subaccounts:
 
 <SDKDoc>
   <TypeScript name="initializeRevenueShareEscrow" type="method" owner="VelocityClient">
@@ -96,7 +96,7 @@ await userClient.changeApprovedBuilder(builderAuthority, 200, true); // cap: 20 
   </TypeScript>
 </SDKDoc>
 
-Call with `add = false` to revoke a builder — this fails with `CannotRevokeBuilderWithOpenOrders` if that builder has open (unsettled) orders outstanding, which must be cancelled or settled first.
+Call with `add = false` to revoke a builder: this fails with `CannotRevokeBuilderWithOpenOrders` if that builder has open (unsettled) orders outstanding, which must be cancelled or settled first.
 
 ### Order Placement (Builder Fee on a Regular Order)
 
@@ -123,7 +123,7 @@ await userClient.placePerpOrder({
   </TypeScript>
 </SDKDoc>
 
-The same two fields are set on a Swift signed order message the same way — see [Order Placement (Builder adds fee to Swift order)](/developers/velocity-sdk/swift) in the Swift guide.
+The same two fields are set on a Swift signed order message the same way. See [Order Placement (Builder adds fee to Swift order)](/developers/velocity-sdk/swift) in the Swift guide.
 
 <Callout type="warning">
 `builderFeeTenthBps` must be within **both** caps: the user's `maxFeeTenthBps` for that builder, and the protocol-wide `MAX_BUILDER_FEE_TENTH_BPS` of `1000` (1% of notional). Exceeding either fails the placement.
@@ -167,7 +167,7 @@ Perp fills fail on-chain with `UnableToLoadRevenueShareAccount` (error `6324` / 
 - the taker's order carries a builder code (`hasBuilderParams(orderParams)` is true), or
 - the taker's `UserStats.referrerStatus` has the `BuilderReferral` bit set and their escrow has a referrer (`escrowHasReferrer(escrow)`).
 
-Liquidation fills and the feature-flag-off state are exempt. Fillers/keepers must attach the escrow for any taker that matches one of the above — the SDK's fill and place-and-make builders accept the taker's decoded escrow directly:
+Liquidation fills and the feature-flag-off state are exempt. Fillers/keepers must attach the escrow for any taker that matches one of the above: the SDK's fill and place-and-make builders accept the taker's decoded escrow directly:
 
 <SDKDoc>
   <TypeScript name="takerEscrow on fills" type="example">
@@ -215,12 +215,12 @@ const escrow = revenueShareEscrowMap.get(takerAuthority.toString()); // undefine
 </SDKDoc>
 
 <Callout type="info">
-Referral rewards also only accrue (and referral slots are only created) for escrows that have a referrer — an escrow with no referrer set is exempt from the enforcement above even if the taker's `referrerStatus` bit happens to be set.
+Referral rewards also only accrue (and referral slots are only created) for escrows that have a referrer: an escrow with no referrer set is exempt from the enforcement above even if the taker's `referrerStatus` bit happens to be set.
 </Callout>
 
 ### Notes on builder codes for MMs
 
-Market makers filling as `makerInfo` are unaffected by this enforcement — it only gates the **taker's** escrow. Makers do not need to pass their own `RevenueShareEscrow` to fill orders, builder-coded or not.
+Market makers filling as `makerInfo` are unaffected by this enforcement: it only gates the **taker's** escrow. Makers do not need to pass their own `RevenueShareEscrow` to fill orders, builder-coded or not.
 
 ## Collecting accrued fees
 

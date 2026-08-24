@@ -3,7 +3,7 @@
 Velocity is a Solana program (smart contract) that manages user accounts, positions, orders, and markets. Understanding the onchain data model helps you work effectively with the [Velocity SDK](/developers/velocity-sdk/setup) (TypeScript) and understand how state updates propagate.
 
 <Callout type="info">
-Velocity has no Python SDK. A Rust client (`velocity-rs`) exists in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/rust/velocity-rs) but is source-only and not published to crates.io — the interfaces below are TypeScript.
+Velocity has no Python SDK. A Rust client (`velocity-rs`) exists in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/rust/velocity-rs) but is source-only and not published to crates.io: the interfaces below are TypeScript.
 </Callout>
 
 ## Core accounts
@@ -20,7 +20,7 @@ Velocity uses several account types, each serving a specific purpose:
 - **Solvency status** - Bitflag gating bankruptcy/deficit-resolution instructions independently of the withdraw-pause flags
 - **Feature flags** - `exchangeStatus`, `featureBitFlags`, `lpPoolFeatureBitFlags`
 
-*The State account is a singleton — there's only one per deployment. It's read by almost every instruction to apply protocol-level rules.*
+*The State account is a singleton: there's only one per deployment. It's read by almost every instruction to apply protocol-level rules.*
 
 <Callout type="info">
 Velocity uses a **tiered key model** instead of a single admin key: `coldAdmin`, `warmAdmin`, `pauseAdmin`, and a set of narrowly-scoped `hot*` keys (`hotAmmCrank`, `hotLpCache`, `hotFeatureFlag`, `hotFeeWithdraw`, `hotMmOracleCrank`, etc.), each authorizing only the specific instructions it needs rather than one address with full control. There is no `state.admin` field.
@@ -72,20 +72,20 @@ See `StateAccount` in [`packages/sdk/src/types.ts`](https://github.com/velocity-
 ### Market accounts
 
 **PerpMarketAccount**
-*One per perp market — 1304 bytes on-chain*
+*One per perp market, 1304 bytes on-chain*
 
 Manages perpetual futures markets with:
 
 - **AMM state** (`amm`) - Base/quote reserves and liquidity parameters for the constant-product vAMM
 - **Oracle fields** - `oracle`, `oracleSource` live at the **top level** of `PerpMarketAccount` (moved off `amm.*` when the AMM was decoupled)
 - **Market stats** (`marketStats`) - mark/oracle TWAPs, volume, and MM-oracle snapshot, shared across makers
-- **Hedge config** (`hedgeConfig`) - this market's relationship to its hedging [VLP pool](/developers/vault-managers) (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`) — replaces the earlier flat `lp*` LP-share fields
+- **Hedge config** (`hedgeConfig`) - this market's relationship to its hedging [VLP pool](/developers/vault-managers) (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`), replacing the earlier flat `lp*` LP-share fields
 - **Fee ledger** (`feeLedger`) - consolidated fee-split accounting (pending protocol/IF/AMM carveouts) from the fee redesign
 - **Risk parameters** - `marginRatioInitial` / `marginRatioMaintenance` (MARGIN_PRECISION, 1e4), `imfFactor`, `contractTier`
 - **Market status** - `status: MarketStatus` (see the discriminant note below)
 
 <Callout type="warning">
-Velocity has no vAMM LP shares: `PerpPosition.lpShares`, `lastQuoteAssetAmountPerLp`, and `perLpBase` do not exist, and the five flat LP-pool fields on `PerpMarketAccount` (`lpPoolId`, `lpStatus`, `lpPausedOperations`, `lpFeeTransferScalar`, `lpExchangeFeeExcluscionScalar`) were replaced by the single `hedgeConfig` object above. High leverage mode, protected maker mode, and fuel tracking were also removed — there is no `PerpMarket.highLeverageMarginRatioInitial`, `protectedMaker*`, or `fuelBoost*`.
+Velocity has no vAMM LP shares: `PerpPosition.lpShares`, `lastQuoteAssetAmountPerLp`, and `perLpBase` do not exist, and the five flat LP-pool fields on `PerpMarketAccount` (`lpPoolId`, `lpStatus`, `lpPausedOperations`, `lpFeeTransferScalar`, `lpExchangeFeeExcluscionScalar`) were replaced by the single `hedgeConfig` object above. High leverage mode, protected maker mode, and fuel tracking were also removed: there is no `PerpMarket.highLeverageMarginRatioInitial`, `protectedMaker*`, or `fuelBoost*`.
 </Callout>
 
 <details>
@@ -138,7 +138,7 @@ interface PerpMarketAccount {
 }
 ```
 
-The current on-chain size is exactly **1304 bytes**, having grown across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign. Any custom (non-IDL) decoder must be rebuilt against [`sdk/src/idl/velocity.json`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/sdk/src/idl/velocity.json) — see `PerpMarketAccount` in `types.ts` for the full field list.
+The current on-chain size is exactly **1304 bytes**, having grown across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign. Any custom (non-IDL) decoder must be rebuilt against [`sdk/src/idl/velocity.json`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/sdk/src/idl/velocity.json). See `PerpMarketAccount` in `types.ts` for the full field list.
 
 </details>
 
@@ -272,7 +272,7 @@ Maintains lifetime statistics:
 - **Delegate permissions** - `delegatePermissions` (gates `transferDepositByDelegate`)
 
 <Callout type="warning">
-Fuel (points/incentives) is gone entirely — there is no `fuel` field. The gov-token (DRIFT) stake fee discount was also removed: `ifStakedGovTokenAmount` was replaced by padding and no longer affects fee tiers, which are now determined purely by 30-day volume.
+Fuel (points/incentives) is gone entirely: there is no `fuel` field. The gov-token (DRIFT) stake fee discount was also removed: `ifStakedGovTokenAmount` was replaced by padding and no longer affects fee tiers, which are now determined purely by 30-day volume.
 </Callout>
 
 <details>
@@ -317,7 +317,7 @@ Each order contains:
 - **Market identification** - Market index and type (perp/spot)
 - **Order parameters** - Type (limit, market, oracle, trigger), direction, base amount, price
 - **Order IDs** - System order ID (`orderId`) and user-defined order ID (`userOrderId`)
-- **Flags** - `bitFlags` (`OrderBitFlag`) — post-only, reduce-only, and now also `HasBuilder` (order attaches a builder fee){/* HIDDEN:  and `IsIsolatedPosition` (order trades against an isolated-margin position) */}
+- **Flags** - `bitFlags` (`OrderBitFlag`): post-only, reduce-only, and now also `HasBuilder` (order attaches a builder fee){/* HIDDEN:  and `IsIsolatedPosition` (order trades against an isolated-margin position) */}
 - **Auction settings** - JIT auction parameters (`auctionStartPrice`, `auctionEndPrice`, `auctionDuration`)
 
 *When an order fills, it's marked as filled but not immediately removed, allowing order history tracking within the account.*
@@ -401,11 +401,11 @@ When you call an instruction (e.g. `placePerpOrder`), the program:
 6. Updates market state if needed (AMM, funding, etc)
 7. Emits event logs for offchain indexing
 
-The SDK handles account passing automatically — you rarely need to manually construct the account list.
+The SDK handles account passing automatically. You rarely need to manually construct the account list.
 
 ## Remaining accounts pattern
 
-Many instructions use "remaining accounts" to dynamically pass oracle, market, and user accounts. This lets a single instruction handle variable market sets without requiring fixed account slots. The SDK builds this list for you (`VelocityClient` does it internally, or use `VelocityCore.remainingAccounts.getRemainingAccounts()` for the stateless/subscription-free path — see [Reading Data](/developers/ecosystem-builders/reading-data)).
+Many instructions use "remaining accounts" to dynamically pass oracle, market, and user accounts. This lets a single instruction handle variable market sets without requiring fixed account slots. The SDK builds this list for you (`VelocityClient` does it internally, or use `VelocityCore.remainingAccounts.getRemainingAccounts()` for the stateless/subscription-free path. See [Reading Data](/developers/ecosystem-builders/reading-data)).
 
 ## Account sizes can grow
 

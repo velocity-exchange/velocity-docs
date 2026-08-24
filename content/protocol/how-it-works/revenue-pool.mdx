@@ -4,7 +4,7 @@
 This page describes Velocity's current, redesigned fee/revenue flow (the [fee redesign](/protocol/trading/trading-fees#fee-redesign)). It replaces an earlier model where all protocol revenue routed through the Insurance Fund and protocol-owned IF shares. See [Trading Fees](/protocol/trading/trading-fees) for the full per-fill split.
 </Callout>
 
-Each spot market's **revenue pool** (`SpotMarket.revenuePool`, a `Deposit`-type pool balance) has exactly one purpose: staging the **insurance fund's** cut of protocol fees before it settles to the Insurance Fund vault. It is *not* where the protocol's own share of fees lands — that goes straight to a separate, directly-withdrawable `protocol_fee_pool` instead (see [Protocol fee custody and withdrawal](#protocol-fee-custody-and-withdrawal)).
+Each spot market's **revenue pool** (`SpotMarket.revenuePool`, a `Deposit`-type pool balance) has exactly one purpose: staging the **insurance fund's** cut of protocol fees before it settles to the Insurance Fund vault. It is *not* where the protocol's own share of fees lands: that goes straight to a separate, directly-withdrawable `protocol_fee_pool` instead (see [Protocol fee custody and withdrawal](#protocol-fee-custody-and-withdrawal)).
 
 The revenue pool increases from various portions of the protocol:
 
@@ -16,7 +16,7 @@ The revenue pool increases from various portions of the protocol:
 
 and ultimately funds:
 
-- the Insurance Fund vault (100% staker-owned — see below)
+- the Insurance Fund vault (100% staker-owned, see below)
 
 - perpetual market AMMs (conditionally, via revenue withdraws)
 
@@ -24,31 +24,31 @@ and ultimately funds:
 
 Any account can call the permissionless `settle_revenue_to_insurance_fund` instruction to settle a portion of the revenue pool to the Insurance Fund vault:
 
-If the Insurance Fund has users staked, each individual settlement is capped to `min(1/10 of the revenue pool, MAX_APR cap)` (halved at high utilization) —
+If the Insurance Fund has users staked, each individual settlement is capped to `min(1/10 of the revenue pool, MAX_APR cap)` (halved at high utilization):
 
 *   thus an astronomically large inflow into the revenue pool (relative to user insurance staked amounts) results in revenue that trickles into the fund over a longer period rather than immediately
 
     *   this encourages more insurance fund stakers (who require a medium horizon of insurance offering) to join during the high annualised cap inflow
 
 <Callout type="important">
-**The Insurance Fund is 100% staker-owned.** There are no protocol-owned IF shares, no settlement-time protocol/staker split, and no `admin_withdraw_from_insurance_fund_vault` — every dollar that settles into the fund accrues to stakers as share-price appreciation. Insurance Fund Stakers must adhere to the cooldown period for withdrawals (see [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking)).
+**The Insurance Fund is 100% staker-owned.** There are no protocol-owned IF shares, no settlement-time protocol/staker split, and no `admin_withdraw_from_insurance_fund_vault`: every dollar that settles into the fund accrues to stakers as share-price appreciation. Insurance Fund Stakers must adhere to the cooldown period for withdrawals (see [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking)).
 </Callout>
 
 ## Protocol Fee Custody and Withdrawal
 
-The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all — it goes straight to each market's separate, directly-withdrawable `protocol_fee_pool` instead. See [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for how that pool is funded and withdrawn.
+The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all. It goes straight to each market's separate, directly-withdrawable `protocol_fee_pool` instead. See [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for how that pool is funded and withdrawn.
 
 ## Spot Markets
 
-Spot Markets allow for swaps between tokens and interest payments between depositors and borrowers (there is no spot order book — see [Order Types](/protocol/trading/order-types)). These flows are parameterised to split fee collection between the revenue pool (insurance) and the protocol's own withdrawable pool — see [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees) for the `if_fee_factor` / `protocol_fee_factor` / `if_liquidation_fee` / `protocol_liquidation_fee` definitions that drive this split. Lenders receive the remainder after both `if_fee_factor` and `protocol_fee_factor` are taken — set both via `update_spot_market_if_factor`.
+Spot Markets allow for swaps between tokens and interest payments between depositors and borrowers (there is no spot order book, see [Order Types](/protocol/trading/order-types)). These flows are parameterised to split fee collection between the revenue pool (insurance) and the protocol's own withdrawable pool. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees) for the `if_fee_factor` / `protocol_fee_factor` / `if_liquidation_fee` / `protocol_liquidation_fee` definitions that drive this split. Lenders receive the remainder after both `if_fee_factor` and `protocol_fee_factor` are taken: set both via `update_spot_market_if_factor`.
 
 The following instructions interact w/ the insurance fund:
 
-*   `resolve_spot_bankruptcy` (gated by `State.solvencyStatus` — see [Liquidations](/protocol/trading/liquidations#bankruptcy-and-solvency-status))
+*   `resolve_spot_bankruptcy` (gated by `State.solvencyStatus`, see [Liquidations](/protocol/trading/liquidations#bankruptcy-and-solvency-status))
 
 ## Perpetual Markets
 
-Perpetual Markets are bootstrapped by the [Velocity AMM](/protocol/how-it-works/velocity-amm), which — depending on market-making performance — can draw funds from the revenue pool to cover asymmetric funding shortfalls and PnL settlement, subject to the caps below.
+Perpetual Markets are bootstrapped by the [Velocity AMM](/protocol/how-it-works/velocity-amm), which (depending on market-making performance) can draw funds from the revenue pool to cover asymmetric funding shortfalls and PnL settlement, subject to the caps below.
 
 Within the program, its parameterized by the following **in bold**:
 
@@ -70,7 +70,7 @@ Additionally, for direct draws from the insurance fund, it's parameterized by th
 
 Unlike spot markets, perp markets are capped by the max draw from insurance via `quote_max_insurance`.
 
-`quote_settled_insurance` tracks the insurance fund draw amount since inception. Once this threshold is reached or the insurance fund is depleted, the market resorts to its own [AMM Fee Pool](/protocol/how-it-works/fee-pool) as a clawback of last resort. For any remaining losses not covered, the market performs socialized losses in bankruptcy events — see [How Perp Bankruptcy Resolution Works](/protocol/insurance-fund#how-perp-bankruptcy-resolution-works).
+`quote_settled_insurance` tracks the insurance fund draw amount since inception. Once this threshold is reached or the insurance fund is depleted, the market resorts to its own [AMM Fee Pool](/protocol/how-it-works/fee-pool) as a clawback of last resort. For any remaining losses not covered, the market performs socialized losses in bankruptcy events. See [How Perp Bankruptcy Resolution Works](/protocol/insurance-fund#how-perp-bankruptcy-resolution-works).
 
 The following instructions interact w/ the insurance fund:
 
@@ -80,4 +80,4 @@ The following instructions interact w/ the insurance fund:
 
 notes:
 
-`resolve_perp_pnl_deficit` can only be resolved by insurance fund deposits (within the market's constraints), not by social loss with other users. Both instructions are gated by `State.solvencyStatus` — see [Liquidations](/protocol/trading/liquidations#bankruptcy-and-solvency-status).
+`resolve_perp_pnl_deficit` can only be resolved by insurance fund deposits (within the market's constraints), not by social loss with other users. Both instructions are gated by `State.solvencyStatus`. See [Liquidations](/protocol/trading/liquidations#bankruptcy-and-solvency-status).

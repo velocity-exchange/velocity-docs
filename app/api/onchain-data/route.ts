@@ -68,7 +68,7 @@ function stripPoolId(symbol: string): string {
 
 // Liability weights use SPOT_MARKET_WEIGHT_PRECISION (1e4), so a raw weight of
 // 10250 means a ratio of 1.025. LTV is 1/ratio, i.e. 1e4/weight as a fraction
-// or 1e6/weight as a percent. Computing from the raw BN keeps full precision —
+// or 1e6/weight as a percent. Computing from the raw BN keeps full precision:
 // deriving it from the floor()'d display string (e.g. 1.025 shown as "102%")
 // would silently produce a wrong figure for any non-whole-percent weight.
 function ltvPercentFromWeight(liabilityWeight: BN): string {
@@ -142,7 +142,7 @@ function marginCell(ratio: number): string {
 }
 
 function getPerpMarginRow(market: PerpMarketAccount): PerpMarginRow | null {
-  // "prediction" markets are the SDK's deprecated/inert contract-type stub —
+  // "prediction" markets are the SDK's deprecated/inert contract-type stub,
   // never assigned to a live market, but skipped for parity with the previous
   // drift.trade-backed implementation, which excluded them by the same name.
   if (isVariant(market.contractType, "deprecatedPrediction")) return null;
@@ -222,7 +222,7 @@ async function loadOnChainData(rpcUrl: string): Promise<OnChainData> {
       .filter((market): market is PerpMarketAccount => market !== null);
 
     // Round trip (b): oracle accounts referenced by the decoded spot
-    // markets — needed to scale initial asset weight by deposit value.
+    // markets, needed to scale initial asset weight by deposit value.
     const oracleBuffers = await getMultipleAccountBuffersChunked(
       connection,
       spotMarkets.map((market) => market.oracle)
@@ -249,7 +249,7 @@ async function loadOnChainData(rpcUrl: string): Promise<OnChainData> {
           oracleBuffer ?? Buffer.alloc(0)
         ).price;
       } catch {
-        // Oracle account missing/undecodable — fall back to zero, matching
+        // Oracle account missing/undecodable: fall back to zero, matching
         // the previous websocket-subscriber implementation's behavior when
         // no oracle price data was yet available.
         oraclePrice = ZERO;

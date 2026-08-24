@@ -1,6 +1,6 @@
 # Reading Data
 
-This page covers every way to read Velocity state in your app — from the subscribed `VelocityClient`/`User` caches, to the stateless `VelocityCore` decoders, to the Data API REST endpoints.
+This page covers every way to read Velocity state in your app: from the subscribed `VelocityClient`/`User` caches, to the stateless `VelocityCore` decoders, to the Data API REST endpoints.
 
 ## Account data via VelocityClient / User
 
@@ -15,7 +15,7 @@ const otherUser = velocityClient.getUser(1);      // subaccount 1
 const userAccount = user.getUserAccount();        // raw decoded UserAccount
 userAccount.authority;
 userAccount.subAccountId;
-userAccount.name;                                 // number[] — decode with `decodeName()`
+userAccount.name;                                 // number[]: decode with `decodeName()`
 ```
 
 ### Positions
@@ -37,7 +37,7 @@ for (const position of userAccount.perpPositions) {
   position.openAsks;
 }
 
-// Higher-level PnL/health accessors live on `User` — see PnL & Risk
+// Higher-level PnL/health accessors live on `User`, see PnL & Risk
 const unrealizedPnl = user.getUnrealizedPNL(true, 0);   // withFunding=true, market 0
 const health = user.getHealth();                        // 0-100
 ```
@@ -59,7 +59,7 @@ for (const order of userAccount.orders) {
   order.triggerPrice;
   order.baseAssetAmount;
   order.baseAssetAmountFilled;
-  order.oraclePriceOffset;        // BN (i64) — always wrap in `new BN(...)` when constructing
+  order.oraclePriceOffset;        // BN (i64): always wrap in `new BN(...)` when constructing
   order.reduceOnly;
   order.bitFlags;                 // OrderBitFlag bitmask: postOnly / reduceOnly / HasBuilder
 }
@@ -141,14 +141,14 @@ perpMarket.oracleSource;
 
 ### Orderbook (DLOB)
 
-For a live L2/L3 orderbook, subscribe to the DLOB directly with the SDK's `SlotSubscriber` / `OrderSubscriber` / `DLOBSubscriber` classes — see [DLOB](/developers/velocity-sdk/dlob) for the full setup sequence and [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) for the hosted DLOB server's REST/websocket API if you'd rather not run your own DLOB.
+For a live L2/L3 orderbook, subscribe to the DLOB directly with the SDK's `SlotSubscriber` / `OrderSubscriber` / `DLOBSubscriber` classes. See [DLOB](/developers/velocity-sdk/dlob) for the full setup sequence and [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) for the hosted DLOB server's REST/websocket API if you'd rather not run your own DLOB.
 
 ## Data API (REST)
 
 The Data API provides historical and aggregate data via REST endpoints, without running your own indexer. Use it for dashboards, analytics, or any non-SDK integration.
 
 <Callout type="warning">
-**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized. The examples below use `data.velocity.exchange` as a placeholder pattern — confirm the real host before shipping against it. See [Data API](/developers/data-api) and the migration report's open questions.
+**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized. The examples below use `data.velocity.exchange` as a placeholder pattern. Confirm the real host before shipping against it. See [Data API](/developers/data-api) and the migration report's open questions.
 </Callout>
 
 - Base URL (provisional): `https://data.velocity.exchange`
@@ -156,7 +156,7 @@ The Data API provides historical and aggregate data via REST endpoints, without 
 
 ### Market stats
 
-Returns aggregate stats for all markets — volume, open interest, funding rate, oracle price, and market status.
+Returns aggregate stats for all markets: volume, open interest, funding rate, oracle price, and market status.
 
 ```
 GET https://data.velocity.exchange/stats/markets
@@ -192,9 +192,9 @@ GET https://data.velocity.exchange/trades?symbol=SOL-PERP&limit=100
 ```
 
 Query parameters:
-- `symbol` — Market symbol (required)
-- `limit` — Max results (default varies, max typically 1000)
-- `pageIndex` — For pagination
+- `symbol`: Market symbol (required)
+- `limit`: Max results (default varies, max typically 1000)
+- `pageIndex`: For pagination
 
 Note: Amounts are in protocol precision (base: 1e9, quote: 1e6). Divide accordingly for human-readable values. See the [Data API glossary](/developers/data-api/glossary) for the full column reference, and note that spot-fulfillment-related columns no longer apply (spot DLOB trading and external fulfillment are both removed on Velocity).
 
@@ -222,5 +222,5 @@ const trades = await tradesRes.json();
 
 For real-time orderbook and order flow, Velocity uses separate services (both hostnames below are provisional pending final infra naming):
 
-- **DLOB server** (provisional: `https://dlob.velocity.exchange`) — Orderbook snapshots and streaming. See [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
-- **Swift server** (provisional: `https://swift.velocity.exchange`) — Signed message orders for fast execution. See [Swift](/developers/velocity-sdk/swift).
+- **DLOB server** (provisional: `https://dlob.velocity.exchange`): Orderbook snapshots and streaming. See [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
+- **Swift server** (provisional: `https://swift.velocity.exchange`): Signed message orders for fast execution. See [Swift](/developers/velocity-sdk/swift).

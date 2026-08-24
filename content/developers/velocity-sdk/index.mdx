@@ -10,16 +10,16 @@ The TypeScript SDK (`@velocity-exchange/sdk`) is the primary way to build on Vel
 
 The pages in this section build on each other. If you're new, read them in this order:
 
-1. **Get set up** — [Setup](/developers/velocity-sdk/setup) (program addresses, wallet, `VelocityClient`), then [Precision & Types](/developers/velocity-sdk/precision-and-types) (everything is `BN`s at fixed precision — read this before touching funds).
-2. **Move funds** — [Deposits & Withdrawals](/developers/velocity-sdk/deposits-withdrawals) and [Transfers](/developers/velocity-sdk/transfers).
-3. **Trade** — [Users](/developers/velocity-sdk/users), [Markets](/developers/velocity-sdk/markets), [Orders](/developers/velocity-sdk/orders), and [P&L / Risk](/developers/velocity-sdk/pnl-risk).
-4. **Go deeper** — [Events](/developers/velocity-sdk/events), [DLOB](/developers/velocity-sdk/dlob), [Swaps](/developers/velocity-sdk/swaps), [Swift](/developers/velocity-sdk/swift), [Builder Codes](/developers/velocity-sdk/builder-codes), and [SDK Internals](/developers/velocity-sdk/sdk-internals) (including error handling).
+1. **Get set up**: [Setup](/developers/velocity-sdk/setup) (program addresses, wallet, `VelocityClient`), then [Precision & Types](/developers/velocity-sdk/precision-and-types) (everything is `BN`s at fixed precision, read this before touching funds).
+2. **Move funds**: [Deposits & Withdrawals](/developers/velocity-sdk/deposits-withdrawals) and [Transfers](/developers/velocity-sdk/transfers).
+3. **Trade**: [Users](/developers/velocity-sdk/users), [Markets](/developers/velocity-sdk/markets), [Orders](/developers/velocity-sdk/orders), and [P&L / Risk](/developers/velocity-sdk/pnl-risk).
+4. **Go deeper**: [Events](/developers/velocity-sdk/events), [DLOB](/developers/velocity-sdk/dlob), [Swaps](/developers/velocity-sdk/swaps), [Swift](/developers/velocity-sdk/swift), [Builder Codes](/developers/velocity-sdk/builder-codes), and [SDK Internals](/developers/velocity-sdk/sdk-internals) (including error handling).
 
-If you haven't yet, skim the [Concepts](/developers/concepts) section first — the [account model](/developers/concepts/account-model) explains the onchain state the SDK wraps.
+If you haven't yet, skim the [Concepts](/developers/concepts) section first: the [account model](/developers/concepts/account-model) explains the onchain state the SDK wraps.
 
 ## End-to-end example
 
-A minimal flow — connect, deposit USDT, place a market order, and read back the position. Each step is covered in depth on its own page.
+A minimal flow: connect, deposit USDT, place a market order, and read back the position. Each step is covered in depth on its own page.
 
 ```js
 import { Connection } from "@solana/web3.js";
@@ -60,5 +60,5 @@ try {
 ```
 
 <Callout type="info">
-Every SDK call that sends a transaction can fail (insufficient collateral, stale oracle, RPC errors) — wrap calls in `try/catch` and inspect the program error code. See [Error handling in SDK Internals](/developers/velocity-sdk/sdk-internals#error-handling) for how to decode program errors and retry safely.
+Every SDK call that sends a transaction can fail (insufficient collateral, stale oracle, RPC errors): wrap calls in `try/catch` and inspect the program error code. See [Error handling in SDK Internals](/developers/velocity-sdk/sdk-internals#error-handling) for how to decode program errors and retry safely.
 </Callout>

@@ -9,7 +9,7 @@ Velocity calculates your account's risk using a **health** metric (0-100) derive
 **Free collateral** is the amount of collateral not currently backing positions, it's what you can withdraw or use to open new positions. Margin requirements increase with position size and vary by market. Leverage is calculated as notional position value divided by total collateral. These metrics update in real-time as prices and positions change.
 
 <Callout type="info">
-**The $100 initial-margin uPnL cap.** When total collateral or free collateral is computed under `'Initial'` margin (i.e. for opening new positions, not for liquidation checks), each position's *weighted, positive* unrealized PnL is capped at **$100** (`MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`, `QUOTE_PRECISION`) before it can count toward buying power. This guards against a single dangerously-configured or manipulated market inflating a user's initial margin capacity. The cap is per-position, applies only to gains (losses are never capped), and only kicks in when you request the asset-weighted PnL (see `getUnrealizedPNL` below) — it has no effect on `'Maintenance'`-margin health/liquidation math, and it doesn't cap raw unweighted PnL.
+**The $100 initial-margin uPnL cap.** When total collateral or free collateral is computed under `'Initial'` margin (i.e. for opening new positions, not for liquidation checks), each position's *weighted, positive* unrealized PnL is capped at **$100** (`MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`, `QUOTE_PRECISION`) before it can count toward buying power. This guards against a single dangerously-configured or manipulated market inflating a user's initial margin capacity. The cap is per-position, applies only to gains (losses are never capped), and only kicks in when you request the asset-weighted PnL (see `getUnrealizedPNL` below): it has no effect on `'Maintenance'`-margin health/liquidation math, and it doesn't cap raw unweighted PnL.
 </Callout>
 
 ## SDK Usage
@@ -85,10 +85,10 @@ console.log(lev.toNumber() / TEN_THOUSAND.toNumber()); // e.g. 2.5 (2.5x leverag
   </TypeScript>
 </SDKDoc>
 
-{/* HIDDEN: isolated positions — temporarily hidden, reinstate later.
+{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
 ### Isolated positions
 
-A perp position opened in **isolated margin mode** is backed only by its own dedicated quote deposit rather than the account's shared cross-margin pool — a loss on an isolated position cannot draw down collateral backing your other positions, and vice versa. Every risk helper above accepts an optional trailing `perpMarketIndex` to scope its result to a single market's isolated position bucket instead of the cross-margin account:
+A perp position opened in **isolated margin mode** is backed only by its own dedicated quote deposit rather than the account's shared cross-margin pool: a loss on an isolated position cannot draw down collateral backing your other positions, and vice versa. Every risk helper above accepts an optional trailing `perpMarketIndex` to scope its result to a single market's isolated position bucket instead of the cross-margin account:
 
 <SDKDoc>
   <TypeScript name="Isolated position risk" type="example">
@@ -106,7 +106,7 @@ const isolatedLeverage = user.getLeverage(true, isolatedMarketIndex);
   </TypeScript>
 </SDKDoc>
 
-`getFreeCollateral` and `getLeverage` return `ZERO` for a market with no open isolated position; `getMarginRequirement` does the same. `getTotalCollateral(marginCategory, strict, includeOpenOrders, liquidationBuffer, perpMarketIndex)` is the one exception — it **throws** if no isolated margin calculation exists for that market, so guard the call if the position may not exist.
+`getFreeCollateral` and `getLeverage` return `ZERO` for a market with no open isolated position; `getMarginRequirement` does the same. `getTotalCollateral(marginCategory, strict, includeOpenOrders, liquidationBuffer, perpMarketIndex)` is the one exception: it **throws** if no isolated margin calculation exists for that market, so guard the call if the position may not exist.
 */}
 
 ### Unrealized PnL

@@ -8,7 +8,7 @@ Each deposit in a spot market earns **interest** from borrowers, while borrows a
 
 Withdrawals require sufficient free collateral, you can't withdraw funds that are backing open positions or would put your account below minimum margin requirements. Beyond margin, a withdrawal can also fail if the exchange or the market has withdrawals paused, or if the spot market's daily withdraw circuit breaker has been tripped (a market-level guard capping how far deposits can drop below their 24-hour TWAP, 25% by default). Handle these as separate error cases rather than assuming free collateral alone determines success. The SDK handles token account derivation and precision conversion automatically.
 
-Spot markets on Velocity are collateral/borrow-lend only — they no longer support order-book trading (see [Orders](/developers/velocity-sdk/orders)). Deposits, withdrawals, and internal transfers are unaffected by that change.
+Spot markets on Velocity are collateral/borrow-lend only: they no longer support order-book trading (see [Orders](/developers/velocity-sdk/orders)). Deposits, withdrawals, and internal transfers are unaffected by that change.
 
 ## SDK Usage
 

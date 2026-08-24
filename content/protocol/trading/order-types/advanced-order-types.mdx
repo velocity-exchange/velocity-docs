@@ -24,7 +24,7 @@ By default, the trigger reference price is the market's **oracle price**. This i
 <Callout type="info">
 Velocity also has a governance-gated **median trigger price** mode that is **currently disabled** (the `MedianTriggerPrice` feature flag is off by default, and is not set on mainnet). When enabled, the trigger reference price is instead the **median** of three values:
 
-- **Oracle Price Adjustment** — `Oracle Price + (Mark Price 5min TWAP − Oracle Price 5min TWAP)`
+- **Oracle Price Adjustment**: `Oracle Price + (Mark Price 5min TWAP − Oracle Price 5min TWAP)`
 - **Last Trade Price**, the last fill price, but only while it is fresh (recent enough by the protocol's staleness bound). If there is no fill yet, or the last fill has gone stale, the oracle price stands in for this leg instead.
 - **Oracle Price with Funding Adjustment**, `Oracle Price + Funding Basis`, where the funding basis is derived from the last funding rate (normalized by its oracle TWAP, annualized, and adjusted by the protocol's funding-rate offset), then decayed linearly to zero over the course of one funding period.
 
@@ -60,8 +60,8 @@ These flags can be combined with the order types above.
 | Reduce‑Only | Enforces that the order will never increase or reverse the current position (go from long to short, or short to long).
 | Post‑Only | Enforces that the order is a maker order that can provide liquidity to the pool and earns a maker rebate (currently 0.25 bps) instead of paying a taker fee.
 | Immediate‑or‑Cancel (IOC) | An order that is placed and potentially partially filled. The remainder that is not filled immediately is then cancelled.
-| Has Builder | Set when the order carries a builder code (`builderIdx` / `builderFeeTenthBps`) — see [Trading Fees](/protocol/trading/trading-fees).
+| Has Builder | Set when the order carries a builder code (`builderIdx` / `builderFeeTenthBps`). See [Trading Fees](/protocol/trading/trading-fees).
 
-{/* HIDDEN: isolated positions — reinstate this row into the flags table above:
+{/* HIDDEN: isolated positions, reinstate this row into the flags table above:
 | Is Isolated Position | Set on orders that risk-increase an [isolated perp position](/protocol/trading/margin) rather than the account's cross-margin position.
 */}

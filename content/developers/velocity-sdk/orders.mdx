@@ -31,7 +31,7 @@ When placing limit orders, you can control maker/taker behavior with `postOnly`:
 
 ### `oraclePriceOffset` is a `BN`
 
-`OrderParams.oraclePriceOffset` (and `Order.oraclePriceOffset` on filled orders) is a signed **`BN`** in `PRICE_PRECISION` (1e6) units — it was widened from `number` to `BN` (i64 on-chain). Always wrap raw numbers with `new BN(...)`; passing a plain JS number will fail type-checking (and, if bypassed, will not round-trip correctly through Borsh encoding).
+`OrderParams.oraclePriceOffset` (and `Order.oraclePriceOffset` on filled orders) is a signed **`BN`** in `PRICE_PRECISION` (1e6) units: it was widened from `number` to `BN` (i64 on-chain). Always wrap raw numbers with `new BN(...)`; passing a plain JS number will fail type-checking (and, if bypassed, will not round-trip correctly through Borsh encoding).
 
 ```js
 import { BN, PRICE_PRECISION } from "@velocity-exchange/sdk";
@@ -262,7 +262,7 @@ await velocityClient.placePerpOrder(orderParams);
   </TypeScript>
 </SDKDoc>
 
-If the taker is referred (their `UserStats.referrerStatus` has the `BuilderReferral` bit) or the order itself carries a builder code, fillers must attach the taker's `RevenueShareEscrow` when filling — see `getFillPerpOrderIx` below — or the fill is rejected with `UnableToLoadRevenueShareAccount`.
+If the taker is referred (their `UserStats.referrerStatus` has the `BuilderReferral` bit) or the order itself carries a builder code, fillers must attach the taker's `RevenueShareEscrow` when filling (see `getFillPerpOrderIx` below) or the fill is rejected with `UnableToLoadRevenueShareAccount`.
 
 ### Cancel Orders
 

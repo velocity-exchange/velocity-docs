@@ -1,9 +1,9 @@
 # P&L Pool
 
-The **P&L Pool** is each perpetual market's pool of settled funds available for withdrawal — negative unrealised P&L that gets settled into it increases the amount available; positive P&L settled out of it decreases that amount. See [Accounting & Settlement](/protocol/trading/profit-loss/accounting-settlement) for how the pool is funded and prioritised against fee sweeps, and [Introduction to Profit & Loss](/protocol/trading/profit-loss) for how calling `settlePNL` relates to realising and claiming P&L.
+The **P&L Pool** is each perpetual market's pool of settled funds available for withdrawal: negative unrealised P&L that gets settled into it increases the amount available; positive P&L settled out of it decreases that amount. See [Accounting & Settlement](/protocol/trading/profit-loss/accounting-settlement) for how the pool is funded and prioritised against fee sweeps, and [Introduction to Profit & Loss](/protocol/trading/profit-loss) for how calling `settlePNL` relates to realising and claiming P&L.
 
 <Callout type="important">
-Calling `settlePNL` does not affect open positions — it only settles the funds available in the P&L Pool for withdrawal. It's important to recognise the difference between **settling P&L** and **realising P&L** — see [Introduction to Profit & Loss](/protocol/trading/profit-loss).
+Calling `settlePNL` does not affect open positions. It only settles the funds available in the P&L Pool for withdrawal. It's important to recognise the difference between **settling P&L** and **realising P&L**. See [Introduction to Profit & Loss](/protocol/trading/profit-loss).
 </Callout>
 
 Any account can call `settlePNL` permissionlessly to settle a position's negative unrealised P&L into the P&L Pool, with one exception: a third party (anyone who is not the position owner or their delegate) cannot settle another user's negative P&L while that market's oracle is margin-invalid (`StaleForMargin` or `InsufficientDataPoints`). Only the owner or their delegate can settle in that state. Settling *positive* P&L out to the user is more restricted: it only succeeds if the P&L Pool has sufficient excess to cover it, or if the caller is the position owner or their delegate.

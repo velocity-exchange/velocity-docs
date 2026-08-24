@@ -19,7 +19,7 @@ A user's current position on Velocity is the cumulative sum of all their filled 
 ### Types of P&L
 
 - `Unrealised P&L (uP&L)`: Potential profit or loss on open positions based on current market price vs. your entry price. It fluctuates with the market.
-- `Settled P&L`: The portion of your realised profit or loss that has been transferred out of the perpetual market and applied to your USDT balance — this can happen independently of closing the position.
+- `Settled P&L`: The portion of your realised profit or loss that has been transferred out of the perpetual market and applied to your USDT balance. This can happen independently of closing the position.
 - `Claimable / Unsettled P&L`: Claimable P&L represents the portion of unsettled P&L that is available to be claimed at this moment. It is possible to have unsettled P&L that is not claimable due to insufficient funds in the P&L Pool, invalid oracle, or other reasons.
 
 <Callout type="info">
@@ -34,7 +34,7 @@ You open a position (e.g., buying BTC-PERP) creating **unsettled P&L** of $0 (no
 As the price moves, the difference between the current oracle price and your cost basis creates **claimable / unsettled P&L**. This is the potential profit or loss on your open position.
 
 ### Closing the position: realising P&L
-When you close (or reduce) the position, the closing price is used to calculate your **realised P&L**. This is the actual profit or loss you lock in, based on the difference between the closing price and your cost basis. *Note:* realising P&L does **not** settle it automatically — it only converts unrealised P&L into realised P&L that is still sitting unsettled in the perpetual market.
+When you close (or reduce) the position, the closing price is used to calculate your **realised P&L**. This is the actual profit or loss you lock in, based on the difference between the closing price and your cost basis. *Note:* realising P&L does **not** settle it automatically. It only converts unrealised P&L into realised P&L that is still sitting unsettled in the perpetual market.
 
 ### Settling P&L: a separate action
 Realised P&L only becomes **settled P&L** once a `settlePnl` action is submitted, moving it out of the perpetual market. This can be done by you, your delegate, or in some cases a third party.
@@ -64,7 +64,7 @@ The key difference lies in the availability for withdrawal:
 
 ### How `settlePNL` Affects Your Position
 
-Calling `settlePNL` settles a position's negative unrealised P&L and sends it to the [P&L Pool](/protocol/how-it-works/profit-loss-pool) — but **the position itself is unaffected**. Instead, the position's Cost Basis is adjusted so the position stays unchanged even though a portion of its unrealised loss has been realised and settled.
+Calling `settlePNL` settles a position's negative unrealised P&L and sends it to the [P&L Pool](/protocol/how-it-works/profit-loss-pool), but **the position itself is unaffected**. Instead, the position's Cost Basis is adjusted so the position stays unchanged even though a portion of its unrealised loss has been realised and settled.
 
 ![Velocity Perpetuals P&L Settlement Mechanism](/assets/8bAYsBqUpelsCx7xgTblP_drift-pandl-settlement-mechanism-banner-v2-1.png)
 

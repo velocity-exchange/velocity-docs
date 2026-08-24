@@ -11,7 +11,7 @@ If a user holds only non-USDT assets, a USDT borrow may be triggered upon settle
 Velocity's tiered fees for futures markets are based **only** on an on-chain calculation of **30-Day Volume**. There is no governance-token staking discount; any such discount was removed as part of the [fee redesign](#fee-redesign).
 
 <Callout type="important">
-Velocity has no spot order book, so there's no maker/taker fee on spot trades. Direct token swaps are not charged a trading fee, but swaps routed through the VLP hedge LP pool do carry a dynamic fee — see [Spot Market Fees](#spot-market-fees) below.
+Velocity has no spot order book, so there's no maker/taker fee on spot trades. Direct token swaps are not charged a trading fee, but swaps routed through the VLP hedge LP pool do carry a dynamic fee. See [Spot Market Fees](#spot-market-fees) below.
 </Callout>
 
 ## Perp Market Fees
@@ -57,7 +57,7 @@ The volume window is evaluated live: crossing a higher-tier threshold applies to
 
 Two admin levers sit on top of the tier table: a global promo tier floor and a per-market taker-fee add-on. Both are described in [Fee Adjustments](#fee-adjustments) below.
 
-Every tier also carries the same **referrer reward** (15% of the taker fee, paid to the referrer) and **referee discount** (5% off the taker fee, for accounts that signed up via a referral) — see [Referee Discount / Referrer Reward](#referee-discount--referrer-reward) below.
+Every tier also carries the same **referrer reward** (15% of the taker fee, paid to the referrer) and **referee discount** (5% off the taker fee, for accounts that signed up via a referral). See [Referee Discount / Referrer Reward](#referee-discount--referrer-reward) below.
 
 ## Builder Fees
 
@@ -96,7 +96,7 @@ remainder ── × amm_fee_numerator%      → AMM fee provision (spendable AMM
 builder_fee = notional × fee_tenth_bps / 100_000   ADDED on top of taker_fee; pure pass-through
 ```
 
-The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to 0%/0% — the protocol receives 100% of the trade-fee remainder as the residual claimant — and is admin-configurable up to `ammFeeNumerator + ifFeeNumerator ≤ 100%`.
+The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to 0%/0% (the protocol receives 100% of the trade-fee remainder as the residual claimant) and is admin-configurable up to `ammFeeNumerator + ifFeeNumerator ≤ 100%`.
 
 #### vAMM maker rebate
 
@@ -113,13 +113,13 @@ If you reconcile `OrderActionRecord` fee legs or estimate the protocol and insur
 #### Key differences from the pre-redesign model
 
 - **Protocol fees are directly withdrawable, not part of the backstop.** They land in a per-market `protocol_fee_pool` and exit via `withdraw_protocol_fees_perp` / `withdraw_protocol_fees_spot`, recipient-locked to `State.protocolFeeRecipientPerp` / `protocolFeeRecipientSpot` (each settable only by `cold_admin`) and gated by a dedicated `FeeWithdraw` hot key. A withdrawal is always capped to the pool's own balance and can never dip into user deposits.
-- **The AMM's books contain only its own money.** Its fee provision is real, spendable liquidity — but the market tracks the cumulative amount received (`feeLedger.ammProtocolFeesReceived`) so a perp bankruptcy can claw back what's still recoverable as the backstop of last resort. The AMM's own trading/spread capital beyond that provision is never touched.
-- **The Insurance Fund is 100% staker-owned.** There are no protocol IF shares — every settled dollar accrues to stakers as share-price appreciation (see [Liquidations](/protocol/trading/liquidations) and [Insurance Fund](/protocol/insurance-fund)).
-- **Liquidations carry an explicit protocol cut** (`protocol_liquidation_fee`), split IF-first against the existing insurance-fee budget so it can never push a liquidation into bankruptcy — see [Liquidations](/protocol/trading/liquidations#liquidation-fees).
+- **The AMM's books contain only its own money.** Its fee provision is real, spendable liquidity, but the market tracks the cumulative amount received (`feeLedger.ammProtocolFeesReceived`) so a perp bankruptcy can claw back what's still recoverable as the backstop of last resort. The AMM's own trading/spread capital beyond that provision is never touched.
+- **The Insurance Fund is 100% staker-owned.** There are no protocol IF shares: every settled dollar accrues to stakers as share-price appreciation (see [Liquidations](/protocol/trading/liquidations) and [Insurance Fund](/protocol/insurance-fund)).
+- **Liquidations carry an explicit protocol cut** (`protocol_liquidation_fee`), split IF-first against the existing insurance-fee budget so it can never push a liquidation into bankruptcy. See [Liquidations](/protocol/trading/liquidations#liquidation-fees).
 
 ## Spot Market Fees
 
-There's no spot order book (per [Order Types](/protocol/trading/order-types)), so there's no maker/taker fee to charge on spot trades in the first place. Direct swaps via `begin_swap` / `end_swap` are charged **no trading fee** — the swap fee on that path is hardcoded to zero. Swaps routed through the VLP hedge LP pool are different: the LP pool charges dynamic in/out swap fees (`handle_view_lp_pool_swap_fees`), which vary with the pool's constituent balances relative to target weights rather than being zero. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply — see [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
+There's no spot order book (per [Order Types](/protocol/trading/order-types)), so there's no maker/taker fee to charge on spot trades in the first place. Direct swaps via `begin_swap` / `end_swap` are charged **no trading fee**. The swap fee on that path is hardcoded to zero. Swaps routed through the VLP hedge LP pool are different: the LP pool charges dynamic in/out swap fees (`handle_view_lp_pool_swap_fees`), which vary with the pool's constituent balances relative to target weights rather than being zero. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
 
 ### Referee Discount / Referrer Reward
 

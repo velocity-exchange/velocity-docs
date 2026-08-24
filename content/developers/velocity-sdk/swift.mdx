@@ -4,7 +4,7 @@ Swift is an extension to Velocity that lets users place orders without submittin
 
 This enables faster order placement, lower latency, and a gas-free experience for takers, while market makers still settle on-chain.
 
-This page covers the taker side — signing and submitting Swift orders. For the maker side (receiving and filling signed orders over WebSocket), see the [SWIFT API guide](/developers/market-makers/swift-api).
+This page covers the taker side: signing and submitting Swift orders. For the maker side (receiving and filling signed orders over WebSocket), see the [SWIFT API guide](/developers/market-makers/swift-api).
 
 <Callout type="info">
 The SDK's own defaults are `wss://swift.velocity.exchange/ws` on mainnet and `wss://swift.master.velocity.exchange/ws` on devnet. The HTTP submit endpoint below uses the same mainnet host.
@@ -76,7 +76,7 @@ const { orderParams: message, signature } =
 </SDKDoc>
 
 <Callout type="info">
-[Builder Codes](/developers/velocity-sdk/builder-codes) attach the same way here: add `builderIdx` / `builderFeeTenthBps` to `orderMessage` alongside `signedMsgOrderParams`. Builder codes are not exclusive to Swift — the same fields also work on regular on-chain order placement.
+[Builder Codes](/developers/velocity-sdk/builder-codes) attach the same way here: add `builderIdx` / `builderFeeTenthBps` to `orderMessage` alongside `signedMsgOrderParams`. Builder codes are not exclusive to Swift: the same fields also work on regular on-chain order placement.
 </Callout>
 
 ### Step 3: Submit to the Swift API
@@ -169,7 +169,7 @@ const ixs = await velocityClient.getPlaceSignedMsgTakerPerpOrderIxs(
   </TypeScript>
 </SDKDoc>
 
-Build instructions to place a maker order and simultaneously fill a pending Swift taker order (atomic maker fill). If the taker's order carries a builder code or the taker is referred with an escrow, pass their decoded `RevenueShareEscrow` as the trailing `takerEscrow` argument — see [Fill-time enforcement](/developers/velocity-sdk/builder-codes#fill-time-enforcement):
+Build instructions to place a maker order and simultaneously fill a pending Swift taker order (atomic maker fill). If the taker's order carries a builder code or the taker is referred with an escrow, pass their decoded `RevenueShareEscrow` as the trailing `takerEscrow` argument. See [Fill-time enforcement](/developers/velocity-sdk/builder-codes#fill-time-enforcement):
 
 <SDKDoc>
   <TypeScript name="getPlaceAndMakeSignedMsgPerpOrderIxs" type="method" owner="VelocityClient">

@@ -34,7 +34,7 @@ bun run cli -- init-vault \
   --profit-share 20
 ```
 
-`--management-fee`/`--profit-share` take a plain percentage number (`2` = 2%, not basis points) — the CLI scales it against the on-chain `PERCENTAGE_PRECISION` (1e6 = 100%), and `initialize_vault` rejects any value ≥ 100%.
+`--management-fee`/`--profit-share` take a plain percentage number (`2` = 2%, not basis points): the CLI scales it against the on-chain `PERCENTAGE_PRECISION` (1e6 = 100%), and `initialize_vault` rejects any value ≥ 100%.
 
 The CLI reads `-u/--url` (or `RPC_URL`) and `-k/--keypair` (or `KEYPAIR_PATH`) for the RPC endpoint and signer; `--env` selects `devnet` or `mainnet-beta` (default `mainnet-beta`).
 

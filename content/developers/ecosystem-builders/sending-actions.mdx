@@ -1,6 +1,6 @@
 # Sending Actions
 
-This page covers every way to send transactions in your app — from high-level `VelocityClient` methods, to the stateless `VelocityCore` instruction builders for full control without a subscribed client.
+This page covers every way to send transactions in your app: from high-level `VelocityClient` methods, to the stateless `VelocityCore` instruction builders for full control without a subscribed client.
 
 ## VelocityClient methods
 
@@ -62,11 +62,11 @@ await velocityClient.withdraw(
 
 ## `VelocityCore`: stateless instruction builders
 
-For advanced use cases — indexers, keeper bots without a full subscribed client, or any context where you only need to construct instructions — `VelocityCore` provides pure instruction builders that take explicit account pubkeys instead of reading from a subscription cache.
+For advanced use cases (indexers, keeper bots without a full subscribed client, or any context where you only need to construct instructions), `VelocityCore` provides pure instruction builders that take explicit account pubkeys instead of reading from a subscription cache.
 
 | Approach | Use when |
 |---|---|
-| `VelocityClient` methods (above) | You already have a subscribed client — simplest path for most apps |
+| `VelocityClient` methods (above) | You already have a subscribed client: simplest path for most apps |
 | `VelocityCore.build*Instruction` (below) | You don't want a full subscription, need multiple instructions in one transaction, or are building a lightweight/serverless integration |
 
 <Steps>
@@ -112,7 +112,7 @@ const remainingAccounts = VelocityCore.remainingAccounts.getRemainingAccounts(
 ```
 
 <Callout type="info">
-`getRemainingAccounts` takes two arguments — a `RemainingAccountsContext` of resolver hooks/caches you own, and a `RemainingAccountParams` describing the markets/positions for this call — not a single combined object. It derives the same oracle/market account set `VelocityClient`'s internal builder does, without needing a live subscription.
+`getRemainingAccounts` takes two arguments (a `RemainingAccountsContext` of resolver hooks/caches you own, and a `RemainingAccountParams` describing the markets/positions for this call), not a single combined object. It derives the same oracle/market account set `VelocityClient`'s internal builder does, without needing a live subscription.
 </Callout>
 
 ### Build a deposit instruction
@@ -170,7 +170,7 @@ const placeOrderIx = await VelocityCore.buildPlacePerpOrderInstruction({
 
 ### Compose and send the transaction
 
-`VelocityCore` builders return raw `TransactionInstruction`s — bring your own transaction sender (Anchor's `sendAndConfirm`, `@solana/web3.js` directly, or a `VelocityClient.txSender` you construct separately):
+`VelocityCore` builders return raw `TransactionInstruction`s: bring your own transaction sender (Anchor's `sendAndConfirm`, `@solana/web3.js` directly, or a `VelocityClient.txSender` you construct separately):
 
 ```js
 import { ComputeBudgetProgram, VersionedTransaction, TransactionMessage } from "@solana/web3.js";
@@ -253,8 +253,8 @@ console.log("Cancel + place transaction:", signature);
 
 If you're batching or sending frequent transactions, consider:
 
-- **Priority fees** — Set `ComputeUnitPrice` to land transactions faster during congestion
-- **Compute budget** — Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
-- **Address Lookup Tables (ALTs)** — Reduce transaction size when referencing many accounts
-- **Retry logic** — Transactions can be dropped; implement retries with backoff for production systems
-- **Bulk order margin enforcement**: `placeOrders`/`placeScaleOrders` now run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than a single end-of-batch check — a batch that previously succeeded may now revert with `InsufficientCollateral`
+- **Priority fees**: Set `ComputeUnitPrice` to land transactions faster during congestion
+- **Compute budget**: Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
+- **Address Lookup Tables (ALTs)**: Reduce transaction size when referencing many accounts
+- **Retry logic**: Transactions can be dropped; implement retries with backoff for production systems
+- **Bulk order margin enforcement**: `placeOrders`/`placeScaleOrders` now run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than a single end-of-batch check, a batch that previously succeeded may now revert with `InsufficientCollateral`

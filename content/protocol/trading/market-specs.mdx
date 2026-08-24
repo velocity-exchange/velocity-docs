@@ -21,7 +21,7 @@ Fundamentally, a market in Contract Tier B is in a 'safer' tranche vs Contract T
 
 Each market's current Contract Tier assignment can change over time as risk parameters are reviewed; the authoritative value for a given market is shown in-app and on-chain. As an example, at the time of writing, SOL-PERP, BTC-PERP, and ETH-PERP are Contract Tier B, and HYPE-PERP is Contract Tier C.
 
-For the full per-tier numeric limits — insurance caps, oracle confidence bands, TWAP-sanitization bounds, and PnL-settlement divergence thresholds — see the [Contract Tiers](/protocol/risk-and-safety/contract-tiers) reference.
+For the full per-tier numeric limits (insurance caps, oracle confidence bands, TWAP-sanitization bounds, and PnL-settlement divergence thresholds), see the [Contract Tiers](/protocol/risk-and-safety/contract-tiers) reference.
 
 | Tier                   | Description                                                                                                             |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -67,4 +67,4 @@ A maximum amount of tokens that can be added to collateral vault.
 A margin fraction factor. Used to increase liability weight and decrease asset weight for large positions
 
 ### Order Step/Tick Size
-Spot markets retain `order_step_size` and `order_tick_size` fields, but **spot order placement is disabled on Velocity** — there is no spot order book. These fields are therefore unused for spot; deposits, borrows, and swaps are not subject to them. (On **perpetual** markets, order sizes must be a multiple of the step size and prices a multiple of the tick size.)
+Spot markets retain `order_step_size` and `order_tick_size` fields, but **spot order placement is disabled on Velocity**. There is no spot order book. These fields are therefore unused for spot; deposits, borrows, and swaps are not subject to them. (On **perpetual** markets, order sizes must be a multiple of the step size and prices a multiple of the tick size.)

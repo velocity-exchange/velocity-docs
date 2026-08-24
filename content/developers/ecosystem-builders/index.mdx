@@ -32,7 +32,7 @@ See [SDK Setup](/developers/velocity-sdk/setup) for the full `VelocityClientConf
 
 ### Read account and market caches
 
-Once subscribed, `VelocityClient` exposes account and market data synchronously from its subscriber caches — no additional RPC round-trip per read:
+Once subscribed, `VelocityClient` exposes account and market data synchronously from its subscriber caches: no additional RPC round-trip per read:
 
 ```ts
 const state = velocityClient.getStateAccount();
@@ -52,13 +52,13 @@ See [Reading Data](/developers/ecosystem-builders/reading-data) for the full set
 
 ## Next steps
 
-- [Reading data](/developers/ecosystem-builders/reading-data) — Account data (positions, orders, balances, collateral), market data (oracle/mark prices, orderbook, candles), and Data API REST endpoints
-- [Sending actions](/developers/ecosystem-builders/sending-actions) — `VelocityClient` methods (orders, cancel, settle PnL, deposit, withdraw) and stateless `VelocityCore` instruction builders
-- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) — L2/L3 REST snapshots and real-time DLOB websocket streaming
-- [SDK Setup](/developers/velocity-sdk/setup) — Full `VelocityClient` initialization reference
+- [Reading data](/developers/ecosystem-builders/reading-data): Account data (positions, orders, balances, collateral), market data (oracle/mark prices, orderbook, candles), and Data API REST endpoints
+- [Sending actions](/developers/ecosystem-builders/sending-actions): `VelocityClient` methods (orders, cancel, settle PnL, deposit, withdraw) and stateless `VelocityCore` instruction builders
+- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws): L2/L3 REST snapshots and real-time DLOB websocket streaming
+- [SDK Setup](/developers/velocity-sdk/setup): Full `VelocityClient` initialization reference
 
 ## Staying up to date
 
-- [GitHub: velocity-v1](https://github.com/velocity-exchange/velocity-v1) — the monorepo containing the program, SDK, vaults, and keeper bots; watch releases for SDK breaking changes
-- [Migration guide](/developers/migrate-from-drift) — full list of behavioral and SDK differences to check when porting an existing integration
+- [GitHub: velocity-v1](https://github.com/velocity-exchange/velocity-v1): the monorepo containing the program, SDK, vaults, and keeper bots; watch releases for SDK breaking changes
+- [Migration guide](/developers/migrate-from-drift): full list of behavioral and SDK differences to check when porting an existing integration
 - [Data API playground](/developers/data-api)

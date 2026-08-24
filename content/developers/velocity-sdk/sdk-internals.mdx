@@ -170,7 +170,7 @@ const ix = await velocityClient.getPlacePerpOrderIx(orderParams);
 
 // 2. Build transaction
 // getVersionedTransaction(ixs, lookupTableAccounts, additionalSigners?, opts?, blockhash?)
-// — the fee payer/signer is `velocityClient`'s own wallet, not a positional arg.
+// the fee payer/signer is `velocityClient`'s own wallet, not a positional arg.
 const tx = await velocityClient.txSender.getVersionedTransaction(
   [ix],
   [], // lookup tables

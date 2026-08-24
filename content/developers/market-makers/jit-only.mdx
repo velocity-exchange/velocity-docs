@@ -266,7 +266,7 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey,
   </TypeScript>
 </SDKDoc>
 
-`getMMOracleDataForPerpMarket` is the recommended oracle getter for market makers: it returns the dedicated MM oracle price when it's active, fresh, and close enough to the exchange oracle, and transparently falls back to the exchange oracle otherwise. It has **no `isValid` field** — that's not part of `MMOraclePriceData`. It does carry `isMMOracleActive` (whether the market has an MM oracle configured at all — not a full validity signal) and `confidence`. For an actual go/no-go validity check, use `isOracleValid(market, oracleData, oracleGuardRails, slot)` from `math/oracles`, which is the same AMM-fill-oriented gate the program itself uses for confidence, staleness, and volatility.
+`getMMOracleDataForPerpMarket` is the recommended oracle getter for market makers: it returns the dedicated MM oracle price when it's active, fresh, and close enough to the exchange oracle, and transparently falls back to the exchange oracle otherwise. It has **no `isValid` field**. That's not part of `MMOraclePriceData`. It does carry `isMMOracleActive` (whether the market has an MM oracle configured at all, not a full validity signal) and `confidence`. For an actual go/no-go validity check, use `isOracleValid(market, oracleData, oracleGuardRails, slot)` from `math/oracles`, which is the same AMM-fill-oriented gate the program itself uses for confidence, staleness, and volatility.
 
 Key fields:
 - `oracle.price`: current oracle price as a `BN` in `PRICE_PRECISION` (1e6) units
@@ -307,7 +307,7 @@ const minSpread = Math.max(0.05, confidence * 2);
 
 ## Using JIT Proxy (JitterSniper / JitterShotgun)
 
-Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) library which handles auction timing, transaction building, and retry logic. **Not yet published to npm** — build it from `packages/jit-proxy` in the monorepo until it is.
+Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) library which handles auction timing, transaction building, and retry logic. **Not yet published to npm**. Build it from `packages/jit-proxy` in the monorepo until it is.
 
 ```typescript
 import { JitterSniper, PriceType } from "@velocity-exchange/jit-proxy";

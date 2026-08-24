@@ -68,7 +68,7 @@ Pass the live `slot` to `getMMOracleDataForPerpMarket`: omitting it falls back t
 
 ### Filter for fillable nodes
 
-Not every node returned is profitable to attempt. Skip orders below the market's minimum step size against the AMM — submitting a fill for these would waste transaction fees and fail on-chain.
+Not every node returned is profitable to attempt. Skip orders below the market's minimum step size against the AMM: submitting a fill for these would waste transaction fees and fail on-chain.
 
 ```typescript copy
 if (
@@ -89,7 +89,7 @@ if (
 
 ### Call `getFillPerpOrderIx` on `VelocityClient`
 
-Submit the fill transaction. On success, the keeper earns a small reward. Expect occasional failures from competing bots filling the same order — handle errors gracefully and continue to the next node.
+Submit the fill transaction. On success, the keeper earns a small reward. Expect occasional failures from competing bots filling the same order: handle errors gracefully and continue to the next node.
 
 ```typescript copy
 const user = this.userMap.get(nodeToFill.node.userAccount.toString());

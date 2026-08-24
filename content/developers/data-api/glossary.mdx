@@ -1,7 +1,7 @@
 # Data API Glossary
 
 <Callout type="warning">
-**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized — see [Data API](/developers/data-api). Some columns below describe features Velocity removed (noted inline) and are kept here only for reference until Velocity's own Data API schema is confirmed.
+**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized. See [Data API](/developers/data-api). Some columns below describe features Velocity removed (noted inline) and are kept here only for reference until Velocity's own Data API schema is confirmed.
 </Callout>
 
 <Callout type="important">
@@ -22,12 +22,12 @@ Columns in the table below are part of each category:
 | user            | pubkey    |                     |                                                                                                                       |
 | amount          | int       |                     |                                                                                                                       |
 | programId       | pubkey    |                     | Solana program identifier. On Velocity this is `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` on both devnet and mainnet-beta. |
-| marketType      | perp/spot |                     | Type of market where the order was filled ("Spot", "Perpetual"). Note: spot order-book trading (the DLOB) is disabled on Velocity — spot fill events no longer occur.                                                      |
+| marketType      | perp/spot |                     | Type of market where the order was filled ("Spot", "Perpetual"). Note: spot order-book trading (the DLOB) is disabled on Velocity: spot fill events no longer occur.                                                      |
 | marketIndex     | int       |                     | Perpetual contract market index. See the SDK's market config (`@velocity-exchange/sdk` `configs`) for the current index-to-symbol mapping. |
 | spotMarketIndex | int       |                     | Index of the spot market.                                                                                             |
 | perpMarketIndex | int       |                     | Index of the perpetual contract market.                                                                               |
 | userAuthority   | pubkey    |                     | Public key of the user's authority account (wallet).                                                                  |
-| oraclePrice     | int       |                     | Oracle price at the time of an event (provided by Pyth or Pyth Lazer on Velocity — legacy Pyth pull and Switchboard are deprecated, see [Account Model](/developers/concepts/account-model)). |
+| oraclePrice     | int       |                     | Oracle price at the time of an event (provided by Pyth or Pyth Lazer on Velocity, legacy Pyth pull and Switchboard are deprecated, see [Account Model](/developers/concepts/account-model)). |
 
 ---
 
@@ -89,7 +89,7 @@ Columns in the table below are part of each category:
 | maker                                      | pubkey                                                               |           | Address of the maker who placed the opposing order.                     |
 | makerOrderId                               | int                                                                  |           | Unique identifier for the maker's order.                                |
 | makerOrderDirection                        | long/short                                                           |           | Direction of the maker's order (e.g., "Buy", "Sell").                   |
-| ~~spotFulfillmentMethodFee~~               | int                                                                  |           | **Removed on Velocity** — see note above. |
+| ~~spotFulfillmentMethodFee~~               | int                                                                  |           | **Removed on Velocity**. See note above. |
 
 ### Funding Rates
 
@@ -164,7 +164,7 @@ Columns in the table below are part of each category:
 ### Insurance Fund
 
 <Callout type="info">
-The insurance fund is now **100% staker-owned** on Velocity — the protocol-owned-shares path and IF rebalance instructions (`transferProtocolIfSharesToRevenuePool`, `beginInsuranceFundSwap`/`endInsuranceFundSwap`, `IfRebalanceConfig`) were removed. `userIfFactor`/`totalIfFactor` below map to the per-market `insuranceFund.ifFeeFactor` concept rather than a protocol/user split.
+The insurance fund is now **100% staker-owned** on Velocity: the protocol-owned-shares path and IF rebalance instructions (`transferProtocolIfSharesToRevenuePool`, `beginInsuranceFundSwap`/`endInsuranceFundSwap`, `IfRebalanceConfig`) were removed. `userIfFactor`/`totalIfFactor` below map to the per-market `insuranceFund.ifFeeFactor` concept rather than a protocol/user split.
 </Callout>
 
 | Column                     | Unit | Precision | Description                                                |

@@ -43,7 +43,7 @@ console.log(getConfig().QUOTE_MINT_ADDRESS);
   </TypeScript>
 </SDKDoc>
 
-On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDT — mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is USDT (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`). If you're porting an integration that assumed a different quote asset, see the [migration guide](/developers/migrate-from-drift).
+On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDT. Mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is USDT (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`). If you're porting an integration that assumed a different quote asset, see the [migration guide](/developers/migrate-from-drift).
 
 <SDKDoc>
   <TypeScript name="TokenFaucet" type="class">
@@ -53,7 +53,7 @@ import { PublicKey } from "@solana/web3.js";
 
 // <FAUCET_PROGRAM_ID> is the devnet token-faucet program's own program ID
 // (a separate deployment from the Velocity program), not documented here as a
-// fixed constant — obtain it from your devnet environment/deploy config.
+// fixed constant. Obtain it from your devnet environment/deploy config.
 const tokenFaucet = new TokenFaucet(
   connection,
   wallet,

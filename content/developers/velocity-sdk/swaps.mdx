@@ -3,12 +3,12 @@
 You can route spot swaps through Jupiter or Titan directly from your Velocity account. The SDK fetches a quote from the chosen provider, builds the swap transaction, and wraps it with `begin_swap`/`end_swap` so the input and output tokens flow through your Velocity spot balances in a single, atomically-checked transaction.
 
 <Callout type="info">
-This is a **collateral swap** between two spot balances inside your Velocity account — unrelated to spot order placement. Velocity [removed spot DLOB trading](/developers/velocity-sdk/dlob) entirely (`place_spot_order` and friends no longer exist), but swapping the tokens backing your spot balances via an aggregator is a separate, still-supported code path.
+This is a **collateral swap** between two spot balances inside your Velocity account: unrelated to spot order placement. Velocity [removed spot DLOB trading](/developers/velocity-sdk/dlob) entirely (`place_spot_order` and friends no longer exist), but swapping the tokens backing your spot balances via an aggregator is a separate, still-supported code path.
 </Callout>
 
 ## Choosing a swap client
 
-`UnifiedSwapClient` is the primary interface for swaps — it wraps either Jupiter or Titan behind one API, so you can switch providers without changing call sites:
+`UnifiedSwapClient` is the primary interface for swaps: it wraps either Jupiter or Titan behind one API, so you can switch providers without changing call sites:
 
 <SDKDoc>
   <TypeScript name="UnifiedSwapClient" type="class">
@@ -138,10 +138,10 @@ console.log(txSig);
 | `slippageBps` | Maximum allowed slippage in basis points | Yes | 50 |
 | `swapMode` | `'ExactIn'` or `'ExactOut'` | Yes | `'ExactIn'` |
 | `onlyDirectRoutes` | If true, restricts to direct token pairs only (no multi-hop) | Yes | false |
-| `reduceOnly` | `SwapReduceOnly` — constrain the in/out token balance to reduce-only at swap end | Yes | |
+| `reduceOnly` | `SwapReduceOnly`: constrain the in/out token balance to reduce-only at swap end | Yes | |
 | `quote` | Pre-fetched quote (from `getQuote()`) to skip an extra round-trip | Yes | |
 | `txParams` | Compute-unit/priority-fee overrides | Yes | |
 
 <Callout type="info">
-`TitanClient` itself is an internal implementation detail and is not exported from the SDK root — construct Titan-backed swaps through `new UnifiedSwapClient({ clientType: "titan", ... })` rather than importing `TitanClient` directly.
+`TitanClient` itself is an internal implementation detail and is not exported from the SDK root: construct Titan-backed swaps through `new UnifiedSwapClient({ clientType: "titan", ... })` rather than importing `TitanClient` directly.
 </Callout>
