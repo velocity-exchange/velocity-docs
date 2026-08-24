@@ -23,19 +23,21 @@ Create and subscribe separate `VelocityClient` instances for the builder and use
 <SDKDoc>
   <TypeScript name="Builder codes setup" type="example">
 ```js
-import { VelocityClient } from "@velocity-exchange/sdk";
+import { VelocityClient, Wallet } from "@velocity-exchange/sdk";
 import { Connection, Keypair } from "@solana/web3.js";
 
 // Initialize connection
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 
 // Builder wallet (revenue share provider)
-const builderWallet = Keypair.fromSecretKey(/* builder secret key */);
-const builderAuthority = builderWallet.publicKey;
+const builderKeypair = Keypair.fromSecretKey(/* builder secret key */);
+const builderWallet = new Wallet(builderKeypair);
+const builderAuthority = builderKeypair.publicKey;
 
 // User wallet (end user)
-const userWallet = Keypair.fromSecretKey(/* user secret key */);
-const takerAuthority = userWallet.publicKey;
+const userKeypair = Keypair.fromSecretKey(/* user secret key */);
+const userWallet = new Wallet(userKeypair);
+const takerAuthority = userKeypair.publicKey;
 
 // Builder client
 const builderClient = new VelocityClient({
@@ -128,7 +130,7 @@ await userClient.placePerpOrder({
 The same two fields are set on a Swift signed order message the same way. See [Order Placement (Builder adds fee to Swift order)](/developers/velocity-sdk/swift) in the Swift guide.
 
 <Callout type="warning">
-`builderFeeTenthBps` must be within **both** caps: the user's `maxFeeTenthBps` for that builder, and the protocol-wide `MAX_BUILDER_FEE_TENTH_BPS` of `1000` (1% of notional). Exceeding either fails the placement.
+`builderFeeTenthBps` must be within **both** caps: the user's `maxFeeTenthBps` for that builder, and the protocol-wide `MAX_BUILDER_FEE_TENTH_BPS` of `1000` (1% of notional), an on-chain Rust constant in the velocity program rather than an SDK export. Exceeding either fails the placement.
 </Callout>
 
 ### Changing a Builder-Coded Order
