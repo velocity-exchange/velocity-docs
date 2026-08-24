@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "rust-docs": "ts-node scripts/rustDocs.ts",
-    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap && node scripts/generateLlmsTxt.mjs"
+    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap && node scripts/generateLlmsTxt.mjs && node scripts/generateMarkdownPages.mjs"
   },
   "repository": {
     "type": "git",

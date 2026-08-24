@@ -7,6 +7,10 @@ _pagefind/
 sitemap*.xml
 robots.txt
 public/llms.txt
+# Per-page markdown mirrors emitted by scripts/generateMarkdownPages.mjs.
+# All hand-authored public/ assets live under public/assets/, so this
+# pattern only ever matches generated output, never a real asset.
+public/**/*.md
 
 # Local Claude Code tooling (not part of the docs repo)
 .claude/
