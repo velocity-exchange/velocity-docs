@@ -18,7 +18,7 @@ Because the program ID changed, **every PDA address is different** from Drift �
 | Anchor | `@coral-xyz/anchor@0.29.0` | `@anchor-lang/core@1.0.1` (aliased as `@coral-xyz/anchor`) |
 | IDL file | `drift.json` | `velocity.json` |
 | Mainnet quote asset | USDC | USDT |
-| Data API host | `data.api.drift.trade` | `data.velocity.exchange` (provisional) |
+| Data API host | `data.api.drift.trade` | `data.velocity.exchange` |
 
 <Callout type="info">
 This page covers the **TypeScript SDK** at `@velocity-exchange/sdk` 0.13.0. Rust (`velocity-rs`) and raw-ABI integrators should also read the [full migration reference](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) in the monorepo.
@@ -87,7 +87,7 @@ These are semantic changes a compiler cannot catch — a port that builds cleanl
 
 The Data API's Trades/Market Trades tables drop the `spotFulfillmentMethodFee` column (external spot fulfillment is removed), and the Funding Rates table drops `periodRevenue` and `baseAssetAmountWithUnsettledLp` (vAMM LP shares are removed). One entire table has no Velocity equivalent:
 
-**LP (BAL), Drift-only, no Velocity equivalent.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely on Velocity — there is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table.
+**LP (BAL), Drift-only, no Velocity equivalent.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely on Velocity. There is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table.
 
 | Column | Unit | Description |
 |---|---|---|

@@ -112,7 +112,7 @@ const perpMarket = coder.accounts.decode("PerpMarket", rawAccountBuffer);
 </Callout>
 
 <Callout type="warning">
-**`MarketStatus` discriminants and account sizes can shift across program versions.** Velocity's current `MarketStatus` variants are `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4), and `PerpMarketAccount` is 1304 bytes. Always decode against the current `sdk/src/idl/velocity.json`, never a hardcoded enum or fixed offset carried over from an earlier integration. See [Account Model](/developers/concepts/account-model) for the full layout, or the [migration guide](/developers/migrate-from-drift/agent-guide#5-behavioral-divergences---stop-and-report) if you're porting a raw decoder from an earlier discriminant numbering.
+**`MarketStatus` discriminants and account sizes can shift across program versions.** Velocity's current `MarketStatus` variants are `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4), and `PerpMarketAccount` is 1304 bytes. Always decode against the current `sdk/src/idl/velocity.json`, never a hardcoded enum or fixed offset carried over from an earlier integration. See [Account Model](/developers/concepts/account-model) for the full layout, or the [migration guide](/developers/migrate-from-drift/agent-guide#5-behavioral-divergences--stop-and-report) if you're porting a raw decoder from an earlier discriminant numbering.
 </Callout>
 
 <Callout type="warning">
