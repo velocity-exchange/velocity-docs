@@ -173,7 +173,7 @@ Parameters:
 - `depth`: number of price levels per side (default 100, capped at 100)
 - `includeIndicative=true`: include offchain indicative quotes from market makers
 
-`/l2` serves the server's Redis-cached book; whether vAMM liquidity is included in that cache is decided server-side, not by a query parameter. `includeVamm` (along with `includePhoenix`/`includeOpenbook`/`includeOracle`) is a parameter of the separate `/batchL2`/`/batchL2Cache` endpoints, not `/l2`.
+`/l2` serves the server's Redis-cached book; whether vAMM liquidity is included in that cache is decided server-side, not by a query parameter. `includeVamm` (along with `includeOracle`) is a parameter of the separate `/batchL2`/`/batchL2Cache` endpoints, not `/l2`.
 
 **L2 response structure:**
 
@@ -227,7 +227,7 @@ interface L2Response {
 }
 
 const response = await fetch(
-  "https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeVamm=true&includeIndicative=true"
+  "https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeIndicative=true"
 );
 const orderbook: L2Response = await response.json();
 

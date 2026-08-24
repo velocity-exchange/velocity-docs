@@ -99,7 +99,7 @@ const computeLimitIx = ComputeBudgetProgram.setComputeUnitLimit({
 });
 ```
 
-**Tip:** Place-and-make transactions typically use 200-400k compute units. Set the limit explicitly rather than defaulting to 200k (which may fail) or 1.4M (which overpays).
+**Tip:** Place-and-make transactions typically use 200-400k compute units. Set the limit explicitly rather than defaulting to 200k (which may fail) or 1.4M (which overpays). This is not a hard ceiling: the `JitMaker` bot runs a heavier place-and-make path and defaults to 800k CU, see [JIT Auctions gotchas](./jit-auctions#gotchas).
 
 ## Address Lookup Tables (ALTs) and blockhash
 
