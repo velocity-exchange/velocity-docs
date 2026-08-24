@@ -1,28 +1,26 @@
 # Referral Links
 
-Create a referral link to earn a portion of the trading fees of users you refer to Velocity.
+Create your personalized referral link and earn a share of the taker fees paid by every trader who joins through it. Referred traders get a discount on their own taker fees.
 
-- Referrers earn **15%** of the taker fee paid by users they refer (the default `referrerRewardNumerator` on the perp fee tiers).
-- Referred users receive a **5%** discount on their taker fees (the default `refereeFeeNumerator`).
+The program has two levels:
 
-These are the protocol's default fee-tier values and can be changed by governance; check the current `perpFeeStructure.feeTiers` on the `State` account for the live numbers. The referrer and referee numerators are the same (15% / 5%) across all three populated tiers, so a referral's economics do not vary with the referred user's volume tier.
+| Level | You earn (% of your referees' taker fees) | Your referees receive | How it's granted |
+| ----- | ----------------------------------------- | --------------------- | ---------------- |
+| **Standard** | 10% | 5% taker-fee discount | Default for all referrers |
+| **Accelerated** | 20% | 5% taker-fee discount | Private beta participants and approved partners |
 
-This document will walk you through setting up your referral link to begin earning today.
+Both rates apply at every fee tier, with no volume cap. These are the protocol's on-chain fee-tier values (`referrerRewardNumerator` and `refereeFeeNumerator`) and an admin can change them; check `perpFeeStructure.feeTiers` on the `State` account for the live numbers.
 
-## A few notes:
+## Accelerated referral level
 
-- Rewards for the referrer accrue only from taker volume.
-- Referral rewards now flow through a per-user `RevenueShareEscrow` account rather than the old epoch-capped `UserStats` path. Fillers must attach a referred taker's escrow account for a fill to succeed. See the [builder codes](/developers/builder-codes) docs for the mechanics if you operate a filler/keeper.
+Accelerated referrers earn **20%** of their referees' taker fees, double the Standard rate. Accelerated status is granted in two ways:
 
-<Callout type="warning">
-The referral link applies solely to *new* Velocity accounts created through your link. For it to apply, users must have clicked the link, connected their wallet, and made a deposit within the same session.
+- **Private-beta participants:** accounts created during Velocity's private beta window automatically receive the Accelerated level and keep it for life.
+- **Partners:** KOLs, affiliates, and ecosystem partners can be granted Accelerated status by the Velocity team after launch.
 
-"New" means the wallet has never created a Velocity subaccount. The referrer is recorded once, during the authority's very first `initialize_user`, and is never written again. Deleting every subaccount does not reset this, because the allocation counter the check reads (`number_of_sub_accounts_created`) is never decremented. A wallet that has traded before cannot be referred, even after closing all of its accounts.
-</Callout>
+## Creating your referral link
 
-## Setup
-
-Create your referral link at [velocity.exchange/referrals](https://velocity.exchange/referrals).
+Create your referral link at [velocity.exchange/referrals](https://velocity.exchange/referrals), or click **More > Referrals** in the top navigation panel.
 
 <Steps>
 ### Create a link
@@ -43,3 +41,16 @@ Once you've approved the transaction, you will find your rewards under "Total Re
 ### Share
 Share your referral link with your friends and community to start earning fees from their trading activity.
 </Steps>
+
+## How rewards work
+
+- Rewards accrue from **taker volume only**. Maker fills do not generate referral rewards.
+- A referral link applies only to **new accounts** created in the same session after clicking the link and making a first deposit.
+- Referral rewards flow through a per-user `RevenueShareEscrow` account rather than the old epoch-capped `UserStats` path. Fillers must attach a referred taker's escrow account for a fill to succeed. See the [builder codes](/developers/builder-codes) docs for the mechanics if you operate a filler or keeper.
+- Velocity reserves the right to adjust the referral program at any time without prior notice. Refer to this page for the latest information.
+
+<Callout type="warning">
+The referral link applies solely to *new* Velocity accounts created through your link. For it to apply, users must have clicked the link, connected their wallet, and made a deposit within the same session.
+
+"New" means the wallet has never created a Velocity subaccount. The referrer is recorded once, during the authority's very first `initialize_user`, and is never written again. Deleting every subaccount does not reset this, because the allocation counter the check reads (`number_of_sub_accounts_created`) is never decremented. A wallet that has traded before cannot be referred, even after closing all of its accounts.
+</Callout>
