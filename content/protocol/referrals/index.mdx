@@ -16,6 +16,8 @@ This document will walk you through setting up your referral link to begin earni
 
 <Callout type="warning">
 The referral link applies solely to *new* Velocity accounts created through your link. For it to apply, users must have clicked the link, connected their wallet, and made a deposit within the same session.
+
+"New" means the wallet has never created a Velocity subaccount. The referrer is recorded once, during the authority's very first `initialize_user`, and is never written again. Deleting every subaccount does not reset this, because the allocation counter the check reads (`number_of_sub_accounts_created`) is never decremented. A wallet that has traded before cannot be referred, even after closing all of its accounts.
 </Callout>
 
 ## Setup

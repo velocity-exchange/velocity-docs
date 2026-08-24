@@ -40,8 +40,13 @@ const META = {
       "trading": {
         "title": "Trading",
         "items": {
+          "order-types": {
+            "title": "Order Types",
+            "items": {
+              "advanced-orders-faq": "",
+            },
+          },
           "auction-parameters": "",
-          "funding-rates": "",
           "margin": {
             "title": "Margin",
             "items": {
@@ -56,20 +61,14 @@ const META = {
               "unsettled-profit-loss": "",
             }
           },
-          "order-types": {
-            "title": "Order Types",
-            "items": {
-              "advanced-order-types": "",
-              "advanced-orders-faq": "",
-            },
-          },
-          "liquidations": "",
+          "funding-rates": "",
           "trading-fees": {
             "title": "Trading Fees",
             "items": {
               "other-trading-fees": "",
             }
           },
+          "liquidations": "",
           "market-specs": "",
         }
       },
