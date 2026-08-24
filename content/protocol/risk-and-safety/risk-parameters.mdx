@@ -28,6 +28,8 @@ Additionally, liabilities (borrows, perp positions, etc) can have premiums appli
 
 `max(.8 * wgt + sqrt(size) * imf_factor, wgt)`
 
+In both formulas `size` is your own token balance in that market, not a dollar value and not the market's total. The discount is a ceiling, so it caps your initial and maintenance asset weights alike. For how the two weights differ, when each one applies, and a worked example, see [Cross-collateral deposits](/protocol/getting-started/cross-collateral-deposits).
+
 ### Price Manipulation Prevention
 
 The Clearinghouse also pauses your risk-increasing trades if they would further increase a large oracle-mark divergence. You also cannot close or reduce a position in a way that further breaches this divergence, unless the divergence has already been breached.
