@@ -27,3 +27,7 @@ There are three ways a user can have their taker order filled:
 To place an order, users sign a transaction containing their order params. The transaction is sent to the Solana network and, once it is included in a block, it is propagated to keepers and market makers via RPCs. The keepers and market makers then race to fill user orders with liquidity that satisfies their auction prices. Backstop (AMM) liquidity is neither a blanket first stop nor a pure last resort. It is interleaved with resting and JIT liquidity by price. At each price level of a fill, the engine compares the AMM's quote against that maker's price: if the AMM is better, the taker fills against the AMM first, but only up to that maker's price level, before filling against the maker; otherwise the maker fills first. Any remaining AMM liquidity that still crosses the taker's limit price is used as a final fill.
 
 ![Velocity's Matching Engine](/assets/matching-engine.png)
+
+## Self-trade prevention
+
+You cannot fill against yourself. When the matching engine looks for resting orders to fill your taker order against, it skips any resting order that belongs to the same account as your taker order. That resting order is not canceled or changed in any way. It simply does not take part in that fill and stays open, waiting to match against someone else's order.
