@@ -36,7 +36,7 @@ The withdraw circuit-breaker is a per-market setting, in basis points (`10_000` 
 
 The breaker is set per market by an admin update, and it must be at or below `10_000` bps. Authority is split by direction: a **warm** admin may keep or tighten it (any value at or below the 2,500 bps default), while raising it above 2,500 bps loosens the breaker and requires the **cold** admin. A tighter breaker means a smaller share of the deposit TWAP can leave per window.
 
-**Maximum borrows.** The ceiling on borrows depends on whether the market is the main pool or an [isolated pool](/protocol/how-it-works/isolated-pools), since isolated pools are tuned to tolerate materially higher utilization:
+**Maximum borrows.** The ceiling on borrows depends on whether the market is the main pool or an isolated pool{/* HIDDEN: isolated-pools page hidden pending pool deployment confirmation, reinstate the link: [isolated pool](/protocol/how-it-works/isolated-pools) */}, since isolated pools are tuned to tolerate materially higher utilization:
 
 | | Main pool | Isolated pool |
 |---|---|---|
