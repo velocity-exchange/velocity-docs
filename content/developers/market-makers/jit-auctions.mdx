@@ -60,14 +60,14 @@ Auction Price(slot) = start_price + (end_price - start_price) x progress
 where progress = min(1, (current_slot - auction_start_slot) / auction_duration)
 ```
 
-**Example** (long market order, oracle at $100):
-- `auctionStartPrice`: $100.00 (oracle)
-- `auctionEndPrice`: $100.10 (oracle + 0.1%, the taker's limit)
+**Example** (long market order, oracle at \$100):
+- `auctionStartPrice`: \$100.00 (oracle)
+- `auctionEndPrice`: \$100.10 (oracle + 0.1%, the taker's limit)
 - `auctionDuration`: 10 slots
-- At slot 3: price = $100.00 + ($100.10 - $100.00) x 0.3 = $100.03
-- At slot 7: price = $100.00 + ($100.10 - $100.00) x 0.7 = $100.07
+- At slot 3: price = \$100.00 + (\$100.10 - \$100.00) x 0.3 = \$100.03
+- At slot 7: price = \$100.00 + (\$100.10 - \$100.00) x 0.7 = \$100.07
 
-A maker offering $100.05 would be eligible to fill starting at slot 5 (when the auction price reaches $100.05). Makers offering $100.02 could fill as early as slot 2.
+A maker offering \$100.05 would be eligible to fill starting at slot 5 (when the auction price reaches \$100.05). Makers offering \$100.02 could fill as early as slot 2.
 
 ## Auction lifecycle
 

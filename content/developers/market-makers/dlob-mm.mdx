@@ -267,7 +267,7 @@ The [`FloatingPerpMaker`](https://github.com/velocity-exchange/velocity-v1/blob/
 
 ## Gotchas and production tips
 
-- **Oracle offset precision:** `oraclePriceOffset` is in raw `PRICE_PRECISION` units (1e6). An offset of `500000` = $0.50, not $500,000. Double check your math.
+- **Oracle offset precision:** `oraclePriceOffset` is in raw `PRICE_PRECISION` units (1e6). An offset of `500000` = \$0.50, not \$500,000. Double check your math.
 - **Oracle offset orders still need updates:** while they track the oracle automatically, you must cancel and re place when changing spread width, order size, or the number of levels. The `cancelAndPlaceOrders` method handles this atomically.
 - **32 order limit per subaccount:** if you quote 5 markets x 2 sides x 3 levels = 30 orders, you're near the limit. Use multiple subaccounts for multi market strategies (see `JitMaker` config for subaccount per market pattern).
 - **`MUST_POST_ONLY` rejection:** if the oracle moves sharply and your offset order would cross the spread, it's rejected (not silently filled as taker). This is the desired behavior; catch the error and re quote.
