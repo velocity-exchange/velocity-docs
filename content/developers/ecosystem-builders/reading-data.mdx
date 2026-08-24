@@ -147,11 +147,11 @@ For a live L2/L3 orderbook, subscribe to the DLOB directly with the SDK's `SlotS
 
 The Data API provides historical and aggregate data via REST endpoints, without running your own indexer. Use it for dashboards, analytics, or any non-SDK integration.
 
-<Callout type="warning">
-**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized. The examples below use `data.velocity.exchange` as a placeholder pattern. Confirm the real host before shipping against it. See [Data API](/developers/data-api) and the migration report's open questions.
+<Callout type="info">
+Velocity's hosted Data API is live at `data.velocity.exchange`. The examples below use that host. See [Data API](/developers/data-api).
 </Callout>
 
-- Base URL (provisional): `https://data.velocity.exchange`
+- Base URL: `https://data.velocity.exchange`
 - [Data API playground](/developers/data-api)
 
 ### Market stats
@@ -220,7 +220,7 @@ const trades = await tradesRes.json();
 
 ## DLOB + Swift for live order flow
 
-For real-time orderbook and order flow, Velocity uses separate services (both hostnames below are provisional pending final infra naming):
+For real-time orderbook and order flow, Velocity uses separate services:
 
-- **DLOB server** (provisional: `https://dlob.velocity.exchange`): Orderbook snapshots and streaming. See [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
+- **DLOB server** (`https://dlob.velocity.exchange`): Orderbook snapshots and streaming. See [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws).
 - **Swift server** (provisional: `https://swift.velocity.exchange`): Signed message orders for fast execution. See [Swift](/developers/velocity-sdk/swift).

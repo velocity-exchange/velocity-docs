@@ -2,8 +2,8 @@
 
 The DLOB (Decentralized Limit Order Book) server powers the UI orderbook and trades feed. It provides both a websocket interface for real-time updates and REST endpoints for snapshots.
 
-<Callout type="warning">
-**Provisional endpoint.** Velocity's hosted DLOB server host is not yet finalized. This page uses `dlob.velocity.exchange` as a placeholder pattern. Confirm the real host before shipping against it.
+<Callout type="info">
+Velocity's hosted DLOB server is live at `dlob.velocity.exchange`. The examples on this page use that host.
 </Callout>
 
 ## Endpoint summary
@@ -88,7 +88,7 @@ GET https://dlob.velocity.exchange/batchL2?marketName=SOL-PERP,BTC-PERP&depth=10
 
 Use this instead of N separate `/l2` calls. Every parameter is a comma-separated list, and the lists are read position by position: the first value of each list describes the first market, the second value the second market, and so on.
 
-Accepted lists: `marketName`, `marketIndex`, `marketType`, `depth`, `includeVamm`, `includePhoenix`, `includeOpenbook`, `includeOracle`, `includeIndicative`.
+Accepted lists: `marketName`, `marketIndex`, `marketType`, `depth`, `includeVamm`, `includeOracle`, `includeIndicative`.
 
 `/batchL2Cache` is registered on the same handler and behaves identically.
 
