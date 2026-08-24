@@ -11,7 +11,7 @@ If a user holds only non-USDT assets, a USDT borrow may be triggered upon settle
 Velocity's tiered fees for futures markets are based **only** on an on-chain calculation of **30-Day Volume**. There is no governance-token staking discount; any such discount was removed as part of the [fee redesign](#fee-redesign).
 
 <Callout type="important">
-Velocity has no spot order book, so there's no maker/taker fee on spot trades. Direct token swaps are not charged a trading fee. See [Spot Market Fees](#spot-market-fees) below.
+Velocity has no spot order book, so there's no maker/taker fee on spot trades. Direct token swaps are not charged a trading fee.
 </Callout>
 
 ## Perp Market Fees
@@ -151,7 +151,7 @@ If you reconcile `OrderActionRecord` fee legs or estimate the protocol and insur
 
 There's no spot order book (per [Order Types](/protocol/trading/order-types)), so there's no maker/taker fee to charge on spot trades in the first place. Direct swaps via `begin_swap` / `end_swap` are charged **no trading fee**. The swap fee on that path is hardcoded to zero.
 
-The VLP hedge LP pool would charge dynamic in/out swap fees (`handle_view_lp_pool_swap_fees`) that vary with the pool's constituent balances relative to target weights, but the LP pool's instruction surface (pool and constituent init/config, swap, add/remove liquidity, and the related admin cranks) is compiled out of mainnet builds pending audit; devnet and test builds keep it live. Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
+Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
 
 ## Disclaimers
 
