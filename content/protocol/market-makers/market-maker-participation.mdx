@@ -4,7 +4,7 @@ _For more information on incentive programs for Market Makers, see_ [Maker Rebat
 
 ## Introduction
 
-Any user can participate as a Market Maker on the platform. Market Makers can provide liquidity through either:  
+You can participate as a Market Maker on the platform. You can provide liquidity through either:  
 
 <Steps>
 ### Just-in-Time (JIT)
@@ -16,17 +16,17 @@ Post-Only Orders on the decentralised orderbook (see [Keepers & Decentralised Or
 
 ## Just-in-Time Liquidity  
 
-Makers can participate in the JIT auction and provide just-in-time liquidity as Taker flow comes in.  
+You can participate in the JIT auction and provide just-in-time liquidity as taker flow comes in.  
 
-The JIT window is the taker order's own auction duration, measured in slots (set by the client, subject to a per-market/tier floor). This gives Makers an opportunity to see retail flow before it hits the market; the wall-clock length of that window depends on both the order and the current Solana slot duration.  
+The JIT window is the taker order's own auction duration, measured in slots (set by the client, subject to a per-market/tier floor). This gives you an opportunity to see retail flow before it hits the market; the wall-clock length of that window depends on both the order and the current Solana slot duration.  
 
-Market Makers can participate in the JIT system by running a JIT Maker Bot. For more information, check out [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)
+You can participate in the JIT system by running a JIT Maker Bot. For more information, check out [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)
 
 For more information on JIT, check out [JIT Maker FAQ](/protocol/how-it-works/jit-faq).
 
 ## Decentralised Orderbook  
 
-Makers can also provide liquidity to Velocity's decentralised orderbook by quoting via the UI or programmatically through the [Velocity SDK](/developers/velocity-sdk/setup)
+You can also provide liquidity to Velocity's decentralised orderbook by quoting via the UI or programmatically through the [Velocity SDK](/developers/velocity-sdk/setup)
 
 <Callout type="info">
 This applies to **perpetual** markets. Spot markets exist for collateral and borrow-lend on Velocity, but spot DLOB trading (including spot maker orders) is disabled.
@@ -34,18 +34,18 @@ This applies to **perpetual** markets. Spot markets exist for collateral and bor
 
 ### Providing liquidity via the UI
 
-Placing 'Post-Only' limit orders via Velocity's UI qualifies the order as a maker order.  
+When you place a 'Post-Only' limit order via Velocity's UI, it qualifies as a maker order.  
 
-This order won't be executed against the AMM or go through the JIT. It will sit in the decentralised orderbook until a taker for that price comes along.  
+This order won't execute against the AMM or go through the JIT. It sits in the decentralised orderbook until a taker for that price comes along.  
 
 ![The 'POST' flag is toggled on here.](/assets/S3njjazK500hoUw5o2v6z_image.png)
 
 ### Programmatic market making with a floating maker bot
 
-Velocity has an open-sourced bot that programmatically quotes bids and asks around the oracle price. These quotes are automatically updated as the oracle price moves.  
+Velocity has an open-sourced bot that programmatically quotes bids and asks around the oracle price. These quotes update automatically as the oracle price moves.  
 
-In practice, the floating maker bot will quote above and below the oracle to provide liquidity around the oracle price. Makers that run the bot will be able to collect the spread as the price moves.  
+In practice, the floating maker bot quotes above and below the oracle to provide liquidity around the oracle price. If you run the bot, you can collect the spread as the price moves.  
 
-Velocity currently runs this bot, along with some additional risk parameters, on the platform for-profit. We've open-sourced the build here for any user to run something similar.  
+Velocity currently runs this bot, along with some additional risk parameters, on the platform for-profit. We've open-sourced the build here so you can run something similar.  
 
 Floating Maker Bot - Github Link: [https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts)
