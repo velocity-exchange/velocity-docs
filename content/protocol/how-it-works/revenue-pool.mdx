@@ -1,7 +1,7 @@
 # Revenue Pool
 
 <Callout type="important">
-This page describes Velocity's current, redesigned fee/revenue flow (the [fee redesign](/protocol/trading/trading-fees#fee-redesign)). It replaces an earlier model where all protocol revenue routed through the Insurance Fund and protocol-owned IF shares. See [Trading Fees](/protocol/trading/trading-fees) for the full per-fill split.
+This page describes Velocity's current, redesigned fee/revenue flow (the [fee redesign](/protocol/trading/trading-fees/fee-mechanics#fee-redesign)). It replaces an earlier model where all protocol revenue routed through the Insurance Fund and protocol-owned IF shares. See [Fee Mechanics](/protocol/trading/trading-fees/fee-mechanics#fee-redesign) for the full per-fill split.
 </Callout>
 
 Each spot market's **revenue pool** (`SpotMarket.revenuePool`, a `Deposit`-type pool balance) has exactly one purpose: staging the **insurance fund's** cut of protocol fees before it settles to the Insurance Fund vault. It is *not* where the protocol's own share of fees lands: that goes straight to a separate, directly-withdrawable `protocol_fee_pool` instead (see [Protocol fee custody and withdrawal](#protocol-fee-custody-and-withdrawal)).
@@ -36,7 +36,7 @@ If the Insurance Fund has users staked, each individual settlement is capped to 
 
 ## Protocol Fee Custody and Withdrawal
 
-The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all. It goes straight to each market's separate, directly-withdrawable `protocol_fee_pool` instead. See [Trading Fees](/protocol/trading/trading-fees#fee-redesign) for how that pool is funded and withdrawn.
+The protocol's own cut of trading fees, liquidation fees, and lending yield is **not** routed through the revenue pool or the Insurance Fund at all. It goes straight to each market's separate, directly-withdrawable `protocol_fee_pool` instead. See [Trading Fees](/protocol/trading/trading-fees/fee-mechanics#fee-redesign) for how that pool is funded and withdrawn.
 
 ## Spot Markets
 

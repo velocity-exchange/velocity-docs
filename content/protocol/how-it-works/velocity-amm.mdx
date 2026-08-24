@@ -130,4 +130,4 @@ How the rebate is computed and where it lands:
 - It is carved out of the taker-fee remainder before that remainder is split between the AMM fee provision, the insurance fund, and the protocol, then folded into the AMM's `amm_fee` for the fill. If the remainder is too small to cover it, the rebate is clamped to what is left.
 - It accrues into the AMM's fee provision and is tracked in the market's cumulative `feeLedger.ammProtocolFeesReceived`, the same counter a perp bankruptcy claws back against.
 
-The taker pays exactly the same fee whether the flag is on or off. What changes is who receives that slice of the fee: with the flag on, part of the protocol and insurance-fund legs is redirected to the AMM. See [Trading Fees](/protocol/trading/trading-fees#vamm-maker-rebate) for the full fee waterfall.
+The taker pays exactly the same fee whether the flag is on or off. What changes is who receives that slice of the fee: with the flag on, part of the protocol and insurance-fund legs is redirected to the AMM. See [Trading Fees](/protocol/trading/trading-fees/fee-mechanics#vamm-maker-rebate) for the full fee waterfall.

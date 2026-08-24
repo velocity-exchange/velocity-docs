@@ -4,19 +4,13 @@ asIndexPage: true
 
 # Trading Fees
 
-Velocity offers a highly competitive fee structure with low taker fees and a flat maker rebate, with the potential for even lower fees as trading volume increases. Fees are calculated per trade based on the filled notional position size and are charged in the market's quote asset (USDT), affecting the position's cost basis.
+Velocity offers a highly competitive fee structure with the potential for even lower fees as trading volume increases. Fees are calculated per trade based on the filled notional position size and are charged in the market's quote asset (USDT), affecting the position's cost basis.
 
-If a user holds only non-USDT assets, a USDT borrow may be triggered upon settlement of a loss in perpetual markets (see [P&L](/protocol/trading/profit-loss)). Trading volume from Swap is excluded from the fee-tier volume calculation.
-
-Velocity's tiered fees for futures markets are based **only** on an on-chain calculation of **30-Day Volume**. There is no governance-token staking discount; any such discount was removed as part of the [fee redesign](#fee-redesign).
-
-<Callout type="important">
-Velocity has no spot order book, so there's no maker/taker fee on spot trades. Direct token swaps are not charged a trading fee.
-</Callout>
+If a user holds only non-USDT assets, a USDT borrow may be triggered upon settlement of a loss in perpetual markets (see [Profit & Loss](/protocol/trading/profit-loss)). Trading volume from Swap is excluded from the fee tier volume calculation.
 
 ## Perp Market Fees
 
-Taker fees are tiered by your trailing 30-day volume and vary by asset. Maker orders earn the same rebate at every tier. Your fee tier updates automatically as your trailing 30-day volume changes, and if you qualify for a higher tier before your first 30 days are complete, the upgrade applies straight away.
+Taker fees are tiered by your trailing 30-day volume and vary by asset. Maker orders earn a rebate at every tier. Your fee tier updates automatically as your trailing 30-day volume changes. If you qualify for the next fee tier before your first 30 days are complete, your tier is upgraded automatically.
 
 <div style={{ marginTop: '1.5em', overflowX: 'auto' }}>
 <table class="fees">
@@ -31,21 +25,21 @@ Taker fees are tiered by your trailing 30-day volume and vary by asset. Maker or
   </thead>
   <tbody>
     <tr>
-      <td>Regular User (tier 0)</td>
+      <td>Regular User</td>
       <td>&lt; \$5M</td>
       <td>0.040% (4 bps)</td>
       <td>0.055% (5.5 bps)</td>
       <td>-0.0025% (-0.25 bps)</td>
     </tr>
     <tr>
-      <td>VIP 1 (tier 1)</td>
+      <td>VIP 1</td>
       <td>\$5M – \$80M</td>
       <td>0.030% (3 bps)</td>
       <td>0.045% (4.5 bps)</td>
       <td>-0.0025% (-0.25 bps)</td>
     </tr>
     <tr>
-      <td>VIP 2 (tier 2)</td>
+      <td>VIP 2</td>
       <td>&gt; \$80M</td>
       <td>0.020% (2 bps)</td>
       <td>0.035% (3.5 bps)</td>
@@ -54,34 +48,6 @@ Taker fees are tiered by your trailing 30-day volume and vary by asset. Maker or
   </tbody>
 </table>
 </div>
-
-The taker fees and maker rebate shown are the values currently live on-chain (`FeeStructure.feeTiers`); an admin can update them (`updatePerpFeeStructure`), so treat the table as current rather than fixed. The 30-day-volume breakpoints are indicative.
-
-The tier fee itself is the BTC/ETH/SOL column. Markets outside those three reach the higher number through the per-market taker-fee add-on (`takerFeeAddonTenthBps`), currently 15 tenth-bps, that is 1.5 bps on top of the tier fee at every tier. The add-on does not touch the maker rebate, so the rebate is the same on every market. See [Fee Adjustments](#fee-adjustments).
-
-The volume window is evaluated live: crossing a higher-tier threshold applies to your very next fill, and dropping back down also tracks the live trailing 30-day value at each fill rather than a lazily-updated stored sum.
-
-A global promo tier floor can also raise your effective tier; see [Fee Adjustments](#fee-adjustments) below.
-
-Referral rewards apply at every tier: the referrer earns a share of the taker fee, and the referee gets 5% off theirs. See [Referral discounts and rewards](#referral-discounts-and-rewards) below.
-
-## Fee Adjustments
-
-Three levers can move the fee you actually pay away from the published tier fee. Two are per-market, one is global.
-
-**`PerpMarket.feeAdjustment` (per-market, multiplicative).** Longer tail assets can have increased fees to stay in line with external markets' fee schedules. Some markets will periodically have flat discounts applied to all fee tiers. The adjustment scales the whole configured fee, and it is the only one of the three that also scales the maker rebate.
-
-**`PerpMarket.takerFeeAddonTenthBps` (per-market, additive).** An absolute surcharge added to the tier's taker fee, expressed in tenth-bps (`10` = 1 bp). It exists because a multiplicative `feeAdjustment` cannot express the same absolute markup across three different tier fees. The field is unsigned, so it can only raise the taker fee, never cut it below the tier fee. That keeps the maker rebate funded at every tier. The ceiling is `MAX_TAKER_FEE_ADDON_TENTH_BPS = 100`, that is 10 bps. The add-on does not touch the maker rebate.
-
-**`State.promoFeeTier` (global, a tier floor).** While set, every account's effective perp tier is `max(volume tier, promoFeeTier)`, clamped to the highest live tier index (2). Nobody is demoted by it, and there is no per-user state: set it back to `0` (the disabled value) and every account is back on its own volume tier at its next fill.
-
-Putting the per-market pieces together, the taker fee on a fill is:
-
-```
-taker_fee = (tier_fee + notional × taker_fee_addon_tenth_bps / 100_000) × (1 ± fee_adjustment%)
-```
-
-So an observed fee above the published tier number is normally an add-on or a positive `feeAdjustment`, and an observed fee at a better tier than your own 30-day volume implies is normally an active `promoFeeTier`.
 
 ## Filler Reward
 
@@ -92,67 +58,7 @@ Filler rewards are the lesser of a size-based component (10% of the fee) and a t
 Referral rewards apply at every fee tier, with no volume cap:
 
 - Traders who join through a referral link receive a **5% discount** on their taker fees.
-- **Standard referrers** earn **10%** of the taker fees paid by the traders they refer.
+- **Standard referrers** earn **10%** of the taker fees paid by traders they refer.
 - **Accelerated referrers** earn **20%**.
 
-Both percentages apply to the effective taker fee paid. The referrer's share accrues to the referrer's `RevenueShareEscrow`, and the referee's discount is never collected in the first place. Maker fills do not generate referral rewards.
-
-These are fee-tier values on-chain (`refereeFeeNumerator` / `referrerRewardNumerator`) and an admin can change them, so check `perpFeeStructure.feeTiers` on the `State` account for the live numbers. See the [Referral Links](/protocol/referrals) page for how the two referrer levels are granted.
-
-## Builder Fees
-
-Order params can optionally carry a **builder code**, which charges a builder fee on top of the taker fee. It does not change the taker's fee tier or the protocol's cut. See [Builder Codes](/developers/builder-codes) for the fee calculation, the caps, and how accrued fees are settled.
-
-## Fee Redesign
-
-Velocity's fee model is a clean per-fill split, not an insurance-fund waterfall. The full taker-fee decomposition, in order:
-
-```
-taker_fee  = ceil(notional × fee_numerator / FEE_DENOMINATOR)   tiered by 30d volume,
-             + notional × taker_fee_addon_tenth_bps / 100_000    plus a per-market add-on,
-                                                                  ± per-market fee_adjustment
-          − referee_discount          (reduces what the taker pays; never collected)
-          − referrer_reward           (→ referrer, via RevenueShareEscrow)
-          − filler_reward             (→ keeper, as perp quote PnL)
-          − maker_rebate              (→ maker; match path only)
-          − vamm_maker_rebate        (→ AMM; only when the VammMakerRebate flag
-                                       is on and the vAMM is the maker)
-          ───────────────────────────
-remainder ── × amm_fee_numerator%      → AMM fee provision (spendable AMM liquidity; the
-          │                              bankruptcy backstop of last resort)
-          ── × if_fee_numerator%       → insurance fund (via the pnl-pool sweep)
-          ── residual                  → protocol (withdrawable `protocol_fee_pool`)
-
-builder_fee = notional × fee_tenth_bps / 100_000   ADDED on top of taker_fee; pure pass-through
-```
-
-The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to 0%/0% (the protocol receives 100% of the trade-fee remainder as the residual claimant) and is admin-configurable up to `ammFeeNumerator + ifFeeNumerator ≤ 100%`.
-
-#### vAMM maker rebate
-
-`State.featureBitFlags` carries a `VammMakerRebate` bit, off by default and toggled exchange-wide (not per market) by `updateFeatureBitFlagsVammMakerRebate`. Enabling it turns on one extra line in the waterfall above: when the vAMM is the maker on a fill, it earns a maker rebate the same way a user maker does.
-
-- The rebate is carved off the remainder **before** the AMM / IF / protocol split, then added back into `amm_fee`, so it reaches the AMM through the existing fee-provision plumbing.
-- It is computed from the **base tier** (`feeTiers[0]`) maker rebate, not the taker's tier. A rebate belongs to the maker, and the vAMM has no volume tier of its own, so pinning it to tier 0 keeps it independent of who the taker is.
-- The per-market `feeAdjustment` scales it, exactly as it scales a user maker's rebate.
-- It is clamped to whatever remainder is left, because the fee-structure numerators are admin-mutable and the rebate is not guaranteed to fit.
-- The taker's fee is unchanged. Only the distribution of the remainder shifts, away from the protocol and insurance-fund legs and toward the AMM.
-
-If you reconcile `OrderActionRecord` fee legs or estimate the protocol and insurance-fund cut from a fill, read the flag before assuming the remainder splits three ways. See [Velocity AMM](/protocol/how-it-works/velocity-amm#vamm-maker-rebate).
-
-#### Key differences from the pre-redesign model
-
-- **Protocol fees are directly withdrawable, not part of the backstop.** They land in a per-market `protocol_fee_pool` and exit via `withdraw_protocol_fees_perp` / `withdraw_protocol_fees_spot`, recipient-locked to `State.protocolFeeRecipientPerp` / `protocolFeeRecipientSpot` (each settable only by `cold_admin`) and gated by a dedicated `FeeWithdraw` hot key. A withdrawal is always capped to the pool's own balance and can never dip into user deposits.
-- **The AMM's books contain only its own money.** Its fee provision is real, spendable liquidity, but the market tracks the cumulative amount received (`feeLedger.ammProtocolFeesReceived`) so a perp bankruptcy can claw back what's still recoverable as the backstop of last resort. The AMM's own trading/spread capital beyond that provision is never touched.
-- **The Insurance Fund is 100% staker-owned.** There are no protocol IF shares: every settled dollar accrues to stakers as share-price appreciation (see [Liquidations](/protocol/trading/liquidations) and [Insurance Fund](/protocol/insurance-fund)).
-- **Liquidations carry an explicit protocol cut** (`protocol_liquidation_fee`), split IF-first against the existing insurance-fee budget so it can never push a liquidation into bankruptcy. See [Liquidations](/protocol/trading/liquidations#liquidation-fees).
-
-## Spot Market Fees
-
-There's no spot order book (per [Order Types](/protocol/trading/order-types)), so there's no maker/taker fee to charge on spot trades in the first place. Direct swaps via `begin_swap` / `end_swap` are charged **no trading fee**. The swap fee on that path is hardcoded to zero.
-
-Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
-
-## Disclaimers
-
-_There are risks associated with Insurance Fund Staking. Read more about the [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) and [Risks](/protocol/risk-and-safety/risks))._
+See the [Referral Links](/protocol/referrals) page for details.

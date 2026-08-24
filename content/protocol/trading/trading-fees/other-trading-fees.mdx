@@ -6,7 +6,7 @@ These are additional fees charged across perpetual and spot markets, on top of t
 
 - **`liquidator_fee`**: Additional premium for taking over asset/liability pairs at oracle, paid to the liquidator.
 - **`if_liquidation_fee`**: Per-market liquidation cut routed to the Insurance Fund.
-- **`protocol_liquidation_fee`**: Per-market liquidation cut routed to the withdrawable `protocol_fee_pool`, introduced with the [fee redesign](/protocol/trading/trading-fees#fee-redesign). Split IF-first against the same insurance-fee budget so it can never push a liquidation into bankruptcy. See [Liquidations](/protocol/trading/liquidations#liquidation-fees).
+- **`protocol_liquidation_fee`**: Per-market liquidation cut routed to the withdrawable `protocol_fee_pool`, introduced with the [fee redesign](/protocol/trading/trading-fees/fee-mechanics#fee-redesign). Split IF-first against the same insurance-fee budget so it can never push a liquidation into bankruptcy. See [Liquidations](/protocol/trading/liquidations#liquidation-fees).
 - **`if_fee_factor`** (spot markets, `InsuranceFund.ifFeeFactor`): fraction of deposit-interest gains reserved for the (100% staker-owned) `revenue_pool` → Insurance Fund.
 - **`protocol_fee_factor`** (spot markets, `SpotMarket.protocolFeeFactor`): fraction of deposit-interest gains reserved for the withdrawable `protocol_fee_pool`. Lenders receive the remainder after both factors.
 
