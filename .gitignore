@@ -6,6 +6,7 @@ node_modules
 _pagefind/
 sitemap*.xml
 robots.txt
+public/llms.txt
 
 # Local Claude Code tooling (not part of the docs repo)
 .claude/
