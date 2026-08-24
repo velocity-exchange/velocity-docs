@@ -1,10 +1,10 @@
 # Risk Parameters
 
-These risk parameters are relevant to perpetual futures. Further risk parameters are also set out in [Risks](/protocol/risk-and-safety/risks).
+These risk parameters apply to your perpetual futures positions and orders. You can find further risk parameters in [Risks](/protocol/risk-and-safety/risks).
 
 ### Price Bands
 
-On Velocity, to prevent market manipulation and protect users during volatile events, the protocol runs two separate oracle-divergence bands. Order placement itself is not gated by either band.
+To prevent market manipulation and protect you during volatile events, the protocol runs two separate oracle-divergence bands. It does not gate order placement on either band.
 
 **Mark vs 5-minute oracle TWAP.** If the AMM reserve (mark) price and the 5-minute oracle TWAP diverge by more than the greater of the exchange-wide configured threshold or 10% (a protocol-wide floor), the protocol blocks PnL settlement, deficit resolution, PnL-pool fee sweeps, and funding updates until the price reverts back within this band.
 
@@ -30,40 +30,40 @@ Additionally, liabilities (borrows, perp positions, etc) can have premiums appli
 
 ### Price Manipulation Prevention
 
-The Clearinghouse will also pause risk-increasing trades that further increase large oracle-mark divergence. Closing/reducing a position that further breaches this divergence is also not allowed (unless the divergence has already been breached).
+The Clearinghouse also pauses your risk-increasing trades if they would further increase a large oracle-mark divergence. You also cannot close or reduce a position in a way that further breaches this divergence, unless the divergence has already been breached.
 
 ### Order/Execution Limits
 
-An individual user sub-account can have up to 32 outstanding orders at any one time. A Market Order sent has limits _within each instruction_ (so may be filled iteratively).
+You can have up to 32 outstanding orders per sub-account at any one time. A market order you send has limits _within each instruction_ (so it may be filled iteratively).
 
-Market Orders have the possibility of only being partially filled before expiration if any of the following limits occur:
+Your market orders may only be partially filled before expiration if any of the following limits occur:
 
--   exceeds its slippage tolerance implied limit price
+-   the order exceeds its slippage tolerance implied limit price
 
--   exceeds its active time limit (for market orders, the Clearinghouse sets this at 30 seconds)
+-   the order exceeds its active time limit: unless you set `max_ts` yourself, the Clearinghouse sets this to `max(30 seconds, auction_duration_ms / 800 + 10 seconds)` from order placement, so a market or oracle order without an explicit `max_ts` stays live for at least 30 seconds, and longer if its auction runs longer
 
--   exceed the market's per-fill AMM cap, set by `max_fill_reserve_fraction` (default 1% of the AMM's base asset reserves, moving price by roughly 2%), and further capped at half of the available liquidity on that side of the AMM
+-   the order would exceed the market's per-fill AMM cap, set by `max_fill_reserve_fraction` (default 1% of the AMM's base asset reserves, moving price by roughly 2%), and further capped at half of the available liquidity on that side of the AMM
 
-Within a single transaction, one fill can only take up to this per-fill AMM cap. Calling multiple fill instructions can still fill a larger order over several transactions. For example, if the per-fill cap was 10,000 SOL, an order for 100,000 SOL can be filled against the AMM across 10 fill instructions.
+Within a single transaction, one fill can only take up to this per-fill AMM cap. Calling multiple fill instructions can still fill a larger order over several transactions. For example, if the per-fill cap was 10,000 SOL, you could fill an order for 100,000 SOL against the AMM across 10 fill instructions.
 
-The following conditions will also expire/cancel the remainder(s) of orders:
+The following conditions will also expire or cancel the remainder of your orders:
 
--   Out of favour oracle price divergence from maker's set limit price (post only orders)
+-   Out-of-favour oracle price divergence from your set limit price (post-only orders):
 
-    -   oracle's price is above the maker's ask limit price by more than the market's initial margin ratio
+    -   the oracle's price is above your ask limit price by more than the market's initial margin ratio
 
-    -   oracle's price is below the maker's bid limit price by more than the market's initial margin ratio
+    -   the oracle's price is below your bid limit price by more than the market's initial margin ratio
 
--   order fill would reduce free collateral below 0 (for taker orders)
+-   the fill would reduce your free collateral below 0 (for taker orders)
 
-Note that whenever a user's orders are cancelled, fillers receive a small reward for the user they filled, if they did not receive payment otherwise.
+If your orders are cancelled this way, the filler who cancelled them receives a small reward, if they did not receive payment otherwise.
 
 ### Unbounded P&L and Market Delisting
 
-This risk is addressed in [Risks](/protocol/risk-and-safety/risks) and [P&L](/protocol/trading/profit-loss).
+You can find more on this risk in [Risks](/protocol/risk-and-safety/risks) and [P&L](/protocol/trading/profit-loss).
 
-Users can technically achieve unbounded unrealised P&L from entering and exiting a trade against the AMM. Further, as the AMM allows for asynchronous trading; there may not be an offsetting loss within the system to account for the gain made by particular users. 
+You can technically achieve unbounded unrealised P&L from entering and exiting a trade against the AMM. Because the AMM allows for asynchronous trading, there may not be an offsetting loss within the system to account for the gain you made.
 
-As such, even if the user can achieve unbounded unrealised gains - those gains cannot be settled and withdrawable as collateral until there is a dollar of offsetting loss to account for the dollar of gain.
+Even if you achieve unbounded unrealised gains this way, you cannot settle and withdraw them as collateral until there is a dollar of offsetting loss to account for the dollar of gain.
 
-In a circumstance where the majority of participants are in extreme positive unrealised P&L and the unrealised P&L cannot be settled; the market may be eligible for settlement through the [Delisting Process](/protocol/risk-and-safety/delisting-process).
+If the majority of participants are in extreme positive unrealised P&L and that unrealised P&L cannot be settled, the market may become eligible for settlement through the [Delisting Process](/protocol/risk-and-safety/delisting-process).
