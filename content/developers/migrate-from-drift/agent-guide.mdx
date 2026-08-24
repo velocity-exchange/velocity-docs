@@ -267,7 +267,7 @@ Old → new: the old native handlers trusted caller-supplied accounts and read t
 
 ### 5.15 `MarketStatus` discriminants shifted
 
-Old → new: Drift's `MarketStatus` had 4 now-removed pause variants between `Active` and `ReduceOnly`, so `ReduceOnly`/`Settlement`/`Delisted` were 6/7/8; they are now **2/3/4**. Affects: any custom (non-IDL) decoder reading the raw status byte will silently misclassify market state (e.g. read `ReduceOnly` as `FundingPaused`). The IDL/SDK class decode is fine. Check: rebuild any raw-numeric status decoders against the new discriminants.
+Old → new: Drift's `MarketStatus` had 4 now-removed pause variants between `Active` and `ReduceOnly`, so `ReduceOnly`/`Settlement`/`Delisted` were 6/7/8; they are now **2/3/4**. `PerpMarketAccount` also grew from 1216 bytes to 1304 bytes across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign. Affects: any custom (non-IDL) decoder reading the raw status byte will silently misclassify market state (e.g. read `ReduceOnly` as `FundingPaused`), and a raw fixed-offset decoder sized for the old struct will read past valid data or miss trailing fields. The IDL/SDK class decode is fine. Check: rebuild any raw-numeric status decoders against the new discriminants and the current struct size.
 
 ### 5.16 `LiquidationRecord.bankrupt` is now state-derived, not constant `true`
 

@@ -9,7 +9,7 @@ The examples below use placeholders like `<RPC_URL>` and `<KEYPAIR_PATH>`.
 | Velocity (mainnet & devnet) | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` |
 | Velocity Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` |
 
-Velocity uses the same program ID on devnet and mainnet-beta. On-chain state does not carry over from Drift Protocol v2 — Velocity is an entirely new deployment, so user accounts must be re-initialized and balances start fresh.
+Velocity uses the same program ID on devnet and mainnet-beta. Velocity is an entirely new deployment, so user accounts must be re-initialized and balances start fresh; no prior on-chain state carries over.
 
 You can also import the Velocity program ID directly from the SDK:
 
@@ -43,7 +43,7 @@ console.log(getConfig().QUOTE_MINT_ADDRESS);
   </TypeScript>
 </SDKDoc>
 
-On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDT — mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is USDT (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`) — note this differs from Drift, whose quote asset was USDC.
+On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDT — mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is USDT (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`). If you're porting an integration that assumed a different quote asset, see the [migration guide](/developers/migrate-from-drift).
 
 <SDKDoc>
   <TypeScript name="TokenFaucet" type="class">

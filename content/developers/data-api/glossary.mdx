@@ -1,7 +1,7 @@
 # Data API Glossary
 
 <Callout type="warning">
-**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized — see [Data API](/developers/data-api). This glossary describes the column set inherited from Drift's Data API; some columns describe features Velocity removed (noted inline) and are kept here only for historical/comparison reference until Velocity's own Data API schema is confirmed.
+**Provisional endpoint.** Velocity's hosted Data API host is not yet finalized — see [Data API](/developers/data-api). Some columns below describe features Velocity removed (noted inline) and are kept here only for reference until Velocity's own Data API schema is confirmed.
 </Callout>
 
 <Callout type="important">
@@ -23,7 +23,7 @@ Columns in the table below are part of each category:
 | amount          | int       |                     |                                                                                                                       |
 | programId       | pubkey    |                     | Solana program identifier. On Velocity this is `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` on both devnet and mainnet-beta. |
 | marketType      | perp/spot |                     | Type of market where the order was filled ("Spot", "Perpetual"). Note: spot order-book trading (the DLOB) is disabled on Velocity — spot fill events no longer occur.                                                      |
-| marketIndex     | int       |                     | Perpetual contract market index. See the SDK's market config (`@velocity-exchange/sdk` `configs`) rather than any Drift-specific constants file. |
+| marketIndex     | int       |                     | Perpetual contract market index. See the SDK's market config (`@velocity-exchange/sdk` `configs`) for the current index-to-symbol mapping. |
 | spotMarketIndex | int       |                     | Index of the spot market.                                                                                             |
 | perpMarketIndex | int       |                     | Index of the perpetual contract market.                                                                               |
 | userAuthority   | pubkey    |                     | Public key of the user's authority account (wallet).                                                                  |
@@ -160,20 +160,6 @@ Columns in the table below are part of each category:
 | quoteEntryAmount      | int  |           | Amount of quote asset before settlement. |
 | settlePrice           | int  |           | Settlement price.                        |
 | explanation           | none |           |                                          |
-
-### LP (BAL)
-
-<Callout type="warning">
-**Removed on Velocity.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely — there is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table. This section is kept only as a historical reference for readers migrating a Drift LP-events integration.
-</Callout>
-
-| Column                | Unit                           | Description                                      |
-| --------------------- | ------------------------------ | ------------------------------------------------ |
-| action                | addLiquidity / settleLiquidity |                                                  |
-| nShares               | int                            | Number of perpetual contract shares traded.      |
-| deltaBaseAssetAmount  | int                            | Change in base asset position due to the trade.  |
-| deltaQuoteAssetAmount | int                            | Change in quote asset position due to the trade. |
-| pnl                   | int                            | Profit or loss from the trade.                   |
 
 ### Insurance Fund
 

@@ -23,7 +23,7 @@ Velocity uses several account types, each serving a specific purpose:
 *The State account is a singleton — there's only one per deployment. It's read by almost every instruction to apply protocol-level rules.*
 
 <Callout type="info">
-Velocity replaced Drift's single `State.admin` with a **tiered key model**: `coldAdmin`, `warmAdmin`, `pauseAdmin`, and a set of narrowly-scoped `hot*` keys (`hotAmmCrank`, `hotLpCache`, `hotFeatureFlag`, `hotFeeWithdraw`, `hotMmOracleCrank`, etc.) — each authorizing only the specific instructions it needs, rather than one address with full control. Code that reads `state.admin` directly no longer compiles against the current IDL.
+Velocity uses a **tiered key model** instead of a single admin key: `coldAdmin`, `warmAdmin`, `pauseAdmin`, and a set of narrowly-scoped `hot*` keys (`hotAmmCrank`, `hotLpCache`, `hotFeatureFlag`, `hotFeeWithdraw`, `hotMmOracleCrank`, etc.), each authorizing only the specific instructions it needs rather than one address with full control. There is no `state.admin` field.
 </Callout>
 
 <details>
@@ -79,13 +79,13 @@ Manages perpetual futures markets with:
 - **AMM state** (`amm`) - Base/quote reserves and liquidity parameters for the constant-product vAMM
 - **Oracle fields** - `oracle`, `oracleSource` live at the **top level** of `PerpMarketAccount` (moved off `amm.*` when the AMM was decoupled)
 - **Market stats** (`marketStats`) - mark/oracle TWAPs, volume, and MM-oracle snapshot, shared across makers
-- **Hedge config** (`hedgeConfig`) - this market's relationship to its hedging [VLP pool](/developers/vault-managers) (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`) — replaces Drift's flat `lp*` LP-share fields
+- **Hedge config** (`hedgeConfig`) - this market's relationship to its hedging [VLP pool](/developers/vault-managers) (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`) — replaces the earlier flat `lp*` LP-share fields
 - **Fee ledger** (`feeLedger`) - consolidated fee-split accounting (pending protocol/IF/AMM carveouts) from the fee redesign
 - **Risk parameters** - `marginRatioInitial` / `marginRatioMaintenance` (MARGIN_PRECISION, 1e4), `imfFactor`, `contractTier`
 - **Market status** - `status: MarketStatus` (see the discriminant note below)
 
 <Callout type="warning">
-Velocity has no vAMM LP shares — `PerpPosition.lpShares`, `lastQuoteAssetAmountPerLp`, and `perLpBase` from Drift do not exist, and the five flat LP-pool fields on `PerpMarketAccount` (`lpPoolId`, `lpStatus`, `lpPausedOperations`, `lpFeeTransferScalar`, `lpExchangeFeeExcluscionScalar`) were replaced by the single `hedgeConfig` object above. High leverage mode, protected maker mode, and fuel tracking were also removed — there is no `PerpMarket.highLeverageMarginRatioInitial`, `protectedMaker*`, or `fuelBoost*`.
+Velocity has no vAMM LP shares: `PerpPosition.lpShares`, `lastQuoteAssetAmountPerLp`, and `perLpBase` do not exist, and the five flat LP-pool fields on `PerpMarketAccount` (`lpPoolId`, `lpStatus`, `lpPausedOperations`, `lpFeeTransferScalar`, `lpExchangeFeeExcluscionScalar`) were replaced by the single `hedgeConfig` object above. High leverage mode, protected maker mode, and fuel tracking were also removed — there is no `PerpMarket.highLeverageMarginRatioInitial`, `protectedMaker*`, or `fuelBoost*`.
 </Callout>
 
 <details>
@@ -138,7 +138,7 @@ interface PerpMarketAccount {
 }
 ```
 
-The current on-chain size is exactly **1304 bytes** (up from Drift's 1216, growing across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign). Any custom (non-IDL) decoder must be rebuilt against [`sdk/src/idl/velocity.json`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/sdk/src/idl/velocity.json) — see `PerpMarketAccount` in `types.ts` for the full field list.
+The current on-chain size is exactly **1304 bytes**, having grown across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign. Any custom (non-IDL) decoder must be rebuilt against [`sdk/src/idl/velocity.json`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/sdk/src/idl/velocity.json) — see `PerpMarketAccount` in `types.ts` for the full field list.
 
 </details>
 
@@ -345,7 +345,7 @@ interface Order {
   existingPositionDirection: PositionDirection;
   postOnly: boolean;
   immediateOrCancel: boolean;
-  oraclePriceOffset: BN;             // now BN (i64), was `number` on Drift
+  oraclePriceOffset: BN;             // i64 offset from oracle price
   auctionDuration: number;
   auctionStartPrice: BN;
   auctionEndPrice: BN;
@@ -355,13 +355,13 @@ interface Order {
 }
 ```
 
-`Order.quoteAssetAmount` from Drift is gone — it never existed on-chain (the decoder always populated it with `0`); read filled quote from `quoteAssetAmountFilled`.
+The `quoteAssetAmount` field is gone. It never existed on-chain (the decoder always populated it with `0`); read filled quote from `quoteAssetAmountFilled`.
 
 </details>
 
 ## PDAs (Program Derived Addresses)
 
-Velocity extensively uses PDAs for deterministic address generation. Most seed strings are unchanged from Drift, but the State seed became `"velocity_state"`, and since the **program ID is new**, every derived address is different from Drift's:
+Velocity extensively uses PDAs for deterministic address generation, derived from the following seeds:
 
 ```
 State PDA:      ["velocity_state"]
@@ -426,14 +426,14 @@ The sizes quoted on this page (`PerpMarket` 1304 bytes, `SpotMarket` 808, `User`
 
 ## MarketStatus discriminants
 
-`MarketStatus` is stored directly in `PerpMarket.status` / `SpotMarket.status`. Velocity removed several deprecated Drift variants, which **shifted the surviving discriminants**:
+`MarketStatus` is stored directly in `PerpMarket.status` / `SpotMarket.status`. The current discriminants are:
 
-| Variant | Drift | Velocity |
-|---|---|---|
-| `Initialized` | 0 | 0 |
-| `Active` | 1 | 1 |
-| `ReduceOnly` | 6 | 2 |
-| `Settlement` | 7 | 3 |
-| `Delisted` | 8 | 4 |
+| Variant | Value |
+|---|---|
+| `Initialized` | 0 |
+| `Active` | 1 |
+| `ReduceOnly` | 2 |
+| `Settlement` | 3 |
+| `Delisted` | 4 |
 
-Any custom (non-IDL) decoder built against Drift's discriminants will silently misread these states — always decode against `sdk/src/idl/velocity.json`, not a hardcoded enum.
+Always decode against `sdk/src/idl/velocity.json`, not a hardcoded enum. If you're porting a raw decoder from an earlier program version, see the [migration guide](/developers/migrate-from-drift/agent-guide#5-behavioral-divergences---stop-and-report) for the discriminants it replaced.

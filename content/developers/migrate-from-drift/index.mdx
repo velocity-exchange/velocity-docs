@@ -18,6 +18,7 @@ Because the program ID changed, **every PDA address is different** from Drift �
 | Anchor | `@coral-xyz/anchor@0.29.0` | `@anchor-lang/core@1.0.1` (aliased as `@coral-xyz/anchor`) |
 | IDL file | `drift.json` | `velocity.json` |
 | Mainnet quote asset | USDC | USDT |
+| Data API host | `data.api.drift.trade` | `data.velocity.exchange` (provisional) |
 
 <Callout type="info">
 This page covers the **TypeScript SDK** at `@velocity-exchange/sdk` 0.13.0. Rust (`velocity-rs`) and raw-ABI integrators should also read the [full migration reference](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) in the monorepo.
@@ -81,6 +82,22 @@ These are semantic changes a compiler cannot catch — a port that builds cleanl
 - **`MarketStatus` discriminants shifted.** Drift's four now-removed pause variants sat between `Active` and `ReduceOnly`, so `ReduceOnly` / `Settlement` / `Delisted` were 6 / 7 / 8. On Velocity they are 2 / 3 / 4. The IDL/Anchor-based SDK decode is fine, but **any custom raw-byte decoder** will silently misclassify market state. Rebuild raw decoders against the new discriminants.
 - **Bulk order margin is tighter.** `place_orders` / `place_scale_orders` now accumulate risk across the batch and check **initial** margin once per touched risk scope (cross plus each isolated market), instead of only gating the last order at maintenance margin. Batches that previously slipped a risk-increasing order past a weak gate now revert with `InsufficientCollateral`. Size batches against initial margin.
 - **Deposits and transfers enforce per-market admission.** Same-market `transfer_deposit` (and the delegate variant) now applies the full deposit/withdraw admission logic (active status, `max_token_deposits`, reduce-only cap), and direct `deposit()` now respects the per-market `Deposit` pause bit independently of the global deposit pause. Transfers into a capped, non-active, or reduce-only market — and deposits into a market with only the per-market deposit bit paused — now revert where they used to succeed. Pre-check spot-market status and caps.
+
+## Data API: Drift-only columns
+
+The Data API's Trades/Market Trades tables drop the `spotFulfillmentMethodFee` column (external spot fulfillment is removed), and the Funding Rates table drops `periodRevenue` and `baseAssetAmountWithUnsettledLp` (vAMM LP shares are removed). One entire table has no Velocity equivalent:
+
+**LP (BAL), Drift-only, no Velocity equivalent.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely on Velocity — there is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table.
+
+| Column | Unit | Description |
+|---|---|---|
+| action | addLiquidity / settleLiquidity | |
+| nShares | int | Number of perpetual contract shares traded. |
+| deltaBaseAssetAmount | int | Change in base asset position due to the trade. |
+| deltaQuoteAssetAmount | int | Change in quote asset position due to the trade. |
+| pnl | int | Profit or loss from the trade. |
+
+See the [Data API glossary](/developers/data-api/glossary) for the full current column reference.
 
 ## SDK surface
 

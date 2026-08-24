@@ -1,13 +1,12 @@
 # Program & Vault Addresses
 
-Below are the mainnet instances of Velocity and Velocity Vaults. Velocity is an entirely new program deployment (new program ID), not an upgrade of Drift Protocol's program — the Drift program address is included for reference only and is not used by Velocity.
+Below are the mainnet instances of Velocity and Velocity Vaults. Velocity is an entirely new program deployment with its own program ID, PDAs, and account layouts.
 
 | Program | Address
 |---------|--------
 | Velocity | vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P
 | Velocity Vaults | vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR
-| Drift Protocol (legacy, paused) | dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH
 
 <Callout type="important">
-Because the program ID changed, every PDA address (state, users, markets, vaults, …) is different from Drift's, even where seed strings are unchanged — addresses must be re-derived against the Velocity program ID, and no on-chain state carries over from Drift.
+Every PDA address (state, users, markets, vaults, …) is specific to this program ID, so addresses must be derived against it directly, and no on-chain state carries over from a prior deployment. If you're porting an integration from an earlier program ID, see the [migration guide](/developers/migrate-from-drift) for the legacy address and PDA-reuse pitfalls.
 </Callout>

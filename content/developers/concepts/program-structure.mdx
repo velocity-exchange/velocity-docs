@@ -37,7 +37,7 @@ Tracks long/short exposure in perpetual futures markets.
 */}
 
 <Callout type="info">
-Velocity has no vAMM LP shares — `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields from Drift do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
+Velocity has no vAMM LP shares. `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
 </Callout>
 
 

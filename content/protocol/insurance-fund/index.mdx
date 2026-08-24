@@ -8,7 +8,7 @@ Anyone can provide passive liquidity by staking the corresponding asset into the
 
 <Callout type="important">
 The Insurance Fund is **100% staker-owned**. Velocity removed the protocol-owned insurance-fund
-shares and IF-rebalance instructions that existed on Drift (`admin_withdraw_from_insurance_fund_vault`,
+shares and IF-rebalance instructions (`admin_withdraw_from_insurance_fund_vault`,
 `transfer_protocol_if_shares_to_revenue_pool`, IF-swap, and the `IfRebalanceConfig` /
 `ProtocolIfSharesTransferConfig` accounts no longer exist). Once a market has stakers, 100% of the
 revenue settled to a market's insurance fund accrues to stakers as share-price appreciation — there
@@ -46,7 +46,7 @@ Velocity Protocol has multiple asset pools. As a result:
 The Insurance Fund is funded entirely by stakers' own contributions plus two revenue streams, with no protocol-owned share:
 
 1.  **Revenue pool settlement** — a capped share of trading, liquidation, and borrow fees collected in a spot market's revenue pool settles into that market's insurance fund vault periodically.
-2.  **Lending-yield carveout** — each spot market's `insuranceFund.ifFeeFactor` (previously a combined `totalFactor`/`userFactor` split on Drift) carves out a fraction of that market's deposit-interest gains directly to the insurance fund, rather than to depositors.
+2.  **Lending-yield carveout** — each spot market's `insuranceFund.ifFeeFactor` (previously a combined `totalFactor`/`userFactor` split) carves out a fraction of that market's deposit-interest gains directly to the insurance fund, rather than to depositors.
 
 Since exchange fees are collected in the quote asset, they will be pooled in that market's Insurance Fund, and in turn, that pool will backstop the allotted portion of bankruptcies in each perpetual market.
 
