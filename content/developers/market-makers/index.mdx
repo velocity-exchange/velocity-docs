@@ -17,6 +17,34 @@ Learn how to place two-sided quotes that automatically update with oracle prices
   href="/developers/market-makers/quickstart"
 />
 
+## Understanding Velocity's Trading Mechanisms
+
+### Orderbook & Matching
+
+**How orders are matched and filled**
+
+Learn about the DLOB architecture, liquidity priority (JIT → DLOB → AMM), and how to access orderbook data via HTTP, WebSocket, or SDK.
+
+*Essential reading for understanding execution flow*
+
+<Cards.Card
+  title="Understand orderbook & matching ↗"
+  href="/developers/market-makers/orderbook-and-matching"
+/>
+
+### JIT Auctions
+
+**Just-In-Time auction mechanics**
+
+Deep dive into how JIT auctions work, auction pricing, maker participation, and place-and-make patterns.
+
+*Critical for competitive market making*
+
+<Cards.Card
+  title="Understand JIT auctions ↗"
+  href="/developers/market-makers/jit-auctions"
+/>
+
 ## Choosing a Strategy
 
 Velocity supports three distinct market making approaches. The right choice depends on your latency infrastructure, capital efficiency goals, and operational complexity tolerance.
@@ -66,22 +94,6 @@ React to incoming taker orders during JIT auctions without maintaining resting o
   href="/developers/market-makers/jit-only"
 />
 
-### SWIFT Market Making
-
-**Offchain JIT market making via signed order delivery**
-
-Receive signed taker orders over WebSocket before they hit the onchain auction. SWIFT is essentially an offchain JIT flow: takers sign their order and broadcast it offchain, and makers can fill it before or as the auction opens. Capital is only deployed when you choose to fill.
-
-**Best for:**
-- Makers who want earlier visibility into taker flow
-- Competitive auction environments
-- Flow selection with more time to decide
-
-<Cards.Card
-  title="Understand SWIFT market making ↗"
-  href="/developers/market-makers/swift-api"
-/>
-
 ## Production
 
 ### Bot Architecture
@@ -93,44 +105,23 @@ Production patterns and best practices for building reliable market making bots.
   href="/developers/market-makers/bot-architecture"
 />
 
-## Understanding Velocity's Trading Mechanisms
-
-### Orderbook & Matching
-
-**How orders are matched and filled**
-
-Learn about the DLOB architecture, liquidity priority (JIT → DLOB → AMM), and how to access orderbook data via HTTP, WebSocket, or SDK.
-
-*Essential reading for understanding execution flow*
-
-<Cards.Card
-  title="Understand orderbook & matching ↗"
-  href="/developers/market-makers/orderbook-and-matching"
-/>
-
-### JIT Auctions
-
-**Just-In-Time auction mechanics**
-
-Deep dive into how JIT auctions work, auction pricing, maker participation, and place-and-make patterns.
-
-*Critical for competitive market making*
-
-<Cards.Card
-  title="Understand JIT auctions ↗"
-  href="/developers/market-makers/jit-auctions"
-/>
-
 ## Advanced Features
 
-### SWIFT API
+### SWIFT
 
-Receive signed taker orders offchain via WebSocket before they hit the auction.
+**Offchain JIT market making via signed order delivery**
 
-**Latency advantage:** 100-500ms faster than onchain feeds
+Receive signed taker orders over WebSocket before they hit the onchain auction. SWIFT is essentially an offchain JIT flow: takers sign their order and broadcast it offchain, and makers can fill it before or as the auction opens. Capital is only deployed when you choose to fill.
+
+**Latency advantage:** 100-500ms faster than onchain feeds.
+
+**Best for:**
+- Makers who want earlier visibility into taker flow
+- Competitive auction environments
+- Flow selection with more time to decide
 
 <Cards.Card
-  title="Understand SWIFT API ↗"
+  title="Understand SWIFT market making ↗"
   href="/developers/market-makers/swift-api"
 />
 

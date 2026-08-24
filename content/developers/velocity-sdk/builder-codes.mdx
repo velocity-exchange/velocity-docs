@@ -2,6 +2,8 @@
 
 Builder Codes let integrators earn fees by routing order flow through their application. A builder fee is an extra fee (on top of the taker's normal tiered fee, capped at 1% of notional via `MAX_BUILDER_FEE_TENTH_BPS`) attached to an order via `builderIdx`/`builderFeeTenthBps`, and settled to the builder's revenue-share account when the order fills. The fee is waived (the fill still goes through at zero builder fee) on liquidation fills, and on any fill where the taker does not clear initial margin under the program's strict oracle rules, so builders shouldn't assume every fill pays.
 
+For the concepts behind this system (the three actors, the escrow model, and the payout paths), see [Velocity Builder Codes](/developers/builder-codes). This page covers the SDK calls that implement it.
+
 <Callout type="info">
 Builder codes work on **any** perp order: regular on-chain order placement (`placePerpOrder`, `placeAndTakePerpOrder`, `placeAndMakePerpOrder`, `fillPerpOrder`) as well as [Swift](/developers/velocity-sdk/swift) signed-message orders. `builderIdx`/`builderFeeTenthBps` are plain optional fields on `OrderParams`, not a Swift-only mechanism.
 </Callout>
