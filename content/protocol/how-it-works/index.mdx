@@ -54,7 +54,7 @@ Trades on Velocity are supported by three liquidity mechanisms. Each mechanism i
 <Steps>
 ### Just-in-Time (JIT) Auction Liquidity
 
-All perp market orders placed on Velocity are routed through a short-term auction. The client sets the auction's duration, and the program floors it at a minimum, currently 4 seconds. During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
+All perp market orders placed on Velocity are routed through a short-term auction. The client sets the auction's duration, and the program floors it at a minimum duration that's admin-configurable per deployment. During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
 
 Auctions are run via a Dutch Auction (where the auction price starts at the better price and linearly moves toward a set worse end price) and market makers compete amongst themselves in speed to fulfil user orders.
 
