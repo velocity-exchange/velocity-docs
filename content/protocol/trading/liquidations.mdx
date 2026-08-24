@@ -30,7 +30,7 @@ The `Health` measure on the user page can help visualise how close a user is to 
 
 `Health = 100% - maint. margin / total collateral`
 
-The user's trade price at liquidation for a perpetual position will be based on the oracle price. The penalty / fee that is set per market, likely above the normal taker fee, in order to give the liquidator a rebate.
+The user's trade price at liquidation for a perpetual position will be based on the oracle price. Both the liquidator fee and the insurance-fund fee are per-market parameters set by protocol admins, and the liquidator fee is what gives the liquidator a rebate for taking over the position.
 
 <Callout type="error">
 **In the case of an extreme oracle error: the market will pause most fills, liquidations, and funding rate updates.**
