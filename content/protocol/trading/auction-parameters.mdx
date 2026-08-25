@@ -14,7 +14,7 @@ Customising auction parameters is recommended for advanced traders only.
 
 ## How auctions work
 
-With Velocity, users can determine the duration of their order in 'slots', and set starting and ending prices based on the keeper network's view of the DLOB.
+With Velocity, users can determine the duration of their auction in 'slots', and set starting and ending prices based on the keeper network's view of the DLOB.
 
 <Callout type="important">
 The duration you request is a floor, not a fixed value. The program can lengthen it, and can move your start and end prices. See [How the program sanitizes your auction](#how-the-program-sanitizes-your-auction) below.
@@ -22,9 +22,9 @@ The duration you request is a floor, not a fixed value. The program can lengthen
 
 As an example, consider an order configured this way:
 
--   the user wants the order to start at a price 0.05% better than the estimated fill price.
+-   the user wants the auction to start at a price 0.05% better than the estimated fill price.
 
--   The order will end at a price that's the worst fill, but with a safety buffer of 0.05% slippage.
+-   The auction will end at a price that's the worst fill, but with a safety buffer of 0.05% slippage.
 
 -   This entire process will take place over 20 slots, roughly 8 seconds at today's 400ms slot time. Do not treat that conversion as fixed: Solana's slot time is shrinking, and the program tracks the live value in `State.slotDurationMs`. See [Slot duration and wall-clock time](/developers/concepts/slot-duration).
 
@@ -34,7 +34,7 @@ Additionally, user's can specify their auctions as offsets from oracle price. Th
 
 ### Auctions for Limit Orders
 
-When submitted limit orders cross the local DLOB and/or AMM, a limit order without post only flag will actually submit an auction first. The limit order uses the user defined rule for start price for its start auction param. It is effectively the same as a market auction order **except the user explicitly overrides the End Price and Slippage Tolerance Limit Price.**
+A submitted limit order that crosses the local DLOB and/or AMM (and doesn't have the post-only flag) carries its own auction, computed and stored as part of the same order, not placed separately or "first." The auction's start price follows the user-defined start-price rule, the same as a market order's auction. **The end price, however, defaults to the order's own limit price rather than the UI's slippage-tolerance setting, and the program clamps both start and end prices so the auction can never fill worse than that limit price.**
 
 
 ### Atomic Fills against Resting Liquidity

@@ -188,6 +188,44 @@ table {
   }
 }
 
+/* Formulas (KaTeX block math, `$$...$$`). Same tonal-card treatment as
+   tables/code: a bounded neutral surface, no accent, since a formula isn't
+   an actionable element. Horizontal scroll keeps wide equations from
+   overflowing narrow viewports instead of shrinking them unreadably small. */
+.katex-display {
+  margin: 24px 0;
+  padding: 20px 24px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--x-color-gray-600) 14%, transparent);
+  background: color-mix(in oklab, var(--x-color-gray-600) 6%, transparent);
+}
+
+.katex-display > .katex {
+  white-space: nowrap;
+}
+
+/* Screenshots and diagrams. An <img> written as JSX in MDX picks up none of
+   the theme's typographic spacing, so it sits flush against the copy above
+   it. 24px matches the table/formula block rhythm. */
+main img {
+  margin-block: 24px;
+}
+
+/* A markdown image (`![]()`) is wrapped in a zoom span inside its own
+   paragraph, which carries a top margin of its own. Zero the paragraph and
+   let the rule above set the spacing, so both syntaxes land on 24px. */
+main p:has(> [data-rmiz]:only-child) {
+  margin-block: 0;
+}
+
+main [data-rmiz],
+main [data-rmiz-content] {
+  display: block;
+}
+
 /* Swagger UI Dark Mode Fixes */
 .swagger-ui {
   .wrapper {

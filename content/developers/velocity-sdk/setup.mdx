@@ -210,7 +210,7 @@ const velocityClient = new VelocityClient({
 
 ### Multiple Subaccounts
 
-Velocity supports multiple subaccounts per wallet, each with its own isolated position and order state. This lets you run separate strategies (e.g., a market-making bot and a hedging bot) under the same authority without cross-contaminating risk or PnL. Use `addUser()` to subscribe to additional subaccounts after initialization.
+Velocity supports multiple subaccounts per wallet, each with its own independent position and order state. This lets you run separate strategies (e.g., a market-making bot and a hedging bot) under the same authority without cross-contaminating risk or PnL. Use `addUser()` to subscribe to additional subaccounts after initialization.
 
 <SDKDoc>
   <TypeScript name="hasUser" type="method" owner="VelocityClient">
