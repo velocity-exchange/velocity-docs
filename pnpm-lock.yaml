@@ -29,6 +29,9 @@ importers:
       fs:
         specifier: 0.0.1-security
         version: 0.0.1-security
+      katex:
+        specifier: 0.16.27
+        version: 0.16.27
       next:
         specifier: 15.3.8
         version: 15.3.8(react-dom@19.2.4(react@19.2.4))(react@19.2.4)

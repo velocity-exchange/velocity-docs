@@ -27,7 +27,7 @@ See [Trigger Market vs. Trigger Limit](/protocol/trading/order-types#trigger-ord
 
 **What is the difference between Take Profit Market and Take Profit Limit?**
 
-The difference is in the way these orders are settled. Take Profit Market orders are immediately sold on market upon hitting their trigger price. On the other hand, Take Profit Limit orders are not sold immediately but are partially filled as limit orders. The subsequent limit orders don’t need to have the same target price as their trigger price.
+Take Profit Market orders close the position immediately at the best available price once the trigger price is hit. Take Profit Limit orders instead place a limit order at your chosen limit price once triggered, so they fill only if the market reaches that price, and the limit price doesn't have to match the trigger price.
 
 **What is the difference between a Stop Loss and a Take Profit?**
 
@@ -35,25 +35,25 @@ Both order types are set on the market when their triggers are met. Where the tw
 
 **Why my stop loss didn't trigger?**
 
-For trigger orders (stop-loss, take-profit), the trigger condition is checked against the oracle price. Once triggered, the order still fills at a maker's limit price or against the AMM, not against the oracle, so a plain limit order does not need the oracle price to cross anything to fill. For precise historical price data based on the oracle, we recommend switching from 'Candles: Fills' to 'Candles: Oracle' in the top right corner of the chart.
+For trigger orders (stop-loss, take-profit), the trigger condition is checked against Velocity's trigger reference price, not the raw oracle price. The reference price is a clamped median of the oracle price, a recent funding/basis adjustment, and the market's last fill price, so it can sit slightly away from the raw oracle print. Once triggered, the order still fills at a maker's limit price or against the AMM, not against the reference price itself, so a plain limit order does not need the reference price to cross anything to fill. For precise historical price data based on the oracle, we recommend switching from 'Candles: Fills' to 'Candles: Oracle' in the top right corner of the chart.
 
-Even if the oracle price triggers your stop, executions are not guaranteed due to the decentralized orderbook. Fillers can place orders in a permissionless manner, operating on a first-come, first-served basis.
+Even if the reference price triggers your stop, executions are not guaranteed due to the decentralized orderbook. Fillers can place orders in a permissionless manner, operating on a first-come, first-served basis.
 
 If the price briefly matches your order, it may not be executed. We are continually enhancing our filler network. For technically inclined individuals seeking guaranteed fills, you can operate your own filler for personal orders; however, even then, execution cannot be assured. This trade-off is necessary to achieve a decentralized and scalable system.
 
 Occasionally, stale oracle information may result in unfilled orders during certain periods.
 
-**Why did my take profit order not work?**
+**My take profit order was triggered, but not filled. Why?**
 
-Take profit orders on Velocity use the oracle price, not the mark price. This means the order is triggered based on a fair market price from the market's configured oracle (Pyth Lazer by default) instead of the current trading price on the exchange. You can switch between the oracle and mark price view on the chart for better understanding.
+Triggering and filling are two separate steps. Triggering only makes the order eligible to fill, once the trigger reference price crosses your trigger price, a keeper must still submit it, either against the AMM or against a resting maker order, the same as any other order (see ["Is my order guaranteed to execute?"](#is-my-order-guaranteed-to-execute)). If your order is a Take Profit Limit, it fills only if the market can execute at your limit price or better; if the market moves past your limit price before a keeper fills it, the order stays open and unfilled until the price returns or you cancel it. A Take Profit Market order fills at the best available price once triggered, but is still subject to the same permissionless, best-effort fill process, so a brief delay or network congestion can leave it triggered but momentarily unfilled.
 
-**My stop-loss order didn't trigger, and the price went up. Why did I lose money?**
+**My stop-loss triggered and I lost money, even though the market price never reached my stop level. Why?**
 
-Similar to the take profit scenario, stop-loss orders are also triggered based on the oracle price. If the oracle price briefly touched your stop-loss level and then bounced back, your order might have been executed even though the market price never reached that level.
+Like take-profit orders, stop-loss orders trigger based on Velocity's trigger reference price, not the raw oracle price or the market's trading price. If the reference price briefly touched your stop level and then bounced back, your order could have triggered and filled even though the visible market price never reached that level.
 
 **What is the difference between a trigger price and a limit price?**
 
-- Trigger price: This price point determines when your order (take profit or stop-loss) gets activated. It uses the oracle price for execution.
+- Trigger price: This price point determines when your order (take profit or stop-loss) gets activated. It uses Velocity's trigger reference price (derived from the oracle, not the raw oracle price itself) for activation.
 
 - Limit price: This price specifies the exact price at which your order gets filled. It can be used with stop-loss and take-profit orders to guarantee execution at a specific price, but comes with potential slippage (filling at a slightly different price) and fees.
 
