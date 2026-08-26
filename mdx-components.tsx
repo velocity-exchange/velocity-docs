@@ -7,6 +7,7 @@ import {
   LTVTable,
 } from "./components/data/CrossCollateralTables";
 import { Api, Rust, SDKDoc, TypeScript } from "./components/SDKDoc";
+import { FeeFlowSankey } from "./components/diagrams/figures/FeeFlowSankey";
 
 export function useMDXComponents(components?: Record<string, unknown>) {
   return useDocsMDXComponents({
@@ -18,6 +19,7 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     TypeScript,
     Rust,
     Api,
+    FeeFlowSankey,
     ...components,
   });
 }

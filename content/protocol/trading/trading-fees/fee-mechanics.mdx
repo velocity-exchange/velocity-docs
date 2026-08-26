@@ -59,6 +59,8 @@ remainder ── × amm_fee_numerator%      → AMM fee provision (spendable AMM
           ── residual                  → protocol (withdrawable `protocol_fee_pool`)
 ```
 
+<FeeFlowSankey />
+
 A builder fee sits outside this split entirely: it is charged on top of the taker fee and passed through to the builder, so it changes neither the taker's fee tier nor the protocol's cut. See [Builder Codes](/developers/builder-codes).
 
 The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to 0%/0% (the protocol receives 100% of the trade-fee remainder as the residual claimant) and is admin-configurable up to `ammFeeNumerator + ifFeeNumerator ≤ 100%`.

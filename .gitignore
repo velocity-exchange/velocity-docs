@@ -13,6 +13,9 @@ public/llms.txt
 public/**/*.md
 
 # Local Claude Code tooling (not part of the docs repo)
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/docs-diagram/
 .agents/
 skills-lock.json
