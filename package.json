@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "rust-docs": "ts-node scripts/rustDocs.ts",
+    "test": "vitest run",
     "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap && node scripts/generateLlmsTxt.mjs && node scripts/generateMarkdownPages.mjs"
   },
   "repository": {
@@ -25,6 +26,8 @@
     "@tanstack/react-query": "5.101.2",
     "@velocity-exchange/sdk": "0.4.0",
     "canvas-txt": "4.1.1",
+    "d3-sankey": "0.12.3",
+    "d3-shape": "3.2.0",
     "dotenv": "16.6.1",
     "fs": "0.0.1-security",
     "katex": "0.16.27",
@@ -40,9 +43,12 @@
     "ts-node": "10.9.2"
   },
   "devDependencies": {
+    "@types/d3-sankey": "0.12.5",
+    "@types/d3-shape": "3.2.0",
     "@types/node": "18.11.10",
     "pagefind": "1.4.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   },
   "packageManager": "pnpm@10.11.1+sha512.e519b9f7639869dc8d5c3c5dfef73b3f091094b0a006d7317353c72b124e80e1afd429732e28705ad6bfa1ee879c1fce46c128ccebd3192101f43dd67c667912"
 }
