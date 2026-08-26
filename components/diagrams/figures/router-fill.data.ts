@@ -115,18 +115,30 @@ export const orderLifecycleSpec: FlowSpec = {
   ],
 };
 
-/** How Velocity finds work that has no operator, and how that work lands. */
-export const relayLoopSpec: FlowSpec = {
+/**
+ * Who builds the transaction, and what the chain then checks. Both paths read
+ * the same router answer. A signed order reaches the chain through a filler, so
+ * the chain holds that filler to the route the taker named. A taker that signs
+ * the transaction chose its own account list, so the chain checks nothing more.
+ *
+ * Source: velocity-v1 `rust/swift/src/route.rs` (the `/route` answer),
+ * `instructions/keeper.rs` (`require_signed_route`), and `math/router.rs`
+ * (`withheld_obligation`).
+ */
+export const routingLanesSpec: FlowSpec = {
   nodes: [
-    { id: "state", label: "Condition block", note: "on the account", value: "wake + resolver", column: 0, tone: "signal" },
-    { id: "turner", label: "Turner", note: "off-chain", kind: "offchain", column: 1 },
-    { id: "resolver", label: "Resolver", note: "simulated only", value: "stages the work", column: 2 },
-    { id: "executor", label: "Executor", note: "lands on chain", value: "no signer", column: 3 },
+    { id: "taker", label: "Taker", note: "wants size at a price", column: 0 },
+    { id: "router", label: "Router", note: "off-chain", value: "GET /route", kind: "offchain", column: 1, tone: "signal" },
+    { id: "filler", label: "Filler", note: "any operator", value: "signed order", kind: "offchain", column: 2 },
+    { id: "client", label: "The taker's client", note: "no third party", value: "own transaction", kind: "offchain", column: 2 },
+    { id: "fill", label: "Router pass", note: "Velocity", value: "checks the route", column: 3, tone: "signal" },
   ],
   edges: [
-    { from: "state", to: "turner", label: "wakes", tone: "signal" },
-    { from: "turner", to: "resolver", dashed: true },
-    { from: "resolver", to: "executor" },
-    { from: "executor", to: "state", label: "pays the sender and moves the wake" },
+    { from: "taker", to: "router", label: "the order", dashed: true },
+    { from: "router", to: "taker", label: "the split, the CLOB makers in order, and the quoter entries", dashed: true },
+    { from: "router", to: "filler", label: "broadcast", dashed: true, tone: "signal" },
+    { from: "router", to: "client", dashed: true },
+    { from: "filler", to: "fill", tone: "signal" },
+    { from: "client", to: "fill" },
   ],
 };

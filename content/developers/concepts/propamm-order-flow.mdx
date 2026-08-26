@@ -55,10 +55,58 @@ program called midpoint, and the maker creates an instance of it. The
 this page calls both cases a quoter program, because Velocity treats them the
 same way.
 
-The filler is an off-chain program. Any person can operate a filler. The filler
-assembles the account list and pays the transaction fee. The filler cannot
-select prices. An incorrect account list makes the transaction fail. It does not
-change the price that the taker receives.
+## Off-chain routers and fillers
+
+<RoutingLanesFlow />
+
+The prices come from the chain. The account list does not. Velocity settles a
+fill only for the users whose accounts the transaction carries, and a book holds
+each maker as an authority and a sub-account rather than as an account key. A
+caller therefore cannot derive the account list from the market address. It must
+read the book.
+
+A router does that read. A router is an off-chain service. It simulates the whole
+fill at a recent slot, and it answers with three things:
+
+- the split across the sources, and the value that binds each part
+- the makers on each book that the fill sweeps, best price first, and the two
+  accounts that each maker costs
+- the registry entries to carry, and the accounts of each entry
+
+Carry the makers in that order and stop where the transaction runs out of room.
+A book stops its walk at the first maker that the transaction omits. A prefix of
+the list therefore fills, and a gap forfeits the depth behind it.
+
+Velocity operates a router. Any person can operate one. A router holds no key and
+signs nothing. It selects no price. A router that answers badly makes a
+transaction fill less or fail. It cannot change the price that the taker
+receives.
+
+Two paths use that answer.
+
+### A signed order
+
+The taker signs an order message. The taker does not sign a transaction, and the
+taker sends no transaction. The message can also name a route: the registry
+entries that the taker permits. Velocity stores a four-byte digest of that list
+on the order.
+
+A filler receives the message. The filler builds the transaction, selects the
+account list, and pays the fee. Any person can operate a filler. Two rules hold
+a filler to the intent of the taker:
+
+- The transaction must include each entry in the route digest.
+- The transaction must reach the makers that the books want. The
+  [withheld report](#what-the-withheld-report-does-instead) section gives the
+  two tests.
+
+### A transaction that the taker builds
+
+The taker builds and signs the transaction. There is no message and no filler.
+The order holds no route digest, and neither rule above applies. The account
+list is the choice of the taker, and the fill is the responsibility of the
+taker. A client on this path calls a router, or it calls `splitAcrossQuoters` in
+the SDK, to decide what to carry.
 
 ## Sequence
 
@@ -220,6 +268,19 @@ compares the two therefore learns that the code changed, and can stop carrying
 the entry. An administrator can also set `isApproved` false at any time. No fill
 reads the slot: that would cost one more account lock for each quoter.
 
+### An optional reprice region
+
+A registry entry can name a byte range: an account, an offset, and a length. The
+range holds the values whose change means that the quoter can quote differently
+now. A midpoint instance names its mid price. A program with its own model names
+its parameter block.
+
+The declaration is a notice to off-chain services. A change inside the range is
+the signal to look for a cross against the new quote. A `watch_len` of zero
+declares no range, and a service then finds a cross by a poll. So a range that
+misses a reprice costs the maker latency on a cross. It cannot make a fill
+incorrect, because no fill reads the range.
+
 ## The midpoint program
 
 A maker does not have to deploy a program. Velocity supplies one deployed
@@ -319,23 +380,6 @@ An order leaves the book in five ways:
 Each way runs through a Velocity instruction. That instruction releases the
 margin in the same transaction. The two programs cannot disagree, because only
 one path changes each record.
-
-## Unattended work
-
-<RelayLoopFlow />
-
-Five types of work have no operator: expiries, evictions, crossed books,
-triggers, and liquidations. The accounts hold conditions. A condition states
-what to watch. An off-chain program called a turner watches the accounts.
-
-A resolver runs only in a simulation. The resolver decides if there is work. The
-resolver also names the accounts and the arguments for that work. An executor is
-the instruction that lands on chain. An executor has no signer, so any person
-can send it. A reservoir for the market pays the sender.
-
-Liquidation uses the same loop. The liquidator is the protocol account. Velocity
-fills the position into the book and the vAMM. The sender needs no inventory.
-The reservoir pays the sender for the transaction, not for the position.
 
 ## Limits for one transaction
 

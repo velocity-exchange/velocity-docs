@@ -6,7 +6,7 @@ import { Sankey } from "../Sankey";
 import {
   fillTopologySpec,
   orderLifecycleSpec,
-  relayLoopSpec,
+  routingLanesSpec,
   signingSpec,
   splitSpec,
 } from "./router-fill.data";
@@ -92,16 +92,16 @@ export function OrderLifecycleFlow() {
   );
 }
 
-export function RelayLoopFlow() {
+export function RoutingLanesFlow() {
   return (
     <Diagram
-      title="How Velocity does unattended work"
-      caption="The condition is on the account that it describes, so the condition cannot become stale while that account changes. The resolver runs only in a simulation. It decides if there is work and names the accounts for that work. The executor is the instruction that lands on chain. It has no signer. The crank reservoir of the market pays the sender, and the protocol treasury refills the reservoir."
+      title="Who builds the transaction"
+      caption="A router simulates the whole fill and returns the account list that the fill needs: the split, the makers on each book in the order to carry them, and the registry entries. A router holds no key and selects no price. A signed order reaches the chain through a filler, so Velocity holds that filler to the route the taker named. A taker that signs its own transaction chose its own account list, and Velocity checks nothing more."
     >
       {({ captionId }) => (
         <Flow
-          spec={relayLoopSpec}
-          ariaLabel="The relay loop. A condition block wakes an off-chain turner. The turner simulates a resolver. The resolver stages an executor. The executor lands, pays the sender, and moves the wake."
+          spec={routingLanesSpec}
+          ariaLabel="Two paths to a fill. A taker asks an off-chain router for the split and the account list. A signed order goes to a filler, which builds and pays. A taker can also build its own transaction. Both reach the same router pass in Velocity."
           describedBy={captionId}
           width={FLOW_WIDTH}
           nodeWidth={FLOW_NODE}

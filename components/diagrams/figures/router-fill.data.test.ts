@@ -3,7 +3,7 @@ import { layoutFlow, type FlowSpec } from "../layout/flow";
 import {
   fillTopologySpec,
   orderLifecycleSpec,
-  relayLoopSpec,
+  routingLanesSpec,
   signingSpec,
 } from "./router-fill.data";
 
@@ -25,7 +25,7 @@ const figures: { name: string; spec: FlowSpec; width: number; nodeWidth: number 
   { name: "fill topology", spec: fillTopologySpec, width: 790, nodeWidth: 150 },
   { name: "signing identities", spec: signingSpec, width: 640, nodeWidth: 210 },
   { name: "order lifecycle", spec: orderLifecycleSpec, width: 790, nodeWidth: 150 },
-  { name: "relay loop", spec: relayLoopSpec, width: 790, nodeWidth: 150 },
+  { name: "routing lanes", spec: routingLanesSpec, width: 790, nodeWidth: 150 },
 ];
 
 describe.each(figures)("$name", ({ spec, width, nodeWidth }) => {
