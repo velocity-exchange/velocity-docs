@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import {
   layoutFlowchart,
   type FlowchartSpec,
@@ -8,6 +8,7 @@ import {
   type PlacedFlowNode,
   type Tone,
 } from "./layout/flowchart";
+import { useHostWidth } from "./useHostWidth";
 
 export type FlowchartProps = {
   spec: FlowchartSpec;
@@ -22,25 +23,12 @@ export type FlowchartProps = {
 const TONES: Tone[] = ["default", "out", "signal"];
 
 export function Flowchart({ spec, width: minWidth = 560, height: minHeight, describedBy, ariaLabel }: FlowchartProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [hostWidth, setHostWidth] = useState(0);
   // React ids carry characters a url(#…) reference cannot hold.
   const markerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
 
-  useLayoutEffect(() => {
-    const el = hostRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => setHostWidth(Math.floor(entry.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Server and first client render use the minimum; the observer widens it before paint.
-  const { nodes, edges, width, height } = layoutFlowchart(spec, {
-    width: Math.max(minWidth, hostWidth),
-    height: minHeight,
-  });
-  const labelOf = (id: string) => nodes.find((n) => n.id === id)?.label ?? id;
+  const [hostRef, hostWidth] = useHostWidth(minWidth);
+  const { nodes, edges, width, height } = layoutFlowchart(spec, { width: hostWidth, height: minHeight });
+  const labelOf = (id: string) => nodes.find((n) => n.id === id)!.label;
 
   return (
     <div ref={hostRef} className="dg-host">

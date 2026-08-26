@@ -1,4 +1,5 @@
 import type { Tone } from "./sankey";
+import { wrapText } from "./text";
 
 export type { Tone };
 
@@ -129,23 +130,6 @@ export function estimateTextWidth(text: string, fontSize: number): number {
   return em * fontSize;
 }
 
-function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
-  const lines: string[] = [];
-  let line = words[0];
-  for (const word of words.slice(1)) {
-    const next = `${line} ${word}`;
-    if (estimateTextWidth(next, fontSize) <= maxWidth) line = next;
-    else {
-      lines.push(line);
-      line = word;
-    }
-  }
-  lines.push(line);
-  return lines;
-}
-
 const round = (n: number) => Math.round(n * 100) / 100;
 
 /**
@@ -170,7 +154,7 @@ export function layoutFlowchart(spec: FlowchartSpec, opts: FlowLayoutOptions): F
 
   // 1. Size every node from its own text, then widen each lane to its widest node.
   const sized = spec.nodes.map((n) => {
-    const lines = wrapText(n.label, maxTextWidth, LABEL_SIZE);
+    const lines = wrapText(n.label, maxTextWidth, (t) => estimateTextWidth(t, LABEL_SIZE));
     const textWidth = Math.max(
       ...lines.map((l) => estimateTextWidth(l, LABEL_SIZE)),
       n.note ? estimateTextWidth(n.note, NOTE_SIZE) : 0,

@@ -1,4 +1,5 @@
 import type { Tone } from "./sankey";
+import { wrapText } from "./text";
 
 export type SequenceActor = {
   id: string;
@@ -167,24 +168,6 @@ export function estimateTextWidth(text: string, fontSize: number): number {
   return em * fontSize;
 }
 
-/** Greedy wrapping, which is optimal for line count at a given width. */
-function wrapText(text: string, maxWidth: number, fontSize: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
-  const lines: string[] = [];
-  let line = words[0];
-  for (const word of words.slice(1)) {
-    const next = `${line} ${word}`;
-    if (estimateTextWidth(next, fontSize) <= maxWidth) line = next;
-    else {
-      lines.push(line);
-      line = word;
-    }
-  }
-  lines.push(line);
-  return lines;
-}
-
 /** The narrowest box the text fits in within MAX_LABEL_LINES lines. */
 function labelBoxWidth(text: string, fontSize: number): number {
   const words = text.split(/\s+/).filter(Boolean);
@@ -348,7 +331,7 @@ export function layoutSequence(spec: SequenceSpec, opts: SequenceLayoutOptions):
 
   function placeNote(step: SequenceNote, top: number): PlacedNote {
     const maxWidth = Math.min(NOTE_MAX_WIDTH, width - EDGE_PAD * 2);
-    const lines = wrapText(step.label, maxWidth - NOTE_PAD_X * 2, FONT_NOTE);
+    const lines = wrapText(step.label, maxWidth - NOTE_PAD_X * 2, (t) => estimateTextWidth(t, FONT_NOTE));
     const textWidth = Math.max(...lines.map((l) => estimateTextWidth(l, FONT_NOTE)));
     const boxWidth = Math.min(maxWidth, Math.ceil(textWidth) + NOTE_PAD_X * 2);
     const boxHeight = lines.length * NOTE_LINE + NOTE_PAD_Y * 2;
@@ -379,7 +362,7 @@ export function layoutSequence(spec: SequenceSpec, opts: SequenceLayoutOptions):
     if (from === to) {
       const side = from === count - 1 && count > 1 ? -1 : 1;
       const room = (count === 1 ? pitch / 2 : pitch) - LOOP_W - SELF_PAD * 2;
-      const lines = wrapText(step.label, room, FONT_LABEL).slice(0, MAX_LABEL_LINES);
+      const lines = wrapText(step.label, room, (t) => estimateTextWidth(t, FONT_LABEL)).slice(0, MAX_LABEL_LINES);
       const x = centre(from);
       const loopTop = top + SELF_TOP;
       return {
@@ -400,7 +383,7 @@ export function layoutSequence(spec: SequenceSpec, opts: SequenceLayoutOptions):
     const x0 = centre(from);
     const x1 = centre(to);
     const room = Math.abs(x1 - x0) - LABEL_PAD * 2;
-    const lines = wrapText(step.label, room, FONT_LABEL).slice(0, MAX_LABEL_LINES);
+    const lines = wrapText(step.label, room, (t) => estimateTextWidth(t, FONT_LABEL)).slice(0, MAX_LABEL_LINES);
     const arrowY = round(top + lines.length * LABEL_LINE + LABEL_GAP);
     return {
       ...common,

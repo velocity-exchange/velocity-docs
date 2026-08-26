@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useId } from "react";
 import {
   LABEL_LINE,
   NOTE_LINE,
@@ -11,6 +11,7 @@ import {
   type PlacedPhase,
   type SequenceSpec,
 } from "./layout/sequence";
+import { useHostWidth } from "./useHostWidth";
 import type { Tone } from "./layout/sankey";
 
 export type SequenceProps = {
@@ -25,21 +26,11 @@ export type SequenceProps = {
 const MAX_STAGGER_STEPS = 8;
 
 export function Sequence({ spec, width: minWidth = 600, describedBy, ariaLabel }: SequenceProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [hostWidth, setHostWidth] = useState(0);
   const uid = useId().replace(/:/g, "");
 
-  useLayoutEffect(() => {
-    const el = hostRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => setHostWidth(Math.floor(entry.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Server and first client render use the minimum; the observer widens it before paint.
+  const [hostRef, hostWidth] = useHostWidth(minWidth);
   // The layout may return more than it was asked for when a label needs the room.
-  const { width, height, actors, rows, phases } = layoutSequence(spec, { width: Math.max(minWidth, hostWidth) });
+  const { width, height, actors, rows, phases } = layoutSequence(spec, { width: hostWidth });
   const tones = new Set(rows.flatMap((r) => (r.kind === "message" ? [r.tone] : [])));
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
 import { layoutSankey, type LabelSide, type PlacedLink, type PlacedNode, type SankeySpec } from "./layout/sankey";
+import { useHostWidth } from "./useHostWidth";
 
 export type SankeyProps = {
   spec: SankeySpec;
@@ -29,19 +29,8 @@ const MARGIN_Y = 24;
 const HEIGHT_GROWTH = 0.12;
 
 export function Sankey({ spec, width: minWidth = 600, height: baseHeight = 360, labelWidth = 150, describedBy, ariaLabel }: SankeyProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [hostWidth, setHostWidth] = useState(0);
 
-  useLayoutEffect(() => {
-    const el = hostRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => setHostWidth(Math.floor(entry.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Server and first client render use the minimum; the observer widens it before paint.
-  const width = Math.max(minWidth, hostWidth);
+  const [hostRef, width] = useHostWidth(minWidth);
   const height = Math.round(baseHeight + (width - minWidth) * HEIGHT_GROWTH);
   const maxCol = Math.max(...spec.nodes.map((n) => n.column));
   const marginLeft = typeof labelWidth === "number" ? labelWidth : labelWidth.left;

@@ -1,6 +1,5 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
 import {
   layoutPriceRamp,
   type PlacedAxis,
@@ -8,6 +7,7 @@ import {
   type PlacedSegment,
   type PriceRampSpec,
 } from "./layout/price-ramp";
+import { useHostWidth } from "./useHostWidth";
 
 export type PriceRampProps = {
   spec: PriceRampSpec;
@@ -36,19 +36,8 @@ export function PriceRamp({
   describedBy,
   ariaLabel,
 }: PriceRampProps) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [hostWidth, setHostWidth] = useState(0);
 
-  useLayoutEffect(() => {
-    const el = hostRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => setHostWidth(Math.floor(entry.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Server and first client render use the minimum; the observer widens it before paint.
-  const width = Math.max(minWidth, hostWidth);
+  const [hostRef, width] = useHostWidth(minWidth);
   const height = Math.round(baseHeight + (width - minWidth) * HEIGHT_GROWTH);
   const layout = layoutPriceRamp(spec, {
     width,
