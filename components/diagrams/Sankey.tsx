@@ -29,7 +29,6 @@ const MARGIN_Y = 24;
 const HEIGHT_GROWTH = 0.12;
 
 export function Sankey({ spec, width: minWidth = 600, height: baseHeight = 360, labelWidth = 150, describedBy, ariaLabel }: SankeyProps) {
-
   const [hostRef, width] = useHostWidth(minWidth);
   const height = Math.round(baseHeight + (width - minWidth) * HEIGHT_GROWTH);
   const maxCol = Math.max(...spec.nodes.map((n) => n.column));

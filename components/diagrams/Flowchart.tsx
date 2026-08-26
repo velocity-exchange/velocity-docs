@@ -61,9 +61,9 @@ export function Flowchart({ spec, width: minWidth = 560, height: minHeight, desc
           ))}
         </defs>
         <g>
-          {edges.map((edge) => (
+          {edges.map((edge, i) => (
             <Edge
-              key={`${edge.from}->${edge.to}`}
+              key={i}
               edge={edge}
               markerId={markerId}
               title={edge.label ?? `${labelOf(edge.from)} to ${labelOf(edge.to)}`}
@@ -109,7 +109,7 @@ function Node({ node }: { node: PlacedFlowNode }) {
       data-kind={node.kind}
       data-tone={node.tone ?? "default"}
       data-node={node.id}
-      style={{ ["--dg-col" as string]: node.row } as CSSProperties}
+      style={{ ["--dg-col" as string]: node.step } as CSSProperties}
     >
       <rect
         className="dg-fc-box"

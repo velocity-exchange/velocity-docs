@@ -98,14 +98,14 @@
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
     animation: dg-draw var(--dg-draw) var(--dg-ease) forwards;
-    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+    animation-delay: calc(min(var(--dg-col, 0), 8) * var(--dg-stagger));
   }
   .dg[data-animate][data-inview] .dg-fc-edge-label {
     animation: dg-rise 480ms var(--dg-ease) both;
-    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger) + var(--dg-draw) * 0.6);
+    animation-delay: calc(min(var(--dg-col, 0), 8) * var(--dg-stagger) + var(--dg-draw) * 0.6);
   }
   .dg[data-animate][data-inview] .dg-fc-node {
     animation: dg-rise 480ms var(--dg-ease) both;
-    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+    animation-delay: calc(min(var(--dg-col, 0), 8) * var(--dg-stagger));
   }
 }

@@ -36,7 +36,6 @@ export function PriceRamp({
   describedBy,
   ariaLabel,
 }: PriceRampProps) {
-
   const [hostRef, width] = useHostWidth(minWidth);
   const height = Math.round(baseHeight + (width - minWidth) * HEIGHT_GROWTH);
   const layout = layoutPriceRamp(spec, {
@@ -60,8 +59,8 @@ export function PriceRamp({
         aria-describedby={describedBy}
       >
         <g>
-          {layout.spans.map((s) => (
-            <g key={s.label}>
+          {layout.spans.map((s, i) => (
+            <g key={i}>
               <rect className="dg-pr-span" x={s.x} y={s.y} width={s.width} height={s.height} />
               <text className="dg-note dg-pr-span-label" x={s.labelX} y={s.labelY} textAnchor="middle">
                 {s.label}
@@ -72,8 +71,8 @@ export function PriceRamp({
         <Axis axis={layout.x} orient="x" />
         <Axis axis={layout.y} orient="y" />
         <g>
-          {layout.references.map((ref) => (
-            <g key={ref.label}>
+          {layout.references.map((ref, i) => (
+            <g key={i}>
               <path className="dg-pr-ref" d={ref.path} data-dashed={ref.dashed ? "" : undefined} />
               <text className="dg-note" x={ref.labelX} y={ref.labelY} textAnchor="start">
                 {ref.label}
@@ -87,8 +86,8 @@ export function PriceRamp({
           ))}
         </g>
         <g>
-          {layout.markers.map((marker) => (
-            <Marker key={marker.label} marker={marker} col={layout.segments.length + 1} />
+          {layout.markers.map((marker, i) => (
+            <Marker key={i} marker={marker} col={layout.segments.length + 1} />
           ))}
         </g>
       </svg>
@@ -105,8 +104,8 @@ function Axis({ axis, orient }: { axis: PlacedAxis; orient: "x" | "y" }) {
   return (
     <g className="dg-pr-axis">
       <line className="dg-pr-rule" x1={axis.x1} y1={axis.y1} x2={axis.x2} y2={axis.y2} />
-      {axis.ticks.map((tick) => (
-        <g key={tick.value}>
+      {axis.ticks.map((tick, i) => (
+        <g key={i}>
           <line className="dg-pr-rule" x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2} />
           <text className="dg-value" x={tick.labelX} y={tick.labelY} textAnchor={across ? "middle" : "end"}>
             {tick.label}

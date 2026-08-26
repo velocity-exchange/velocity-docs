@@ -220,6 +220,28 @@ describe("layoutFlowchart", () => {
     expect(() => layoutFlowchart({ nodes: [], edges: [] }, opts)).toThrow(/at least one node/);
   });
 
+  it("rejects a left or right side on an edge that stays in one lane", () => {
+    const nodes = [
+      { id: "a", label: "A", col: 0, row: 0 },
+      { id: "b", label: "B", col: 0, row: 1 },
+    ];
+    expect(() => layoutFlowchart({ nodes, edges: [{ from: "a", to: "b", side: "right" }] }, opts)).toThrow(/route through the source box/);
+    expect(() => layoutFlowchart({ nodes, edges: [{ from: "a", to: "b", side: "bottom" }] }, opts)).not.toThrow();
+  });
+
+  it("counts node and edge stagger steps from the first row, not row zero", () => {
+    const shifted = {
+      nodes: [
+        { id: "a", label: "A", col: 0, row: 5 },
+        { id: "b", label: "B", col: 0, row: 6 },
+      ],
+      edges: [{ from: "a", to: "b" }],
+    };
+    const { nodes, edges } = layoutFlowchart(shifted, opts);
+    expect(nodes.map((n) => n.step)).toEqual([0, 1]);
+    expect(edges[0].step).toBe(0);
+  });
+
   it("throws on a non-integer grid position", () => {
     const bad = { ...spec, nodes: [...spec.nodes, { id: "half", label: "Half", col: 1.5, row: 4 }] };
     expect(() => layoutFlowchart(bad, opts)).toThrow(/integer col and row/);

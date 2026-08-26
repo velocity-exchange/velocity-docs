@@ -74,6 +74,8 @@ export type PlacedFlowNode = FlowNode & {
   rx: number;
   /** Label wrapped to the node width, one string per line. */
   lines: string[];
+  /** Stagger index for the draw-in, counted from the first row. */
+  step: number;
   /** Baseline of the first label line. Later lines step by `lineHeight`. */
   labelBaseline: number;
   lineHeight: number;
@@ -210,6 +212,7 @@ export function layoutFlowchart(spec: FlowchartSpec, opts: FlowLayoutOptions): F
     return {
       ...node,
       kind,
+      step: r,
       x: nx,
       y: ny,
       width: nw,
@@ -311,6 +314,10 @@ function validate(spec: FlowchartSpec): void {
     if (!byId.has(e.from)) throw new Error(`Flowchart edge references unknown node "${e.from}"`);
     if (!byId.has(e.to)) throw new Error(`Flowchart edge references unknown node "${e.to}"`);
     if (e.from === e.to) throw new Error(`Flowchart edge loops on node "${e.from}"`);
+    const sameCol = byId.get(e.from)!.col === byId.get(e.to)!.col;
+    if (sameCol && (e.side === "left" || e.side === "right")) {
+      throw new Error(`Flowchart edge "${e.from}" to "${e.to}" is in one lane; side "${e.side}" would route through the source box`);
+    }
   }
 }
 

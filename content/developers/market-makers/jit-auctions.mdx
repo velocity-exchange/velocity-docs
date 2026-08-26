@@ -29,6 +29,8 @@ Every taker order that enters a JIT auction has three key parameters that define
 
 <AuctionPriceRamp />
 
+The figure uses the worked example of a 10-slot auction from $100.00 to $100.10. Slot counts are wall-clock time only at today's slot time; see [Slot duration and wall-clock time](/developers/concepts/slot-duration).
+
 **For a taker going LONG:**
 - Slot 0: auction price = `auctionStartPrice` (e.g., oracle), taker pays at or near oracle
 - Slot 5: auction price = midpoint (e.g., oracle + 0.05%)

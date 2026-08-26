@@ -177,4 +177,10 @@ authored as data specs, never as hand-drawn SVG.
 
 **Drawn by Default.** Diagrams render fully drawn with no JavaScript and under reduced motion. The single allowed animation is a one-time draw-in when the figure scrolls into view, staggered by column, using the same ease and rise-and-fade as the rest of the site.
 
+### Renderers
+Sankey, Flowchart, Sequence, and PriceRamp share the frame, tokens, and motion above. Each
+non-Sankey renderer keeps its own classes in `components/diagrams/<type>.css` (imported in
+`app/layout.tsx`); those files may derive local properties (`--dg-fc-*`, `--dg-sq-*`, `--dg-pr-*`)
+from the tokens here but never introduce a new color.
+
 **Scroll, Don't Shrink.** Below about 560px the figure scrolls horizontally rather than scaling text below legibility.

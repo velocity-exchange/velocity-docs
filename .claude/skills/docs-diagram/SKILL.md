@@ -45,7 +45,7 @@ export const spec: SankeySpec = {
   the default side is not clear, typically a pass-through middle node whose own ribbons rise
   through the space above it, which wants `below`.
 - Ranges: draw the midpoint, put the range in `value` ("2–10%"), and explain in the caption.
-- Every link needs a `label`; it becomes the accessible `<title>`.
+- Every link needs a `label`; it becomes the hover `<title>` (the figure itself is named by `ariaLabel` and described by the caption).
 
 ## Writing a Flowchart spec
 
@@ -72,7 +72,7 @@ export const spec: FlowchartSpec = {
 - Connectors are orthogonal and land on box edges. Set `side` (`top` | `right` | `bottom`
   | `left`) only when the default route would cross a box.
 - Label the branches out of every decision ("yes", "no"). An edge label becomes the
-  accessible `<title>`; keep labels to a word or three.
+  hover `<title>`; keep labels to a word or three.
 
 ## Writing a Sequence spec
 
@@ -97,7 +97,7 @@ export const spec: SequenceSpec = {
 - `phase` brackets consecutive steps under a label ("Auction window"). Phases never nest.
 - Message labels sit above the arrow and wrap to two lines. Keep them to two or three words;
   longer labels widen the whole figure. Five actors fit the 600px minimum.
-- Every message needs a `label`; it becomes the accessible `<title>`.
+- Every message needs a `label`; it becomes the hover `<title>`.
 
 ## Writing a PriceRamp spec
 
@@ -119,7 +119,7 @@ export const spec: PriceRampSpec = {
   `{ at, label }` to name a slot ("Placed", "Expiry").
 - `segments`: the ramp. `dashed` for a continuation past the auction, `tone: "out"` for a leg
   that is no longer the auction, `tone: "signal"` for the one line to follow. A segment's
-  `label` is its accessible `<title>`, not drawn.
+  `label` is its hover `<title>`, not drawn.
 - `references` are horizontal price lines (oracle, limit), labelled outside the plot on the
   right; widen `margin.right` for long labels. `spans` shade an x range. `markers` sit on the
   line; `place` (`above` | `below`) overrides the label side on collision.

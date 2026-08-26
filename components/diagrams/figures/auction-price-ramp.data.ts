@@ -43,7 +43,6 @@ export const auctionPriceRampSpec: PriceRampSpec = {
   ],
   references: [
     { y: ORACLE, label: "Oracle, $100.00" },
-    { y: END, label: "Limit, $100.10" },
   ],
   spans: [{ from: 0, to: DURATION, label: "Auction, 10 slots" }],
   markers: [
