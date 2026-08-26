@@ -2,7 +2,9 @@
 
 ## How it works
 
-Orders on Velocity go through a multi-stage matching process. When you place an order, it enters a **JIT auction** (Just-In-Time) where market makers can compete to fill it at better prices. If no one fills during the auction, the order either executes against the **DLOB** (Decentralized Limit Order Book) or the **AMM** as a fallback. This design ensures you get the best price from multiple liquidity sources.
+A taker order fills by price, not by source. It walks the **DLOB** (Decentralized Limit Order Book) from the best price level down, and at each level the AMM's quote, the resting order, and any **JIT** (Just-In-Time) maker quote compete on price, so one order can fill from more than one source. A market order's auction bounds the price that is acceptable while it runs. The AMM comes last only as a residual fill, once the maker list is exhausted and size still crosses your limit price. See [Orderbook & Matching](/developers/market-makers/orderbook-and-matching) for the full rules.
+
+<LiquidityRoutingFlow />
 
 Orders are stored in your user account and have both an onchain order ID and an optional user-assigned ID for tracking. When an order fills, your position updates automatically, and you can query fill events to see execution details.
 
