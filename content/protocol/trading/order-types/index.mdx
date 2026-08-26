@@ -28,7 +28,7 @@ The auction is not the only way a Market Order gets filled. Both during the auct
 
 - **Backstop liquidity**: Velocity's AMM.
 
-The AMM is not a pure last resort that only steps in when no market maker does. At each price level, the matching engine compares the AMM's quote against the best available maker price and fills against whichever is better, so one Market Order can fill partly against makers and partly against the AMM. See [Matching Engine](/protocol/how-it-works/matching-engine) for the full ordering rules.
+The AMM is not a pure last resort that only steps in when no market maker does. Every liquidity source quotes a ladder of prices, and the matching engine divides the order across those ladders by price, so one Market Order can fill partly against makers and partly against the AMM. See [Matching Engine](/protocol/how-it-works/matching-engine) for the full ordering rules.
 
 Whichever source fills the order, it can only fill at a price within your slippage tolerance.
 
