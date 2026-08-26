@@ -71,12 +71,17 @@ function Node({ node, side }: { node: PlacedNode; side: "left" | "right" | "abov
   const pad = 10;
   const anchor = side === "left" ? "end" : "start";
   const x = side === "left" ? node.x0 - pad : side === "right" ? node.x1 + pad : node.x1 + pad;
-  const y = side === "above" ? cy : cy;
+  const y = cy;
   const hasNote = Boolean(node.note);
   const labelDy = hasNote ? -3 : 4;
 
   return (
-    <g className="dg-node" data-tone={node.tone ?? "default"} style={{ ["--dg-col" as string]: node.column } as React.CSSProperties}>
+    <g
+      className="dg-node"
+      data-tone={node.tone ?? "default"}
+      data-node={node.id}
+      style={{ ["--dg-col" as string]: node.column } as React.CSSProperties}
+    >
       <rect className="dg-node-rect" x={node.x0} y={node.y0} width={node.x1 - node.x0} height={Math.max(2, h)} />
       <text x={x} y={y} textAnchor={anchor}>
         <tspan className="dg-label" dy={labelDy}>
