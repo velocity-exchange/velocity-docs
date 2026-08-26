@@ -27,7 +27,6 @@
     "@velocity-exchange/sdk": "0.4.0",
     "canvas-txt": "4.1.1",
     "d3-sankey": "0.12.3",
-    "d3-shape": "3.2.0",
     "dotenv": "16.6.1",
     "fs": "0.0.1-security",
     "katex": "0.16.27",
@@ -44,7 +43,6 @@
   },
   "devDependencies": {
     "@types/d3-sankey": "0.12.5",
-    "@types/d3-shape": "3.2.0",
     "@types/node": "18.11.10",
     "pagefind": "1.4.0",
     "typescript": "5.9.3",

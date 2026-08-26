@@ -54,7 +54,6 @@ describe("layoutSankey", () => {
     }
     for (const l of links) {
       expect(l.path.startsWith("M")).toBe(true);
-      expect(l.tone ?? "default").toBeDefined();
     }
   });
 

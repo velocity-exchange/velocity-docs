@@ -70,7 +70,6 @@
 }
 .dg-link[data-tone="out"] { stroke: var(--dg-flow-out); }
 .dg-link[data-tone="signal"] { stroke: var(--dg-flow-signal); }
-.dg-link:focus-visible { outline: none; stroke: var(--vlc-action); }
 
 .dg-label {
   fill: var(--dg-ink);
@@ -89,8 +88,8 @@
   font-size: 12px;
 }
 
-/* Hover/focus: keep the active path, dim the rest. */
-.dg-svg:has(.dg-link:hover, .dg-link:focus-visible) .dg-link:not(:hover, :focus-visible) { opacity: 0.3; }
+/* Hover: keep the active path, dim the rest. */
+.dg-svg:has(.dg-link:hover) .dg-link:not(:hover) { opacity: 0.3; }
 
 /* Motion: fully drawn by default; draws in once, only when allowed. */
 @media (prefers-reduced-motion: no-preference) {

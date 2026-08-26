@@ -5,7 +5,7 @@ import { Sankey } from "../Sankey";
 import { feeFlowSpec } from "./fee-flow.data";
 
 const CAPTION =
-  "Target allocation of a perp taker fee, as a share of the gross fee. The filler and maker legs vary by fill and are drawn at their midpoints. The Insurance Fund, vAMM, and protocol shares are admin-set numerators and are 0/0/100 on-chain today.";
+  "Target allocation of a perp taker fee, as a share of the gross fee. The filler and maker legs vary by fill and are drawn at their midpoints. The Insurance Fund, vAMM, and protocol shares are admin-set numerators and are 0/0/100 on-chain today. The vAMM maker rebate is off by default and is not drawn.";
 
 export function FeeFlowSankey() {
   return (

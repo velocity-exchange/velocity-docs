@@ -13,9 +13,9 @@ export const feeFlowSpec: SankeySpec = {
     { id: "maker", label: "Maker rebate", value: "6.3–12.5%", column: 1, tone: "out" },
     // Labelled below: the Insurance Fund and vAMM ribbons rise across the space above it.
     { id: "net", label: "Net taker fee", value: "≈70%", column: 1, labelSide: "below" },
-    { id: "if", label: "Insurance Fund", value: "15% of net", column: 2 },
-    { id: "vamm", label: "vAMM capital", value: "15% of net", column: 2 },
-    { id: "protocol", label: "Protocol", value: "70% of net", column: 2, tone: "signal" },
+    { id: "if", label: "Insurance Fund", value: "≈10%", note: "15% of net", column: 2 },
+    { id: "vamm", label: "vAMM capital", value: "≈10%", note: "15% of net", column: 2 },
+    { id: "protocol", label: "Protocol", value: "≈49%", note: "70% of net", column: 2, tone: "signal" },
   ],
   links: [
     { from: "gross", to: "referee", value: 5, tone: "out", label: "Referee discount: 5% of the gross taker fee, never collected" },

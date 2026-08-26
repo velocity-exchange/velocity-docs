@@ -26,9 +26,6 @@ importers:
       d3-sankey:
         specifier: 0.12.3
         version: 0.12.3
-      d3-shape:
-        specifier: 3.2.0
-        version: 3.2.0
       dotenv:
         specifier: 16.6.1
         version: 16.6.1
@@ -72,9 +69,6 @@ importers:
       '@types/d3-sankey':
         specifier: 0.12.5
         version: 0.12.5
-      '@types/d3-shape':
-        specifier: 3.2.0
-        version: 3.2.0
       '@types/node':
         specifier: 18.11.10
         version: 18.11.10

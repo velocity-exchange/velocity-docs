@@ -166,7 +166,7 @@ authored as data specs, never as hand-drawn SVG.
 ### Tokens
 - Ink and labels: `--dg-ink` (gray-900), `--dg-muted` (gray-600, values and captions).
 - Structure: `--dg-rule` (gray-600 at 18%), `--dg-node` (gray-600 at 12%), the same tonal card as tables.
-- Flows: `--dg-flow` (gray-400 at 55%), `--dg-flow-out` (gray-400 at 30%, value leaving the system), `--dg-flow-signal` (Velocity Green at 55%).
+- Flows: `--dg-flow` (gray-400 at 55%), `--dg-flow-out` (gray-400 at 30%, value leaving the system), `--dg-flow-signal` (Velocity Green at 55%), `--dg-node-signal` (Velocity Green at 22%, node fill for the signal leg).
 - Type: labels in the body sans at 13px/500; values in the mono label stack at 12px.
 - Motion: `--dg-ease` (`cubic-bezier(0.22, 1, 0.36, 1)`), `--dg-draw` 900ms, `--dg-stagger` 120ms per column.
 

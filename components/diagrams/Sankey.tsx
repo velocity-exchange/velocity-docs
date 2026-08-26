@@ -80,7 +80,6 @@ function Link({ link, col }: { link: PlacedLink; col: number }) {
       data-tone={link.tone ?? "default"}
       data-path={`${link.from}->${link.to}`}
       style={{ ["--dg-col" as string]: col } as React.CSSProperties}
-      tabIndex={0}
     >
       <title>{title}</title>
     </path>
