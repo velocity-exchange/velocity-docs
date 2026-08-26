@@ -12,6 +12,8 @@ Vault depositors in Trusted vaults place significant trust in the manager. Borro
 
 **Borrow:** Move vault assets out (e.g. USDT) up to the vault's capacity. Vault equity for share accounting includes the manager's borrowed value so depositor share price reflects the full claim on the vault.
 
+<TrustedVaultSankey />
+
 ```bash
 bun run cli -- manager-borrow \
   --vault-address <VAULT_ADDRESS> \
