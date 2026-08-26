@@ -1,0 +1,111 @@
+/* Flowchart styles. Every value derives from the --dg-* tokens in tokens.css:
+   the connector strengths are alphas of --dg-muted, never a new hue. */
+.dg-fc {
+  --dg-fc-line: color-mix(in oklab, var(--dg-muted) 52%, transparent);
+  --dg-fc-line-out: color-mix(in oklab, var(--dg-muted) 26%, transparent);
+  --dg-fc-outline: color-mix(in oklab, var(--dg-muted) 38%, transparent);
+}
+
+/* A step is the tonal card the tables and Sankey nodes use. A decision keeps that
+   fill and takes a heavier outline, which reads as "this one branches" without
+   spending a diamond's worth of empty corners. A terminal is the same card drawn
+   as a pill, so start and end are told apart by silhouette alone. */
+.dg-fc-box {
+  fill: var(--dg-node);
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+}
+.dg-fc-node[data-kind="decision"] .dg-fc-box {
+  stroke: var(--dg-fc-outline);
+}
+.dg-fc-node[data-tone="out"] .dg-fc-box {
+  fill: none;
+}
+.dg-fc-node[data-tone="out"] .dg-fc-label {
+  fill: var(--dg-muted);
+}
+.dg-fc-node[data-tone="signal"] .dg-fc-box {
+  fill: var(--dg-node-signal);
+  stroke: var(--dg-flow-signal);
+}
+
+.dg-fc-label {
+  fill: var(--dg-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dg-fc-note {
+  fill: var(--dg-muted);
+  font-size: 12px;
+}
+
+.dg-fc-edge-path {
+  fill: none;
+  stroke: var(--dg-fc-line);
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+}
+.dg-fc-edge[data-tone="out"] .dg-fc-edge-path {
+  stroke: var(--dg-fc-line-out);
+}
+.dg-fc-edge[data-tone="signal"] .dg-fc-edge-path {
+  stroke: var(--dg-flow-signal);
+  stroke-width: 2;
+}
+
+/* Markers cannot inherit the referencing path's stroke everywhere, so each tone
+   gets its own arrowhead and the path picks the matching one. */
+.dg-fc-arrow {
+  fill: var(--dg-fc-line);
+  stroke: none;
+}
+.dg-fc-marker[data-tone="out"] .dg-fc-arrow {
+  fill: var(--dg-fc-line-out);
+}
+.dg-fc-marker[data-tone="signal"] .dg-fc-arrow {
+  fill: var(--dg-flow-signal);
+}
+
+.dg-fc-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+}
+
+.dg-fc-edge-label {
+  fill: var(--dg-muted);
+  font-size: 12px;
+}
+
+.dg-fc-edge {
+  transition: opacity 180ms var(--dg-ease);
+}
+/* Hover: keep the active branch, dim the rest. */
+.dg-fc:has(.dg-fc-edge:hover) .dg-fc-edge:not(:hover) {
+  opacity: 0.3;
+}
+
+/* Motion: fully drawn by default; draws in once, only when allowed. Rows are the
+   flow steps here, so --dg-col carries the row and the chart draws top to bottom. */
+@media (prefers-reduced-motion: no-preference) {
+  .dg[data-animate]:not([data-inview]) .dg-fc-edge,
+  .dg[data-animate]:not([data-inview]) .dg-fc-node {
+    opacity: 0;
+  }
+  .dg[data-animate][data-inview] .dg-fc-edge-path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: dg-draw var(--dg-draw) var(--dg-ease) forwards;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+  .dg[data-animate][data-inview] .dg-fc-edge-label {
+    animation: dg-rise 480ms var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger) + var(--dg-draw) * 0.6);
+  }
+  .dg[data-animate][data-inview] .dg-fc-node {
+    animation: dg-rise 480ms var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+}
