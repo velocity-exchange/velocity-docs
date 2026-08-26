@@ -207,11 +207,18 @@ the program.
 | **Margin reduction before execution** | Depth that the quoter account cannot support |
 | **Margin check after the fill** | An account left below its margin requirement |
 | **Registry approval** | Any order flow. An administrator approves the entry, and the maker can make the entry inactive. |
-| **Frozen program** | Approval of one program binary and use of a different binary |
 
-Approval applies to one program binary. Approval does not apply to the author of
-the program. Velocity refuses an entry if the program has an upgrade authority.
-The holder of that authority can replace the binary after approval.
+A maker may upgrade the program behind an approved entry. Velocity does not
+require a frozen program, because the limits above hold across an upgrade. A
+`Custom` entry moves only its own registered user. The price is held to its own
+quote and to the taker's limit price. The size is held inside its own margin. So
+an upgrade can lose the maker's money and cannot take anyone else's.
+
+Approval records the slot the program was last deployed at, in
+`QuoterV0.approvedProgramSlot`. An upgrade moves that slot. A router that
+compares the two therefore learns that the code changed, and can stop carrying
+the entry. An administrator can also set `isApproved` false at any time. No fill
+reads the slot: that would cost one more account lock for each quoter.
 
 ## The midpoint program
 
