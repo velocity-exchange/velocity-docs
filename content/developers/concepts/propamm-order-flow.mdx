@@ -155,25 +155,40 @@ order became matchable.
 | Age of the order | What the book does | Result for the taker |
 | --- | --- | --- |
 | Inside the grace window | The book passes over the order and continues | The depth behind the order is available |
-| Outside the grace window | The book stops the walk and reports the price and size as withheld depth | The depth behind the order is not available |
+| Outside the grace window | The book stops the walk and reports the price and size as withheld depth | The depth behind the order is not available, and the filler must answer for the omission |
 
 The grace window exists because a filler cannot know of a new order. The
 transaction has a fixed account list, and a filler assembles that list before it
 sends the transaction.
 
-Withheld depth then affects the division, in one case only. Velocity holds back
-taker size equal to the withheld size. Velocity discards that size after the
-division. The taker keeps the size unfilled, and the remainder rests at the
-taker limit price.
+Withheld depth takes no part of the division. The taker asked to trade, so the
+size goes to the sources that can fill it. The aged order keeps its place in the
+queue, because the book stopped its own walk.
 
-Velocity holds back that size only when all three of these are true:
+### What the withheld report does instead
 
-- The order is not immediate-or-cancel.
-- The instruction is not a liquidation.
-- The remainder has a price to rest at.
+The report says that the transaction omitted a maker the book wanted. Velocity
+then asks whether the party that built the transaction could have carried that
+maker.
 
-Velocity holds back no size in any other case. A remainder that cannot rest
-takes the worse price instead of no fill.
+A taker that signs the transaction chose its own account list, so Velocity asks
+nothing more. A taker that does not sign is trusting a filler. Velocity then
+applies two rules, and the fill fails if either one fails.
+
+| Rule | Error |
+| --- | --- |
+| The transaction holds more locks than one more maker would need. A maker costs two accounts, and the ceiling is 62. | `FillerOmittedReachableMaker` |
+| Every loaded user received a balance change, or holds a role in the fill. The roles are the taker, the filler, the taker's referrer, and a registered quoter's user. | `FillerPaddedTheUserSet` |
+
+The second rule is what the first one alone would miss. A filler can reach the
+account ceiling with users that fill nothing. That forces the withhold, and it
+leaves the flow for a source of the filler's own. Those accounts spent the locks
+that the missing maker needed.
+
+Both rules need the account count, and only the instructions sysvar gives it.
+A fill that withholds depth without that account fails with
+`FillerObligationUncountable`. A fill that withholds nothing never reads it, so
+the account costs a lock only where it earns one.
 
 ## Limits on a quoter program
 
@@ -337,10 +352,11 @@ Include each entry that the fill uses. Also include the registered CPI accounts
 of that entry, its program, its response account, and its `quoter_signer`. The
 entry holds all of these values. Do not use a fixed list.
 
-### Include each maker that the fill must use
-A source fills only for a user account that the transaction includes. If the
-transaction omits a maker, the source reports that maker's depth as withheld
-depth. Velocity then discards the depth.
+### Include each maker that the fill can reach
+A source fills only for a user account that the transaction includes. A transaction that the taker
+did not sign must be full before it omits a maker. It must also carry no user
+that fills nothing. Pass the instructions sysvar so
+Velocity can count the accounts.
 
 ### Use the signed route
 An order holds a four-byte digest of the entries that the signer selected. The
