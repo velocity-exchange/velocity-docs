@@ -7,6 +7,7 @@ import {
   fillTopologySpec,
   orderLifecycleSpec,
   quoterCallSpec,
+  routerReachSpec,
   routingLanesSpec,
   signingSpec,
   splitSpec,
@@ -19,13 +20,13 @@ const FLOW_NODE = 150;
 export function FillTopologyFlow() {
   return (
     <Diagram
-      title="The four liquidity sources in one fill"
-      caption="The green lines are the calls that leave the Velocity program. A book and a quoter program answer on the same interface. Velocity applies its limits when each call returns. The filler is off-chain and has no privilege. The filler assembles the account list and pays the transaction fee. The filler cannot select prices."
+      title="The two routers and the four kinds of quoter"
+      caption="Two routers do the same work. The off-chain router quotes every quoter on the market and picks the ones that one transaction can carry. The router pass inside Velocity quotes the quoters that arrived and holds each one to its own answer. The green lines are the calls that leave the Velocity program. A book and a custom quoter answer on the same interface, and Velocity applies its limits when each call returns."
     >
       {({ captionId }) => (
         <Flow
           spec={fillTopologySpec}
-          ariaLabel="Flow diagram of a perp fill. A taker order and an off-chain filler reach the router pass. The router quotes the vAMM, DLOB makers, the CLOB book, and registered quoter programs, then settles."
+          ariaLabel="Flow diagram of a perp fill. An off-chain router passes a subset of the market to the router pass, alongside the taker order. The router pass quotes the vAMM, DLOB makers, the CLOB book, and custom quoter programs, then settles."
           describedBy={captionId}
           width={FLOW_WIDTH}
           nodeWidth={FLOW_NODE}
@@ -39,12 +40,12 @@ export function SplitSankey() {
   return (
     <Diagram
       title="How Velocity divides the taker size"
-      caption="The values are an example. They are not a measurement. Tiers fill in order, from the lowest number. Sources in one tier divide a price level in proportion to their depth, which is what the two sources in tier 10 show. The size that no source has depth for stays unfilled. Withheld depth is absent from this figure because it takes no part of the division."
+      caption="The values are an example. They are not a measurement. Tiers fill in order, from the lowest number. Quoters in one tier divide a price level in proportion to their depth, which is what the two quoters in tier 10 show. The size that no quoter has depth for stays unfilled. Withheld depth is absent from this figure because it takes no part of the division."
     >
       {({ captionId }) => (
         <Sankey
           spec={splitSpec}
-          ariaLabel="Sankey diagram of the taker size divided across priority tiers and then across each source"
+          ariaLabel="Sankey diagram of the taker size divided across priority tiers and then across each quoter"
           describedBy={captionId}
           width={620}
           height={340}
@@ -125,6 +126,26 @@ export function QuoterCallFlow() {
           describedBy={captionId}
           width={FLOW_WIDTH}
           nodeWidth={FLOW_NODE}
+        />
+      )}
+    </Diagram>
+  );
+}
+
+export function RouterReachSankey() {
+  return (
+    <Diagram
+      title="What one transaction can carry"
+      caption="The values are an example. They are not a measurement. A transaction locks at most 64 accounts, and one maker costs two of them, so a fill reaches part of a market and not all of it. The off-chain router chooses that part by price. The depth it carries here is the depth that the next figure divides the taker size across."
+    >
+      {({ captionId }) => (
+        <Sankey
+          spec={routerReachSpec}
+          ariaLabel="Sankey diagram of the depth on a market, divided into the depth one transaction carries, the depth priced worse than the taker's limit, and the depth left out for want of account room"
+          describedBy={captionId}
+          width={620}
+          height={260}
+          labelWidth={{ left: 150, right: 170 }}
         />
       )}
     </Diagram>

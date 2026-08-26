@@ -12,13 +12,13 @@ import type { SankeySpec } from "../layout/sankey";
 // return edge, which crosses the figure, or in the caption.
 // `router-fill.data.test.ts` checks each of these limits.
 
-/** The liquidity sources in one perp fill, and the program that holds each one. */
+/** The two routers, the four kinds of quoter, and the program that holds each one. */
 export const fillTopologySpec: FlowSpec = {
   nodes: [
-    { id: "taker", label: "Taker order", note: "resting or signed", column: 0 },
-    { id: "filler", label: "Filler", note: "off-chain", kind: "offchain", column: 0 },
+    { id: "offchain", label: "Off-chain router", note: "quotes every quoter", value: "picks a subset", kind: "offchain", column: 0 },
+    { id: "taker", label: "Taker order", note: "size and limit price", column: 0 },
 
-    { id: "router", label: "Router pass", note: "Velocity", value: "one per fill", column: 1, tone: "signal" },
+    { id: "router", label: "Router pass", note: "Velocity", value: "quotes the subset", column: 1, tone: "signal" },
 
     { id: "vamm", label: "vAMM", note: "curve, no orders", column: 2 },
     { id: "dlob", label: "DLOB makers", note: "User.orders", column: 2 },
@@ -28,8 +28,8 @@ export const fillTopologySpec: FlowSpec = {
     { id: "settle", label: "Settlement", note: "Velocity", value: "margin checked", column: 3 },
   ],
   edges: [
+    { from: "offchain", to: "router", label: "a subset", dashed: true },
     { from: "taker", to: "router" },
-    { from: "filler", to: "router", dashed: true },
     { from: "router", to: "vamm" },
     { from: "router", to: "dlob" },
     { from: "router", to: "clob", tone: "signal" },
@@ -55,13 +55,13 @@ export const splitSpec: SankeySpec = {
 
     { id: "t0", label: "Tier 0 — vAMM", value: "40", column: 1 },
     { id: "t10", label: "Tier 10 — books", value: "45", column: 1 },
-    { id: "t20", label: "Tier 20 — quoters", value: "10", column: 1 },
+    { id: "t20", label: "Tier 20 — custom", value: "10", column: 1 },
     { id: "short", label: "No depth", value: "5", note: "stays unfilled", column: 1, tone: "out", labelSide: "below" },
 
     { id: "vamm", label: "vAMM", value: "40", column: 2 },
     { id: "clob", label: "CLOB book", value: "25", column: 2 },
     { id: "dlob", label: "DLOB maker", value: "20", column: 2 },
-    { id: "quoter", label: "Quoter", value: "10", column: 2 },
+    { id: "quoter", label: "Custom quoter", value: "10", column: 2 },
   ],
   links: [
     { from: "size", to: "t0", value: 40 },
@@ -167,5 +167,32 @@ export const quoterCallSpec: FlowSpec = {
     { from: "quoter", to: "region", label: "writes" },
     { from: "region", to: "read", label: "the bytes" },
     { from: "quoter", to: "velocity", label: "return data: the offset and the length of the response" },
+  ],
+};
+
+
+/**
+ * Why two routers exist. The off-chain router reads the whole market; a
+ * transaction locks at most 64 accounts, so it carries a part of it.
+ *
+ * The values are an example, and they meet `splitSpec`: the 95 carried here is
+ * the depth that the 100 of taker size in that figure divides across, which is
+ * why 5 of it finds no depth.
+ *
+ * Source: velocity-v1 `rust/swift/src/route.rs` and `math/router.rs`
+ * (`TX_ACCOUNT_LOCK_CEILING`, `MAKER_ACCOUNT_COST`).
+ */
+export const routerReachSpec: SankeySpec = {
+  nodes: [
+    { id: "seen", label: "On the market", value: "135", note: "every quoter, every maker", column: 0 },
+
+    { id: "carried", label: "In the transaction", value: "95", note: "best price first", column: 1, tone: "signal" },
+    { id: "worse", label: "Worse than the limit", value: "25", column: 1, tone: "out" },
+    { id: "noroom", label: "No account room", value: "15", column: 1, tone: "out", labelSide: "below" },
+  ],
+  links: [
+    { from: "seen", to: "carried", value: 95, tone: "signal", label: "Depth the transaction carries, taken best price first" },
+    { from: "seen", to: "worse", value: 25, tone: "out", label: "Depth priced worse than the taker's limit price" },
+    { from: "seen", to: "noroom", value: 15, tone: "out", label: "Depth the taker would accept, left out because the transaction has no account room for its owner" },
   ],
 };

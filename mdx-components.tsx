@@ -12,6 +12,7 @@ import {
   FillTopologyFlow,
   OrderLifecycleFlow,
   QuoterCallFlow,
+  RouterReachSankey,
   RoutingLanesFlow,
   SigningFlow,
   SplitSankey,
@@ -34,6 +35,7 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     OrderLifecycleFlow,
     RoutingLanesFlow,
     QuoterCallFlow,
+    RouterReachSankey,
     ...components,
   });
 }

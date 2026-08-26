@@ -7,15 +7,16 @@ description: How Velocity fills a perp order across the vAMM, resting user order
 
 Velocity fills a perp order in one router pass. The router does three things:
 
-1. It asks each liquidity source for its prices.
-2. It divides the taker size across the sources.
-3. It holds each source to the prices that the source gave.
+1. It asks each quoter for its prices.
+2. It divides the taker size across the quoters.
+3. It holds each quoter to the prices that the quoter gave.
 
-A liquidity source can be a program that Velocity does not control. Most makers
-write no program. Velocity supplies one deployed program for spline quoting, and
-a maker creates an instance of it. A maker with a different quoting model
-deploys a program and registers that program. Velocity calls the program during
-a fill. Velocity does not trust the program.
+A quoter is a liquidity source. Two kinds of quoter are inside Velocity, and two
+kinds are separate programs. A separate program can be code that Velocity does
+not control. Most makers write no program: Velocity supplies one deployed
+program for spline quoting, and a maker creates an instance of it. A maker with
+a different quoting model deploys a program and registers it. Velocity calls
+that program during a fill. Velocity does not trust it.
 
 This page gives three things:
 
@@ -32,22 +33,29 @@ the limits can change.
 
 <FillTopologyFlow />
 
-Velocity reads four liquidity sources.
+A fill reads four kinds of quoter.
 
-| Source | Order records live in | Liquidity belongs to | Program author |
+| Quoter | Order records live in | Liquidity belongs to | Program author |
 | --- | --- | --- | --- |
 | **vAMM** | No orders. Velocity reads a curve as price levels. | The protocol | The protocol |
 | **DLOB makers** | `User.orders` | Any user | The protocol |
 | **CLOB book** | The market account of the CLOB program | Any user | The protocol |
-| **Quoter program** | Accounts of the quoter program | One registered user | The protocol, for the midpoint program. A market maker, for any other. |
+| **Custom quoter** | Accounts of that program | One registered user | The protocol, for the midpoint program. A market maker, for any other. |
 
 The DLOB and the CLOB hold orders from the same users, under the same margin
 rules. Only the location of the order record is different. A DLOB order is a row
 in the `User` account of its owner. A CLOB order is a record in one market
 account, which holds the orders of every maker on that market.
 
-Two of the four sources are separate programs. Both separate programs answer on
-the same interface.
+Two of the four kinds are separate programs. Both answer on the same
+interface.
+
+Two routers run, and they do the same work. An off-chain router quotes every
+quoter on the market and picks the ones to carry. The router pass inside Velocity
+quotes the quoters that arrived, divides the taker size across them, and holds
+each one to its own answer. Only the second router moves collateral. The first
+one decides what the second one can reach, because a transaction can carry only
+part of a market.
 
 A maker that quotes a spline writes no program. Velocity supplies a deployed
 program called midpoint, and the maker creates an instance of it. The
@@ -57,10 +65,15 @@ same way.
 
 ## What a quoter is
 
-A quoter is a program that Velocity calls during a fill, plus a registry entry
-that says how to call it. The program answers two questions: what it can fill,
-and then a request to fill part of it. The registry entry holds the program
-address, the accounts of each call, and the identity that the fill settles for.
+A quoter is a liquidity source. It answers two questions: what it can fill, and
+then a request to fill part of it. The four kinds above are the four answers to
+those questions, and the router treats them alike.
+
+The vAMM and a DLOB order are inside Velocity, so Velocity asks them directly.
+The other two kinds are separate programs. A separate program needs a registry
+entry that says how to call it, and this page calls that case a **registered
+quoter**. The entry holds the program address, the accounts of each call, and
+the identity that the fill settles for.
 
 The entry is an account, `QuoterV0`. Its address derives from the market index,
 the program, and the quoted `User`, so one program can serve many markets and
@@ -122,7 +135,7 @@ read the book.
 A router does that read. A router is an off-chain service. It simulates the whole
 fill at a recent slot, and it answers with three things:
 
-- the split across the sources, and the value that binds each part
+- the split across the quoters, and the value that binds each part
 - the makers on each book that the fill sweeps, best price first, and the two
   accounts that each maker costs
 - the registry entries to carry, and the accounts of each entry
@@ -130,6 +143,18 @@ fill at a recent slot, and it answers with three things:
 Carry the makers in that order and stop where the transaction runs out of room.
 A book stops its walk at the first maker that the transaction omits. A prefix of
 the list therefore fills, and a gap forfeits the depth behind it.
+
+<RouterReachSankey />
+
+The room is the reason the off-chain router exists. A transaction locks at most
+64 accounts, and one maker costs two of them, so no transaction reaches a whole
+market. The off-chain router reads the whole market and chooses the part to
+carry. The router pass on chain then quotes that part, and it can fill nothing
+outside it.
+
+So the two routers differ in what they see, not in what they do. The off-chain
+router sees everything and binds nobody. The router pass sees one transaction and
+binds every quoter in it.
 
 Velocity operates a router. Any person can operate one. A router holds no key and
 signs nothing. It selects no price. A router that answers badly makes a
@@ -167,14 +192,14 @@ the SDK, to decide what to carry.
 Velocity does all of these steps in one instruction.
 
 <Steps>
-### Quote each source
-Velocity sends one `quote_v0` call to each source. Velocity quotes every source
+### Quote each quoter
+Velocity sends one `quote_v0` call to each quoter. Velocity quotes every quoter
 before it divides the size, because the router must compare the prices first.
 
 ### Check each price list
 Each price must be more than zero. Each size must be more than zero. The prices
 must move in one direction. Velocity stops at the first price that breaks that
-order. A source can truncate only its own price list.
+order. A quoter can truncate only its own price list.
 
 ### Reduce a custom quoter to its margin
 Velocity does not reserve margin for a custom quoter in advance. Velocity
@@ -186,12 +211,12 @@ A resting order reserved its margin at placement. Velocity therefore does not
 reduce DLOB depth or CLOB depth here.
 
 ### Divide the size
-Velocity divides the taker size across the sources. The next section gives the
+Velocity divides the taker size across the quoters. The next section gives the
 three rules.
 
 ### Execute each part
-Velocity sends one `execute_v0` call to each source. The size is the part that
-the division gave to that source.
+Velocity sends one `execute_v0` call to each quoter. The size is the part that
+the division gave to that quoter.
 
 ### Compare the result to the quote
 Velocity compares the value of the part to the value that the division
@@ -208,13 +233,13 @@ Velocity checks the margin of the taker. Velocity also checks the margin of each
 maker in the fill. Velocity does both checks before the instruction ends.
 </Steps>
 
-A source can give a good price and then fill at a worse price. Step 6 then
+A quoter can give a good price and then fill at a worse price. Step 6 then
 fails, and the complete fill fails.
 
 The order of step 3 and step 4 matters. Velocity truncates unsupported depth
 before it divides the size. Unsupported depth therefore wins no part of the
 fill. A division that ran first would give a part to that
-depth. The part would come from a source that can fill it. The taker would then
+depth. The part would come from a quoter that can fill it. The taker would then
 receive less.
 
 ## Size division
@@ -225,20 +250,20 @@ Three rules control the division.
 
 <Steps>
 ### Priority tier
-Each source has a priority number. The vAMM has 0. A book has 10. A custom
+Each quoter has a priority number. The vAMM has 0. A book has 10. A custom
 quoter has 20. An administrator can change each number. At the same price, the
-source with the lower number fills first.
+quoter with the lower number fills first.
 
 ### Proportion inside a tier
-Two sources in one tier can give the same price. Velocity then divides that
-price level in proportion to the depth of each source.
+Two quoters in one tier can give the same price. Velocity then divides that
+price level in proportion to the depth of each quoter.
 
 ### Step size
 Each part is a multiple of `order_step_size` for the market. Execution then
 cannot lose size that is smaller than one step.
 </Steps>
 
-Size that no source has depth for stays unfilled. A limit order rests with that
+Size that no quoter has depth for stays unfilled. A limit order rests with that
 size. An immediate-or-cancel order cancels it.
 
 ### An order whose owner the transaction omits
@@ -259,7 +284,7 @@ transaction has a fixed account list, and a filler assembles that list before it
 sends the transaction.
 
 Withheld depth takes no part of the division. The taker asked to trade, so the
-size goes to the sources that can fill it. The aged order keeps its place in the
+size goes to the quoters that can fill it. The aged order keeps its place in the
 queue, because the book stopped its own walk.
 
 ### What the withheld report does instead
@@ -279,7 +304,7 @@ applies two tests. The fill fails if either test is true.
 
 The second test is what the first one alone would miss. A filler can reach the
 account ceiling with users that fill nothing. That forces the withhold, and it
-leaves the flow for a source of the filler's own. Those accounts spent the locks
+leaves the flow for a quoter of the filler's own. Those accounts spent the locks
 that the missing maker needed.
 
 Both tests need the account count, and only the instructions sysvar gives it.
@@ -532,8 +557,8 @@ change.
 | --- | --- | --- |
 | Quoter entries in one fill | 8 | A transaction can name 64 accounts. A fill uses approximately 15 accounts before the first quoter. Each quoter adds 3 more accounts. |
 | Registered CPI accounts for each quoter | 32 | An administrator approves this list. Velocity forwards it in each call. |
-| User accounts on the wire | 48 | Velocity can settle a fill only for these users. A source can offer liquidity only for these users. |
-| Price levels that Velocity reads from one source | 128 | Velocity ignores each level after the 128th level. |
+| User accounts on the wire | 48 | Velocity can settle a fill only for these users. A quoter can offer liquidity only for these users. |
+| Price levels that Velocity reads from one quoter | 128 | Velocity ignores each level after the 128th level. |
 
 <Callout type="warning">
 A quoter that registers more accounts reduces the number of quoters in one
@@ -549,7 +574,7 @@ of that entry, its program, its response account, and its `quoter_signer`. The
 entry holds all of these values. Do not use a fixed list.
 
 ### Include each maker that the fill can reach
-A source fills only for a user account that the transaction includes. A transaction that the taker
+A quoter fills only for a user account that the transaction includes. A transaction that the taker
 did not sign must be full before it omits a maker. It must also carry no user
 that fills nothing. Pass the instructions sysvar so
 Velocity can count the accounts.
@@ -573,4 +598,4 @@ this step calculates the wrong fill.
 - [Account model](/developers/concepts/account-model) — the accounts that a fill
   loads
 - [Orderbook & matching](/developers/market-makers/orderbook-and-matching) — the
-  DLOB, which is one of the four sources on this page
+  DLOB, which is one of the four kinds of quoter on this page
