@@ -34,7 +34,7 @@ export const fillTopologySpec: FlowSpec = {
     { id: "router", label: "Router pass", note: "Velocity", value: "the subset", column: 2, tone: "signal" },
 
     { id: "vamm", label: "vAMM", note: "curve, no orders", column: 3 },
-    { id: "dlob", label: "DLOB makers", note: "User.orders", column: 3 },
+    { id: "dlob", label: "DLOB makers", note: "User.orders", value: "to be removed", column: 3 },
     { id: "clob", label: "CLOB book", note: "market account", value: "quote/execute", column: 3 },
     { id: "custom", label: "Custom quoters", note: "their accounts", value: "quote/execute", column: 3 },
 
@@ -73,7 +73,7 @@ export const splitSpec: SankeySpec = {
 
     { id: "vamm", label: "vAMM", value: "40", column: 2 },
     { id: "clob", label: "CLOB book", value: "25", column: 2 },
-    { id: "dlob", label: "DLOB maker", value: "20", column: 2 },
+    { id: "dlob", label: "DLOB maker", value: "20", note: "to be removed", column: 2 },
     { id: "quoter", label: "Custom quoter", value: "10", column: 2 },
   ],
   links: [

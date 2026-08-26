@@ -1,5 +1,12 @@
 # Orderbook + DLOB websocket
 
+<Callout type="warning">
+The DLOB is to be removed. An order will rest in one CLOB market account instead
+of in the `User` account of its owner, so the on-chain source of this feed
+changes. The endpoints on this page describe the feed as it works now. See
+[PropAMM Order Flow](/developers/concepts/propamm-order-flow).
+</Callout>
+
 The DLOB (Decentralized Limit Order Book) server powers the UI orderbook and trades feed. It provides both a websocket interface for real-time updates and REST endpoints for snapshots.
 
 <Callout type="info">

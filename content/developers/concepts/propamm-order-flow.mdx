@@ -46,7 +46,7 @@ The router pass reads four kinds of quoter.
 | Quoter | Order records live in | Liquidity belongs to | Program author |
 | --- | --- | --- | --- |
 | **vAMM** | No orders. Velocity reads a curve as price levels. | The protocol | The protocol |
-| **DLOB makers** | `User.orders` | Any user | The protocol |
+| **DLOB makers** _(to be removed)_ | `User.orders` | Any user | The protocol |
 | **CLOB book** | The market account of the CLOB program | Any user | The protocol |
 | **Custom quoter** | Accounts of that program | One registered user | The protocol, for the midpoint program. A market maker, for any other. |
 
@@ -54,6 +54,13 @@ The DLOB and the CLOB hold orders from the same users, under the same margin
 rules. Only the location of the order record is different. A DLOB order is a row
 in the `User` account of its owner. A CLOB order is a record in one market
 account, which holds the orders of every maker on that market.
+
+<Callout type="warning">
+The DLOB is to be removed. The CLOB book replaces it, and an order will rest in
+one market account instead of in the `User` account of its owner. The fill route
+already moves that way: a taker remainder that can rest goes onto the book, not
+into `User.orders`. Build against the CLOB book. Do not build against the DLOB.
+</Callout>
 
 Two of the four kinds are separate programs. Both answer on the same
 interface.
@@ -71,6 +78,7 @@ then a request to fill part of it. The four kinds above are the four answers to
 those questions, and the router treats them alike.
 
 The vAMM and a DLOB order are inside Velocity, so Velocity asks them directly.
+The DLOB is to be removed, so a new quoter is one of the other two kinds.
 The other two kinds are separate programs. A separate program needs a registry
 entry that says how to call it, and this page calls that case a **registered
 quoter**. The entry holds the program address, the accounts of each call, and
@@ -599,4 +607,5 @@ this step calculates the wrong fill.
 - [Account model](/developers/concepts/account-model) — the accounts that a fill
   loads
 - [Orderbook & matching](/developers/market-makers/orderbook-and-matching) — the
-  DLOB, which is one of the four kinds of quoter on this page
+  DLOB, which is one of the four kinds of quoter on this page and is to be
+  removed
