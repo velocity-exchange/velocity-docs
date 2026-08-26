@@ -19,7 +19,7 @@ diagram per concept; the prose stays the source of truth and the diagram is the 
 - Tokens and styles: `components/diagrams/tokens.css` (do not add colors here without
   updating DESIGN.md section 7).
 - Frame: `components/diagrams/Diagram.tsx` (`title?`, `caption` required, render-prop children).
-- Renderers: `components/diagrams/Sankey.tsx` (props: `spec`, `ariaLabel`, `describedBy`, `width`, `height`, `labelWidth`).
+- Renderers: `components/diagrams/Sankey.tsx` (props: `spec`, `ariaLabel`, `describedBy`, `width`, `height`, `labelWidth`). `labelWidth` is the room reserved outside the first and last columns: one number for both sides, or `{ left, right }` when the two sides need different room.
 - Layout: `components/diagrams/layout/sankey.ts` (`SankeySpec`, `layoutSankey`). Pure; tested in `sankey.test.ts`.
 - Figures: `components/diagrams/figures/<name>.data.ts` (the spec) + `<Name>.tsx` (composes Diagram + renderer).
 - Registration: add the figure to `mdx-components.tsx`, then use `<Name />` in MDX.
@@ -29,7 +29,7 @@ diagram per concept; the prose stays the source of truth and the diagram is the 
 ```ts
 import type { SankeySpec } from "../layout/sankey";
 export const spec: SankeySpec = {
-  nodes: [{ id, label, column, value?, note?, tone? }],
+  nodes: [{ id, label, column, value?, note?, tone?, labelSide? }],
   links: [{ from, to, value, label?, tone? }],
 };
 ```
@@ -38,6 +38,10 @@ export const spec: SankeySpec = {
 - `value` on links is the flow size (use consistent units, usually % of the source).
 - `tone`: `default` (neutral), `out` (leaves the system: rebates, rewards), `signal`
   (the one leg that matters, green). At most one `signal` per diagram.
+- `labelSide` (`left` | `right` | `above` | `below`) overrides where a label sits; the default
+  is outside for the first and last columns and above for the middle ones. Reach for it when
+  the default side is not clear, typically a pass-through middle node whose own ribbons rise
+  through the space above it, which wants `below`.
 - Ranges: draw the midpoint, put the range in `value` ("2–10%"), and explain in the caption.
 - Every link needs a `label`; it becomes the accessible `<title>`.
 

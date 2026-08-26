@@ -58,6 +58,14 @@ describe("layoutSankey", () => {
     }
   });
 
+  it("honours separate left and right margins", () => {
+    const { nodes } = layoutSankey(spec, { ...opts, marginLeft: 100, marginRight: 40 });
+    const first = nodes.filter((n) => n.column === 0);
+    const last = nodes.filter((n) => n.column === 2);
+    for (const n of first) expect(n.x0).toBe(100);
+    for (const n of last) expect(n.x1).toBe(600 - 40);
+  });
+
   it("is deterministic", () => {
     expect(layoutSankey(spec, opts)).toEqual(layoutSankey(spec, opts));
   });

@@ -13,7 +13,8 @@ export type DiagramProps = {
 
 /**
  * "static" is what the server sends, so the figure is drawn with no JavaScript.
- * A figure below the fold arms itself (hidden) and draws in when it is reached.
+ * A figure with no pixel on screen arms itself (hidden) and waits; any figure
+ * that is even partly visible goes straight to "drawn" and plays the draw-in.
  */
 type Phase = "static" | "armed" | "drawn";
 
@@ -26,21 +27,17 @@ export function Diagram({ title, caption, animate = true, children }: DiagramPro
     if (!animate) return;
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    let armed = false;
     const io = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) {
-          if (!armed) {
-            armed = true;
-            setPhase("armed");
-          }
+        if (entries[entries.length - 1].intersectionRatio === 0) {
+          setPhase("armed");
           return;
         }
-        // Already on screen when this ran: leave it drawn rather than blink it out.
-        if (armed) setPhase("drawn");
+        // Both attributes land in one commit, so there is never a hidden frame.
+        setPhase("drawn");
         io.disconnect();
       },
-      { threshold: 0.35 },
+      { threshold: [0, 0.35] },
     );
     io.observe(el);
     return () => io.disconnect();
