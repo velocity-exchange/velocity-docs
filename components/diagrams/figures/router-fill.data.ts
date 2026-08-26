@@ -142,3 +142,30 @@ export const routingLanesSpec: FlowSpec = {
     { from: "client", to: "fill" },
   ],
 };
+
+/**
+ * One leg of a quoter call. Velocity writes the arguments, calls the program,
+ * and reads the response out of the quoter's own account.
+ *
+ * The response does not come back as return data. Return data holds 1024 bytes
+ * and a ladder is larger, so the return holds a `ResponsePointerV0` and the
+ * records stay in the account. Velocity reads them where they lie: velocity's
+ * heap is 32 KB and never reclaims, and one fill calls every quoter twice.
+ *
+ * Source: velocity-v1 `crates/quoter-spec/src/lib.rs` and
+ * `state/prop_amm.rs` (`invoke_quoter`).
+ */
+export const quoterCallSpec: FlowSpec = {
+  nodes: [
+    { id: "velocity", label: "Velocity", note: "writes the arguments", value: "disc ++ args", column: 0 },
+    { id: "quoter", label: "The quoter", note: "one CPI call", value: "quote or execute", column: 1, tone: "signal" },
+    { id: "region", label: "Response account", note: "the quoter's own", value: "fixed-width", column: 2 },
+    { id: "read", label: "Router pass", note: "reads it in place", value: "no decode step", column: 3 },
+  ],
+  edges: [
+    { from: "velocity", to: "quoter", label: "the args", tone: "signal" },
+    { from: "quoter", to: "region", label: "writes" },
+    { from: "region", to: "read", label: "the bytes" },
+    { from: "quoter", to: "velocity", label: "return data: the offset and the length of the response" },
+  ],
+};

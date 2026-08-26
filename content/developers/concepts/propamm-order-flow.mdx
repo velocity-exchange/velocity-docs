@@ -55,6 +55,60 @@ program called midpoint, and the maker creates an instance of it. The
 this page calls both cases a quoter program, because Velocity treats them the
 same way.
 
+## What a quoter is
+
+A quoter is a program that Velocity calls during a fill, plus a registry entry
+that says how to call it. The program answers two questions: what it can fill,
+and then a request to fill part of it. The registry entry holds the program
+address, the accounts of each call, and the identity that the fill settles for.
+
+The entry is an account, `QuoterV0`. Its address derives from the market index,
+the program, and the quoted `User`, so one program can serve many markets and
+many makers. `initialize_quoter` creates one.
+
+| Field | What it holds |
+| --- | --- |
+| `program_id` | The program that Velocity calls |
+| `response_account` | The account that the program writes each response into |
+| `quote_v0_discriminator` | The first eight bytes of the instruction data for the quote call |
+| `execute_v0_discriminator` | The same, for the execute call |
+| `quote_l3_v0_discriminator` | The same, for the optional third call. Zero means the program has none. |
+| `quote_accounts`, `execute_accounts` | Up to 32 accounts for each call, in order. An administrator approves each list. |
+| `user` | The one Velocity `User` that the entry fills for |
+| `market` | The one perp market that the entry serves |
+| `priority` | The routing tier. See [Size division](#size-division). |
+| `is_approved`, `is_active` | The administrator's switch and the maker's switch |
+
+Velocity stores each discriminator instead of deriving it. A program that is not
+an Anchor program can therefore serve as a quoter.
+
+An entry has one of three types. The type decides who can register it, and which
+users the response of that entry may name.
+
+| Type | Registered by | Its response may name |
+| --- | --- | --- |
+| `Custom` | Any maker | The one `User` in the entry |
+| `Clob` | An administrator | Any user that the transaction carries |
+| `Vamm` | An administrator | Nothing. A fill refuses the entry. |
+
+A `Custom` entry is the third-party case, and it is the narrow one. The
+registration names one `User`, and the authority of that `User` must sign the
+registration. So the program of a maker can move the collateral of that one
+account and no other. This is the limit that makes an unaudited program safe to
+call. See [Limits on a quoter program](#limits-on-a-quoter-program).
+
+A `Clob` entry is a book, and a book settles for whoever rests on it. Naming one
+is therefore an administrator's action, and a market accepts it once. A market
+cannot be pointed at a second book later.
+
+A `Vamm` entry names a priority tier and nothing else. The vAMM quotes inside
+Velocity, so a fill never calls it across a program boundary. A fill that finds
+a `Vamm` entry in its route fails.
+
+No response of any type may name the taker, and none may name the protocol
+account. Velocity applies both rules to each balance change, before the type of
+the entry decides anything else.
+
 ## Off-chain routers and fillers
 
 <RoutingLanesFlow />
@@ -163,14 +217,6 @@ fill. A division that ran first would give a part to that
 depth. The part would come from a source that can fill it. The taker would then
 receive less.
 
-<Callout>
-A response does not use return data, because return data has a limit of 1024
-bytes. The source writes the response into an account that the source owns. The
-source returns a `ResponsePointerV0` value with an offset and a length. Velocity
-reads the records in that account. The size of the account sets the maximum size
-of a response.
-</Callout>
-
 ## Size division
 
 <SplitSankey />
@@ -240,6 +286,102 @@ Both tests need the account count, and only the instructions sysvar gives it.
 A fill that withholds depth without that account fails with
 `FillerObligationUncountable`. A fill that withholds nothing never reads it, so
 the account costs a lock only where it earns one.
+
+## The quoter interface
+
+<QuoterCallFlow />
+
+A quoter answers two calls. Both calls carry the same request shape, and both
+answer in the same framing. The `quoter-spec` crate declares every type on this
+wire. Velocity, the CLOB, and the midpoint program all use those declarations,
+so no program mirrors them by hand.
+
+| Call | The question | The answer |
+| --- | --- | --- |
+| `quote_v0` | What can you fill, and at which prices? | `QuoteResponseV0` |
+| `execute_v0` | Fill this much base. | `ExecuteResponseV0` |
+| `quote_l3_v0` | Which resting orders stand behind the ladder, and who owns each one? | `L3ResponseV0`. Optional. A reader that gets no answer credits the whole ladder to the `user` of the entry, which is correct for a quoter that fills from one account. A book is the exception. |
+
+### The request
+
+`QuoteArgsV0` carries what the taker wants and who the caller can settle for.
+
+| Field | Meaning |
+| --- | --- |
+| `users` | The user set of the transaction, at most 48 entries. Each entry is a wallet and a sub-account index. A response may name no other user. |
+| `direction` | The direction of the taker |
+| `size` | Base that the taker wants filled |
+| `caps` | The room that each user has left. The next section gives the shape. |
+| `reference_price` | The price that the caller marks a filled position at. A budget is spent against this price. |
+| `taker` | The user of the taker. A quoter always passes over the orders of this user. |
+| `limit_price` | The worst price that the caller accepts. A quoter can stop its walk there. Zero means no bound. |
+
+`ExecuteArgsV0` holds the same fields except `limit_price`. The size of an
+execute call is already a part of the ladder that the caller chose, so the walk
+that fills it reaches no level that a bound would cut.
+
+`UserCapsV0` states the room per user, and it has two parts.
+
+- `excluded` holds one bit for each index in the user set. A set bit means that
+  the user has no room on the swept side. The quoter passes over the orders of
+  that user and fills the depth behind them.
+- `caps` holds up to 8 partial budgets. A budget is the quote amount that one
+  user can lose while it fills on the swept side, measured against
+  `reference_price`. A user that is in neither part is unconstrained.
+
+<Callout type="info">
+`caps` and `limit_price` are not trust boundaries. Velocity checks each response
+against the quote and against its own limits, and it checks the margin of each
+touched account after the fill. A quoter that ignores these fields wastes the
+compute of the caller and gets its own fill refused. It cannot widen what it may
+fill.
+</Callout>
+
+### The response
+
+A response is data in the response account of the quoter. It is a header of
+counts, then that many fixed-width records for each section, in order. Every
+record is little-endian and has no padding hole, so Velocity reads it in place
+and allocates nothing. The size of that account sets the largest response that
+the quoter can give.
+
+`quote_v0` answers with a ladder and one more record.
+
+| Section | What it holds |
+| --- | --- |
+| `levels` | The ladder. Each rung is a price and the base available at that price. Velocity reads at most 128 rungs. |
+| `withheld` | The best price that the quoter did not offer, and the base resting there, because that liquidity belongs to a user outside `users`. Zero when the quoter left nothing out. See [An order whose owner the transaction omits](#an-order-whose-owner-the-transaction-omits). |
+
+`execute_v0` answers with what the fill did.
+
+| Section | What it holds |
+| --- | --- |
+| `changes` | One record for each user: the base and the quote that moved. The sign follows the direction of the taker. A user that gave three orders to one sweep gets one record. |
+| `cancelled` | Each order that the quoter removed because the remainder fell under the minimum of the market |
+| `completed` | The id of each resting order that the fill consumed whole. Each id names its own change by index. |
+| `partial` | The one order that the fill left resting with less size. A best-price-first walk ends when the size of the taker runs out, so only the last order that it reached can be partial. |
+
+The ids are separate sections and not lists inside each change, because a quoter
+writes the records as it walks a book. Ids for one user arrive between the fills
+of other users. An index into `changes` therefore makes each id an append at the
+tail.
+
+### What a maker implements
+
+A maker that quotes a spline implements nothing. It creates an instance of the
+[midpoint program](#the-midpoint-program) with `initialize_quoter_v0`, and then
+it writes a mid price and a spline.
+
+A maker with a different model implements the two calls above and deploys the
+program. The program must write each response into an account that both call
+lists name. Velocity refuses to approve an entry whose lists omit the response
+account, because Velocity reads each response from it.
+
+Each case then registers the same way: `initialize_quoter` on Velocity creates
+the entry, and an administrator approves it. The two instruction names are
+close. `initialize_quoter_v0` belongs to the midpoint program and creates an
+instance of it. `initialize_quoter` belongs to Velocity and creates a registry
+entry, for a midpoint instance or for any other program.
 
 ## Limits on a quoter program
 

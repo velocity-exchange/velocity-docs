@@ -11,6 +11,7 @@ import { FeeFlowSankey } from "./components/diagrams/figures/FeeFlowSankey";
 import {
   FillTopologyFlow,
   OrderLifecycleFlow,
+  QuoterCallFlow,
   RoutingLanesFlow,
   SigningFlow,
   SplitSankey,
@@ -32,6 +33,7 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     SigningFlow,
     OrderLifecycleFlow,
     RoutingLanesFlow,
+    QuoterCallFlow,
     ...components,
   });
 }

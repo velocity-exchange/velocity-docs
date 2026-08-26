@@ -6,6 +6,7 @@ import { Sankey } from "../Sankey";
 import {
   fillTopologySpec,
   orderLifecycleSpec,
+  quoterCallSpec,
   routingLanesSpec,
   signingSpec,
   splitSpec,
@@ -102,6 +103,25 @@ export function RoutingLanesFlow() {
         <Flow
           spec={routingLanesSpec}
           ariaLabel="Two paths to a fill. A taker asks an off-chain router for the split and the account list. A signed order goes to a filler, which builds and pays. A taker can also build its own transaction. Both reach the same router pass in Velocity."
+          describedBy={captionId}
+          width={FLOW_WIDTH}
+          nodeWidth={FLOW_NODE}
+        />
+      )}
+    </Diagram>
+  );
+}
+
+export function QuoterCallFlow() {
+  return (
+    <Diagram
+      title="One leg of a quoter call"
+      caption="A quoter writes its response into its own account and returns the offset and the length of it. Return data holds 1024 bytes, and a ladder is larger. Velocity then reads the records where they lie: each record has a fixed width and a little-endian layout, so there is no decode step. Velocity has a 32 KB heap that it never reclaims, and one fill calls every registered quoter twice."
+    >
+      {({ captionId }) => (
+        <Flow
+          spec={quoterCallSpec}
+          ariaLabel="One quoter call. Velocity writes the discriminator and the arguments, calls the quoter program, and the quoter writes fixed-width records into its response account. The quoter returns a pointer, and the router pass reads the records in place."
           describedBy={captionId}
           width={FLOW_WIDTH}
           nodeWidth={FLOW_NODE}
