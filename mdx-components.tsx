@@ -8,6 +8,13 @@ import {
 } from "./components/data/CrossCollateralTables";
 import { Api, Rust, SDKDoc, TypeScript } from "./components/SDKDoc";
 import { FeeFlowSankey } from "./components/diagrams/figures/FeeFlowSankey";
+import {
+  FillTopologyFlow,
+  OrderLifecycleFlow,
+  RelayLoopFlow,
+  SigningFlow,
+  SplitSankey,
+} from "./components/diagrams/figures/RouterFigures";
 
 export function useMDXComponents(components?: Record<string, unknown>) {
   return useDocsMDXComponents({
@@ -20,6 +27,11 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     Rust,
     Api,
     FeeFlowSankey,
+    FillTopologyFlow,
+    SplitSankey,
+    SigningFlow,
+    OrderLifecycleFlow,
+    RelayLoopFlow,
     ...components,
   });
 }

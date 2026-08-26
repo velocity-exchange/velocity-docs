@@ -1,0 +1,364 @@
+---
+title: PropAMM Order Flow
+description: How Velocity fills a perp order across the vAMM, resting user orders, and third-party quoter programs. The call interface, the limits on an external program, and the accounts a client must supply.
+---
+
+# PropAMM Order Flow
+
+Velocity fills a perp order in one router pass. The router does three things:
+
+1. It asks each liquidity source for its prices.
+2. It divides the taker size across the sources.
+3. It holds each source to the prices that the source gave.
+
+A liquidity source can be a program that Velocity does not control. Most makers
+write no program. Velocity supplies one deployed program for spline quoting, and
+a maker creates an instance of it. A maker with a different quoting model
+deploys a program and registers that program. Velocity calls the program during
+a fill. Velocity does not trust the program.
+
+This page gives three things:
+
+- the call interface
+- the limits that Velocity applies to an external program
+- the accounts that a client must supply
+
+<Callout type="warning">
+This page describes a design in development. The wire types, the PDA seeds, and
+the limits can change.
+</Callout>
+
+## Structure
+
+<FillTopologyFlow />
+
+Velocity reads four liquidity sources.
+
+| Source | Order records live in | Liquidity belongs to | Program author |
+| --- | --- | --- | --- |
+| **vAMM** | No orders. Velocity reads a curve as price levels. | The protocol | The protocol |
+| **DLOB makers** | `User.orders` | Any user | The protocol |
+| **CLOB book** | The market account of the CLOB program | Any user | The protocol |
+| **Quoter program** | Accounts of the quoter program | One registered user | The protocol, for the midpoint program. A market maker, for any other. |
+
+The DLOB and the CLOB hold orders from the same users, under the same margin
+rules. Only the location of the order record is different. A DLOB order is a row
+in the `User` account of its owner. A CLOB order is a record in one market
+account, which holds the orders of every maker on that market.
+
+Two of the four sources are separate programs. Both separate programs answer on
+the same interface.
+
+A maker that quotes a spline writes no program. Velocity supplies a deployed
+program called midpoint, and the maker creates an instance of it. The
+[midpoint program](#the-midpoint-program) section gives the details. The rest of
+this page calls both cases a quoter program, because Velocity treats them the
+same way.
+
+The filler is an off-chain program. Any person can operate a filler. The filler
+assembles the account list and pays the transaction fee. The filler cannot
+select prices. An incorrect account list makes the transaction fail. It does not
+change the price that the taker receives.
+
+## Sequence
+
+Velocity does all of these steps in one instruction.
+
+<Steps>
+### Quote each source
+Velocity sends one `quote_v0` call to each source. Velocity quotes every source
+before it divides the size, because the router must compare the prices first.
+
+### Check each price list
+Each price must be more than zero. Each size must be more than zero. The prices
+must move in one direction. Velocity stops at the first price that breaks that
+order. A source can truncate only its own price list.
+
+### Reduce a custom quoter to its margin
+Velocity does not reserve margin for a custom quoter in advance. Velocity
+therefore adds the sizes that the quoter quoted. Velocity compares that total to
+the size that the quoter account supports. Velocity then truncates the price
+list at the supported size.
+
+A resting order reserved its margin at placement. Velocity therefore does not
+reduce DLOB depth or CLOB depth here.
+
+### Divide the size
+Velocity divides the taker size across the sources. The next section gives the
+three rules.
+
+### Execute each part
+Velocity sends one `execute_v0` call to each source. The size is the part that
+the division gave to that source.
+
+### Compare the result to the quote
+Velocity compares the value of the part to the value that the division
+calculated. Velocity also compares each balance change to a price band. Velocity
+calculates that band from the price levels that the part used. The taker limit
+price applies to the complete fill.
+
+### Apply the balance changes
+Velocity applies one balance change for each user in the response. Velocity
+applies a change only for a user that the rules permit.
+
+### Check margin
+Velocity checks the margin of the taker. Velocity also checks the margin of each
+maker in the fill. Velocity does both checks before the instruction ends.
+</Steps>
+
+A source can give a good price and then fill at a worse price. Step 6 then
+fails, and the complete fill fails.
+
+The order of step 3 and step 4 matters. Velocity truncates unsupported depth
+before it divides the size. Unsupported depth therefore wins no part of the
+fill. A division that ran first would give a part to that
+depth. The part would come from a source that can fill it. The taker would then
+receive less.
+
+<Callout>
+A response does not use return data, because return data has a limit of 1024
+bytes. The source writes the response into an account that the source owns. The
+source returns a `ResponsePointerV0` value with an offset and a length. Velocity
+reads the records in that account. The size of the account sets the maximum size
+of a response.
+</Callout>
+
+## Size division
+
+<SplitSankey />
+
+Three rules control the division.
+
+<Steps>
+### Priority tier
+Each source has a priority number. The vAMM has 0. A book has 10. A custom
+quoter has 20. An administrator can change each number. At the same price, the
+source with the lower number fills first.
+
+### Proportion inside a tier
+Two sources in one tier can give the same price. Velocity then divides that
+price level in proportion to the depth of each source.
+
+### Step size
+Each part is a multiple of `order_step_size` for the market. Execution then
+cannot lose size that is smaller than one step.
+</Steps>
+
+### An order whose owner the transaction omits
+
+Velocity settles a fill only for a `User` account in the transaction. A book can
+hold an order for a user that the transaction omits. The age of that order
+decides what the book does. A market sets the limit with
+`unknown_user_grace_slots`. The book measures the age from the slot at which the
+order became matchable.
+
+| Age of the order | What the book does | Result for the taker |
+| --- | --- | --- |
+| Inside the grace window | The book passes over the order and continues | The depth behind the order is available |
+| Outside the grace window | The book stops the walk and reports the price and size as withheld depth | The depth behind the order is not available |
+
+The grace window exists because a filler cannot know of a new order. The
+transaction has a fixed account list, and a filler assembles that list before it
+sends the transaction.
+
+Withheld depth then affects the division, in one case only. Velocity holds back
+taker size equal to the withheld size. Velocity discards that size after the
+division. The taker keeps the size unfilled, and the remainder rests at the
+taker limit price.
+
+Velocity holds back that size only when all three of these are true:
+
+- The order is not immediate-or-cancel.
+- The instruction is not a liquidation.
+- The remainder has a price to rest at.
+
+Velocity holds back no size in any other case. A remainder that cannot rest
+takes the worse price instead of no fill.
+
+## Limits on a quoter program
+
+A quoter program can be code from a third party. Velocity therefore assumes
+that any quoter program is hostile. Velocity applies these limits from outside
+the program.
+
+| Limit | What the limit prevents |
+| --- | --- |
+| **Quote comparison** | A good quote followed by a worse fill |
+| **Permitted users** | A change for the taker, for another quoter's maker, or for the protocol account |
+| **Included user list** | A fill for a `User` account that the transaction does not include |
+| **Margin reduction before execution** | Depth that the quoter account cannot support |
+| **Margin check after the fill** | An account left below its margin requirement |
+| **Registry approval** | Any order flow. An administrator approves the entry, and the maker can make the entry inactive. |
+| **Frozen program** | Approval of one program binary and use of a different binary |
+
+Approval applies to one program binary. Approval does not apply to the author of
+the program. Velocity refuses an entry if the program has an upgrade authority.
+The holder of that authority can replace the binary after approval.
+
+## The midpoint program
+
+A maker does not have to deploy a program. Velocity supplies one deployed
+program called midpoint. A maker creates an instance of that program with
+`initialize_quoter_v0`. An instance is a PDA for one market, one wallet, and one
+sub-account. Every instance runs the same binary, so one review of that binary
+covers every maker that uses it.
+
+An instance quotes from a mid price and a spline. The spline holds up to 64 rungs
+for each side. Each rung holds an offset from mid and a size. The offset is in
+parts per million of mid. The program calculates each quote price when Velocity
+asks for a quote. The price is the mid plus or minus the offset. The program
+rounds that price away from mid, to the tick size of the market.
+
+A maker writes two values.
+
+| Value | Instruction | Measured cost |
+| --- | --- | --- |
+| The mid price | `set_mid_v0` | 349 compute units |
+| The spline of one side or both sides | `set_levels_v0` | 4,369 compute units for 64 rungs on each side |
+
+The mid price is the frequent write, and it is the cheaper of the two.
+
+An instance holds three keys. Each key permits one type of action.
+
+| Key | Permits |
+| --- | --- |
+| `authority` | Pause the instance, change the configuration, and rotate the hot key. A desk can hold this key offline. |
+| `hot_authority` | Write the mid price and the spline. Nothing else. |
+| `user_authority` | Identify the quoted `User`. It signs the creation of the instance, and the PDA seeds hold it. |
+
+Two rules limit the damage from a failed price feed.
+
+- An instance stops quoting when `mid_slot` falls more than
+  `max_mid_staleness_slots` behind the current slot.
+- Each rung holds a filled amount. A consumed rung stays consumed until the
+  maker writes that side again. A taker cannot consume one rung twice while the
+  maker changes the mid price.
+
+Velocity treats an instance as it treats any other quoter program. An
+administrator approves the registry entry. The maker can make the entry
+inactive. Velocity reduces the quoted size to the margin of the quoted `User`
+before it calls the instance.
+
+## Signing identities
+
+<SigningFlow />
+
+A callee inherits signer privilege through a CPI call. The callee can then use
+that signature in a further call. Velocity therefore uses three separate keys.
+Each key reaches one type of callee.
+
+| PDA | Seeds | Authority over |
+| --- | --- | --- |
+| `velocity_signer` | `["velocity_signer"]` | Each spot vault, each insurance-fund vault, and the protocol `User` |
+| `clob_authority` | `["clob_authority"]` | The `place_authority` of each book: place, cancel, evict, expire, and execute |
+| `quoter_signer` | `["quoter_signer", entry]` | Nothing |
+
+`clob_authority` can place and cancel orders on any market, for any user.
+`place_order_v0` receives the user as an argument, and the book trusts its
+authority to check that user. Velocity therefore never gives `clob_authority` to
+a third-party program.
+
+Velocity derives `quoter_signer` from the registry entry. A quoter program
+receives the key for its own entry only. That signature proves that Velocity
+called that program. It proves nothing at a different program. It is not the
+place authority of a book, and it is not the key of a second entry.
+
+<Callout type="important">
+The CLOB instructions use an account named `clob_authority`. Derive it with
+`getClobAuthorityPublicKey`. `getQuoterSignerPublicKey` takes the registry entry
+as an argument. A maker sets the expected caller of a quoter instance to the key
+of that maker's own entry.
+</Callout>
+
+## Order records in two programs
+
+<OrderLifecycleFlow />
+
+A CLOB order exists in two programs at the same time. Each program holds a
+different fact about it.
+
+- The CLOB program holds the order. The order is a record in an array. The
+  record is a member of one of two lists, and each list is in price order.
+- Velocity holds the margin for the order. The fields are `open_bids`,
+  `open_asks`, and `open_orders` on the maker position. Velocity reserves them at
+  placement. Velocity applies the same margin check as a DLOB order.
+
+An order leaves the book in five ways:
+
+- a fill
+- a cull, when the remainder is below the minimum size
+- a cancel by the owner
+- an eviction at the soft limit
+- an expiry
+
+Each way runs through a Velocity instruction. That instruction releases the
+margin in the same transaction. The two programs cannot disagree, because only
+one path changes each record.
+
+## Unattended work
+
+<RelayLoopFlow />
+
+Five types of work have no operator: expiries, evictions, crossed books,
+triggers, and liquidations. The accounts hold conditions. A condition states
+what to watch. An off-chain program called a turner watches the accounts.
+
+A resolver runs only in a simulation. The resolver decides if there is work. The
+resolver also names the accounts and the arguments for that work. An executor is
+the instruction that lands on chain. An executor has no signer, so any person
+can send it. A reservoir for the market pays the sender.
+
+Liquidation uses the same loop. The liquidator is the protocol account. Velocity
+fills the position into the book and the vAMM. The sender needs no inventory.
+The reservoir pays the sender for the transaction, not for the position.
+
+## Limits for one transaction
+
+These limits control what a client can put in one transaction. The values can
+change.
+
+| Limit | Value | Reason |
+| --- | --- | --- |
+| Quoter entries in one fill | 8 | A transaction can name 64 accounts. A fill uses approximately 15 accounts before the first quoter. Each quoter adds 3 more accounts. |
+| Registered CPI accounts for each quoter | 32 | An administrator approves this list. Velocity forwards it in each call. |
+| User accounts on the wire | 48 | Velocity can settle a fill only for these users. A source can offer liquidity only for these users. |
+| Price levels that Velocity reads from one source | 128 | Velocity ignores each level after the 128th level. |
+
+<Callout type="warning">
+A quoter that registers more accounts reduces the number of quoters in one
+transaction. A filler must expect this behaviour.
+</Callout>
+
+## Client requirements
+
+<Steps>
+### Read the account list from the registry
+Include each entry that the fill uses. Also include the registered CPI accounts
+of that entry, its program, its response account, and its `quoter_signer`. The
+entry holds all of these values. Do not use a fixed list.
+
+### Include each maker that the fill must use
+A source fills only for a user account that the transaction includes. If the
+transaction omits a maker, the source reports that maker's depth as withheld
+depth. Velocity then discards the depth.
+
+### Use the signed route
+An order holds a four-byte digest of the entries that the signer selected. The
+fill must include each entry in that digest. Presence is the requirement, not
+participation. Extra entries are permitted, because the router allocates by
+price.
+
+### Reproduce the division off chain
+Use `splitAcrossQuoters` in the SDK. It gives the same result as the program,
+and it reports the `scaledQuote` value that binds each part. A client that omits
+this step calculates the wrong fill.
+</Steps>
+
+## Related pages
+
+- [Program structure](/developers/concepts/program-structure) — the location of
+  each program
+- [Account model](/developers/concepts/account-model) — the accounts that a fill
+  loads
+- [Orderbook & matching](/developers/market-makers/orderbook-and-matching) — the
+  DLOB, which is one of the four sources on this page
