@@ -1,20 +1,19 @@
 # Liquidations
 
-
 <Callout type="warning">
-Trading on leverage can be risky. Make sure you are aware of the liquidation rules outlined below before applying margin.
+  Trading on leverage can be risky. Make sure you are aware of the liquidation rules outlined below
+  before applying margin.
 </Callout>
 
+## What is Liquidation?
 
-## What is Liquidation?  
-
-Liquidations are a part of leveraged trading. Traders that elect to use leverage are using the collateral they deposited as margin to borrow money from the protocol. Traders may choose to do this in order to open a larger position and have more exposure to a particular asset, i.e. *leveraged exposure*.  
+Liquidations are a part of leveraged trading. Traders that elect to use leverage are using the collateral they deposited as margin to borrow money from the protocol. Traders may choose to do this in order to open a larger position and have more exposure to a particular asset, i.e. _leveraged exposure_.
 
 When this occurs, the protocol must protect itself by ensuring that there is enough margin for the position to settle any losses that occur. There is a prescribed minimum ratio between a position's value and its margin for each asset (**Minimum Maintenance Margin**).
 
-If a position drops below its Minimum Maintenance Margin, liquidators are incentivized by the protocol to take over positions so a user's remaining collateral may settle the losses that have occurred. Read [Insurance Fund](/protocol/insurance-fund) for what happens when prices move rapidly and/or liquidations don't happen in time.  
+If a position drops below its Minimum Maintenance Margin, liquidators are incentivized by the protocol to take over positions so a user's remaining collateral may settle the losses that have occurred. Read [Insurance Fund](/protocol/insurance-fund) for what happens when prices move rapidly and/or liquidations don't happen in time.
 
-## How do Liquidations work?  
+## How do Liquidations work?
 
 By default, all positions within a subaccount (deposits, borrows, and perpetuals positions) are **cross-margined**: liquidations are calculated based on your account level leverage rather than isolated to the leverage present in your perpetuals and/or borrow account.
 
@@ -22,9 +21,9 @@ By default, all positions within a subaccount (deposits, borrows, and perpetuals
 Velocity also supports **[isolated positions](/protocol/trading/margin)**: a perp position funded and margined independently of the rest of the subaccount. Isolated positions are liquidated on their own, without touching the account's cross-margin collateral or other positions, and (unlike cross-margin) close **100% in a single liquidation** rather than unwinding gradually. See [below](#isolated-position-liquidations).
 */}
 
-You can be liquidated when your `totalCollateral` becomes less than your`maintenanceMarginRequirement`. Your total collateral is the weighted value of your deposits and perp pnl. Your margin requirement is the weighted value of your borrows and perp positions.  
+You can be liquidated when your `totalCollateral` becomes less than your `maintenanceMarginRequirement`. Your total collateral is the weighted value of your deposits and perp pnl. Your margin requirement is the weighted value of your borrows and perp positions.
 
-Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Velocity State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.  
+Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Velocity State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.
 
 The `Health` measure on the user page can help visualise how close a user is to liquidation territory. At 0 Health, a user can get liquidated.
 
@@ -33,7 +32,8 @@ The `Health` measure on the user page can help visualise how close a user is to 
 The user's trade price at liquidation for a perpetual position will be based on the oracle price. Both the liquidator fee and the insurance-fund fee are per-market parameters set by protocol admins, and the liquidator fee is what gives the liquidator a rebate for taking over the position.
 
 <Callout type="error">
-**In the case of an extreme oracle error: the market will pause most fills, liquidations, and funding rate updates.**
+  **In the case of an extreme oracle error: the market will pause most fills, liquidations, and
+  funding rate updates.**
 </Callout>
 
 <Callout type="info">
@@ -41,24 +41,26 @@ Example:
 
 You deposit 500 USDT and you long 200 SOL-PERP at \$25.
 
-* Your position value is \$5000 USDT and your margin/collateral is \$500 USDT, you have 10x leverage.
-* Note that the Minimum Maintenance Margin for a SOL-PERP is 3% (see Minimum Maintenance Margin for assets here: [Margin](/protocol/trading/margin)).
+- Your position value is \$5000 USDT and your margin/collateral is \$500 USDT, you have 10x leverage.
+- Note that the Minimum Maintenance Margin for a SOL-PERP is 3% (see Minimum Maintenance Margin for assets here: [Margin](/protocol/trading/margin)).
 
 Calculations:
 
-* Total collateral = `500 * 1.00 = 500`
-* Margin requirement = `5000 * .03 = 150`
+- Total collateral = `500 * 1.00 = 500`
+- Margin requirement = `5000 * .03 = 150`
 
 You are liquidated if the price of SOL decreases by ~7.22% to ~\$23.20. This is because:
 
-* Perp PnL = `200 * $25 * -0.0722 = -361`
-* New total collateral = `500 - 361 = 139`
-* New margin requirement = `23.20 * 200 * .03 = 139.2`
+- Perp PnL = `200 * $25 * -0.0722 = -361`
+- New total collateral = `500 - 361 = 139`
+- New margin requirement = `23.20 * 200 * .03 = 139.2`
 
 At that point your total collateral is less than your margin requirement and liquidation is triggered.
+
 </Callout>
 
 {/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
+
 ## Isolated Position Liquidations
 
 Cross-margin liquidations unwind gradually: a throttled percentage per slot window that accelerates or slows based on how the price moves after liquidation begins (see [Liquidation Engine](/protocol/how-it-works/liquidation-engine)). **Isolated positions skip this ramp entirely: once an isolated position is under-margined, it is liquidated 100% in one shot**, since its collateral and risk can't spill over into the rest of the account the way a cross-margined position's can.
@@ -70,15 +72,14 @@ Per-market liquidation fee rates are split three ways when a position is liquida
 
 - **`liquidator_fee`**: paid to the liquidator, unchanged from a standard liquidation reward.
 - **`if_liquidation_fee`**: the insurance fund's cut.
-- **`protocol_liquidation_fee`**: a protocol cut, introduced alongside the [fee redesign](/protocol/trading/trading-fees/fee-mechanics#fee-redesign). The combined insurance-side budget (`if_liquidation_fee + protocol_liquidation_fee`) is computed once against the user's margin shortfall, then split **IF-first**: the insurance fund receives exactly what it would have received without the protocol fee, and the protocol only captures margin headroom *beyond* that. This means adding a protocol cut can never push a liquidation into bankruptcy that wouldn't otherwise have happened. It only reduces the excess margin the liquidatee would have kept.
+- **`protocol_liquidation_fee`**: a protocol cut, introduced alongside the [fee redesign](/protocol/trading/trading-fees/fee-mechanics#fee-redesign). The combined insurance-side budget (`if_liquidation_fee + protocol_liquidation_fee`) is computed once against the user's margin shortfall, then split **IF-first**: the insurance fund receives exactly what it would have received without the protocol fee, and the protocol only captures margin headroom _beyond_ that. This means adding a protocol cut can never push a liquidation into bankruptcy that wouldn't otherwise have happened. It only reduces the excess margin the liquidatee would have kept.
 
 Perp liquidations accrue the IF and protocol cuts as pending fee-ledger counters (materialized by the fee sweep); spot liquidations credit the liability market's `revenue_pool` and `protocol_fee_pool` directly.
 
 ## Bankruptcy and Solvency Status
 
-If a liquidation leaves a user with an outstanding liability and no further assets, the account becomes bankrupt and is resolved via `resolve_perp_bankruptcy` / `resolve_spot_bankruptcy` (or `resolve_perp_pnl_deficit` for a market-wide PnL deficit short of full bankruptcy). These solvency-repair instructions are gated by a dedicated `State.solvencyStatus` bitflag (`SolvencyStatus.SOLVENCY_REPAIR_PAUSED`) rather than the general withdraw-pause flag: an admin can pause deposits/withdrawals without also blocking bad-debt resolution, or pause solvency repair independently via `AdminClient.updateSolvencyStatus` (cold-admin only). See [Insurance Fund](/protocol/insurance-fund) for the backstop waterfall itself.
+If a liquidation leaves a user with an outstanding liability and no further assets, the account becomes bankrupt and is resolved via `resolve_perp_bankruptcy` / `resolve_spot_bankruptcy` (or `resolve_perp_pnl_deficit` for a market-wide PnL deficit short of full bankruptcy). See [Insurance Fund](/protocol/insurance-fund) for the backstop waterfall itself.
 
 ## Being a Liquidator
 
-Read [Liquidation Engine](/protocol/how-it-works/liquidation-engine#liquidators) if you want to learn more about being a liquidator on the platform. Liquidators earn a fee for their services.  
-
+Read [Liquidation Engine](/protocol/how-it-works/liquidation-engine#liquidators) if you want to learn more about being a liquidator on the platform. Liquidators earn a fee for their services.
