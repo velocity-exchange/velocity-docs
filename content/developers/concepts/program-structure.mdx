@@ -92,6 +92,8 @@ Market and oracle orders (and limit orders given auction params) go through a **
 - `auctionDuration` - Slots for auction to run
 - Price linearly improves from start to end over the duration
 
+<AuctionPriceRamp />
+
 Post-only limit orders, and any order with `auctionDuration == 0`, skip the auction and rest immediately at their limit price.
 
 This gives better prices while maintaining MEV resistance. See [JIT Auctions](/developers/market-makers/jit-auctions) for details.

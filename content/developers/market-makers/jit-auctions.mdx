@@ -27,17 +27,7 @@ Every taker order that enters a JIT auction has three key parameters that define
 
 ## Auction timeline
 
-```
-Slot 0          Slot 5          Slot 10 (end)
-  |               |               |
-  Best price ──────────────────► Worst price (for taker)
-  for taker                       Falls to DLOB/AMM
-
-  Hardest for     Easier for      Auction over,
-  makers to       makers to       remaining size
-  win fills       win fills       goes to DLOB
-```
-
+<AuctionPriceRamp />
 
 **For a taker going LONG:**
 - Slot 0: auction price = `auctionStartPrice` (e.g., oracle), taker pays at or near oracle
@@ -70,6 +60,8 @@ where progress = min(1, (current_slot - auction_start_slot) / auction_duration)
 A maker offering \$100.05 would be eligible to fill starting at slot 5 (when the auction price reaches \$100.05). Makers offering \$100.02 could fill as early as slot 2.
 
 ## Auction lifecycle
+
+<JitAuctionSequence />
 
 **1. Taker places order**
 <SDKDoc>

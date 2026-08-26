@@ -12,6 +12,10 @@ import { RevenuePoolSankey } from "./components/diagrams/figures/RevenuePoolSank
 import { BorrowApySankey } from "./components/diagrams/figures/BorrowApySankey";
 import { BuilderFeeSankey } from "./components/diagrams/figures/BuilderFeeSankey";
 import { TrustedVaultSankey } from "./components/diagrams/figures/TrustedVaultSankey";
+import { AuctionPriceRamp } from "./components/diagrams/figures/AuctionPriceRamp";
+import { JitAuctionSequence } from "./components/diagrams/figures/JitAuctionSequence";
+import { LiquidityRoutingFlow } from "./components/diagrams/figures/LiquidityRoutingFlow";
+import { AuctionSanitizationFlow } from "./components/diagrams/figures/AuctionSanitizationFlow";
 
 export function useMDXComponents(components?: Record<string, unknown>) {
   return useDocsMDXComponents({
@@ -28,6 +32,10 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     BorrowApySankey,
     BuilderFeeSankey,
     TrustedVaultSankey,
+    AuctionPriceRamp,
+    JitAuctionSequence,
+    LiquidityRoutingFlow,
+    AuctionSanitizationFlow,
     ...components,
   });
 }
