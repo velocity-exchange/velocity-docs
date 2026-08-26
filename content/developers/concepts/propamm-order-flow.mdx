@@ -176,19 +176,19 @@ maker.
 
 A taker that signs the transaction chose its own account list, so Velocity asks
 nothing more. A taker that does not sign is trusting a filler. Velocity then
-applies two rules, and the fill fails if either one fails.
+applies two tests. The fill fails if either test is true.
 
-| Rule | Error |
+| The fill fails when | Error |
 | --- | --- |
-| The transaction holds more locks than one more maker would need. A maker costs two accounts, and the ceiling is 62. | `FillerOmittedReachableMaker` |
-| Every loaded user received a balance change, or holds a role in the fill. The roles are the taker, the filler, the taker's referrer, and a registered quoter's user. | `FillerPaddedTheUserSet` |
+| The transaction had room for another maker. A transaction may lock 62 accounts. A maker costs two of them. So 60 locks or fewer leaves room for one. | `FillerOmittedReachableMaker` |
+| The transaction is full, and a loaded user filled nothing and holds no role in the fill. The roles are the taker, the filler, the taker's referrer, and a registered quoter's user. | `FillerPaddedTheUserSet` |
 
-The second rule is what the first one alone would miss. A filler can reach the
+The second test is what the first one alone would miss. A filler can reach the
 account ceiling with users that fill nothing. That forces the withhold, and it
 leaves the flow for a source of the filler's own. Those accounts spent the locks
 that the missing maker needed.
 
-Both rules need the account count, and only the instructions sysvar gives it.
+Both tests need the account count, and only the instructions sysvar gives it.
 A fill that withholds depth without that account fails with
 `FillerObligationUncountable`. A fill that withholds nothing never reads it, so
 the account costs a lock only where it earns one.
