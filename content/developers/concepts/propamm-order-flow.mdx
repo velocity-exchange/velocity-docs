@@ -3,20 +3,39 @@ title: PropAMM Order Flow
 description: How Velocity fills a perp order across the vAMM, resting user orders, and third-party quoter programs. The call interface, the limits on an external program, and the accounts a client must supply.
 ---
 
+# PropAMMs and Velocity
+
+Velocity seeks to have the best on-chain market structure in order to give users the tightest possible spreads.
+
+In spot markets, we have already seen that PropAMMs give makers superior optionality and therefore
+lead to tight spreads. PropAMMs also have the advantage of being able to react intraslot to price changes
+without waiting for a round-trip latency of an off-chain entity writing quotes. This means that when price
+discovery happens fully on chain, a PropAMM is like a colocated computer at the exchange.
+
+Equally, CLOBs have their use cases, especially for takers. Users need to be able to place resting orders.
+The needs of professional traders and market makers are different. Market makers need frequent cheap updates.
+Traders want price time priority and the ability to see the full book.
+
+Velocity's PropAMM design seeks to unify these two systems. Velocity's own vAMM quotes side-by-side
+with a CLOB which quotes side-by-side with PropAMMs.
+
+Because a CLOB is slower and more expensive to write to, orders on the CLOB receive priority over quotes
+from a PropAMM.
+
 # PropAMM Order Flow
 
-Velocity fills a perp order in one router pass. The router does three things:
+Similar to spot PropAMMs, Velocity fills a perp order using a router pass.
+The on-chain router does three things:
 
-1. It asks each quoter for its prices.
+1. It asks each quoter for its price ladder.
 2. It divides the taker size across the quoters.
 3. It holds each quoter to the prices that the quoter gave.
 
-A quoter is a liquidity source. Two kinds of quoter are inside Velocity, and two
-kinds are separate programs. A separate program can be code that Velocity does
-not control. Most makers write no program: Velocity supplies one deployed
-program for spline quoting, and a maker creates an instance of it. A maker with
-a different quoting model deploys a program and registers it. Velocity calls
-that program during a fill. Velocity does not trust it.
+A quoter is a liquidity source. Two kinds of quoter are inside Velocity and exist on every market,
+the rest are separate programs. While several makers will write no program and use the Velocity-supplied
+program for spline quoting; a maker with a custom quoting model can deploy their own program for better control.
+Velocity calls that program and other programs during a fill. The blast radius of that program is strictly limited to
+the user account it quotes on.
 
 This page gives three things:
 
@@ -24,22 +43,23 @@ This page gives three things:
 - the limits that Velocity applies to an external program
 - the accounts that a client must supply
 
-<Callout type="warning">
-This page describes a design in development. The wire types, the PDA seeds, and
-the limits can change.
-</Callout>
-
 ## Structure
 
 <FillTopologyFlow />
 
-Two routers run, and they do the same work. An off-chain router quotes every
-quoter on the market and picks the ones to carry. The router pass inside Velocity
-quotes the quoters that arrived, divides the taker size across them, and holds
+Solana has strict transaction size limits that mean often every quoter can not fit into a single transaction.
+An off-chain router's job is to check every quoter on the market and pick the ones to carry to the blockchain.
+The on-chain router pass inside Velocity checks the quoters that arrived, divides the taker size across them, and holds
 each one to its own answer. Only the second router moves collateral. The first
 one decides what the second one can reach, because a transaction can carry only
 part of a market. A filler or the taker signs the transaction between the two,
 which [Off-chain routers and fillers](#off-chain-routers-and-fillers) covers.
+
+Note that this model is slightly different than spot PropAMMs. Because spot PropAMMs do not
+expose their underlying curve or pricing ladder, on-chain is mostly bound to the percent-wise division
+decided by the external router. With Velocity's quoter interface, this is no longer the case. The on-chain
+router may find a more optimum split than off-chain due to price changes between when the transaction was created
+and when it lands.
 
 The router pass reads four kinds of quoter.
 
@@ -53,7 +73,8 @@ The router pass reads four kinds of quoter.
 The DLOB and the CLOB hold orders from the same users, under the same margin
 rules. Only the location of the order record is different. A DLOB order is a row
 in the `User` account of its owner. A CLOB order is a record in one market
-account, which holds the orders of every maker on that market.
+account, which holds the orders of every maker on that market. When this change is deployed,
+DLOB users are expected to migrate their orders to the CLOB.
 
 <Callout type="warning">
 The DLOB is to be removed. The CLOB book replaces it, and an order will rest in
@@ -73,16 +94,14 @@ same way.
 
 ## What a quoter is
 
-A quoter is a liquidity source. It answers two questions: what it can fill, and
-then a request to fill part of it. The four kinds above are the four answers to
-those questions, and the router treats them alike.
+A quoter is a liquidity source. A quoter exposes its price ladder, and gives methods
+to record a fill. The user on the Velocity program holds the positions, the quoter program
+is given authority to dictate that user's bulk orders.
 
 The vAMM and a DLOB order are inside Velocity, so Velocity asks them directly.
-The DLOB is to be removed, so a new quoter is one of the other two kinds.
-The other two kinds are separate programs. A separate program needs a registry
-entry that says how to call it, and this page calls that case a **registered
-quoter**. The entry holds the program address, the accounts of each call, and
-the identity that the fill settles for.
+A separate program needs a registry entry that says how to call it,
+this page calls that case a **registered quoter**. The entry holds the program address,
+the accounts of each call, and the identity that the fill settles for.
 
 The entry is an account, `QuoterV0`. Its address derives from the market index,
 the program, and the quoted `User`, so one program can serve many markets and
@@ -121,7 +140,7 @@ call. See [Limits on a quoter program](#limits-on-a-quoter-program).
 
 A `Clob` entry is a book, and a book settles for whoever rests on it. Naming one
 is therefore an administrator's action, and a market accepts it once. A market
-cannot be pointed at a second book later.
+cannot be pointed at a second book later. There is exactly one CLOB per perp market.
 
 A `Vamm` entry names a priority tier and nothing else. The vAMM quotes inside
 Velocity, so a fill never calls it across a program boundary. A fill that finds
@@ -159,18 +178,18 @@ The room is the reason the off-chain router exists. A transaction locks at most
 64 accounts, and one maker costs two of them, so no transaction reaches a whole
 market. The off-chain router reads the whole market and chooses the part to
 carry. The router pass on chain then quotes that part, and it can fill nothing
-outside it.
+outside it. The off-chain router should do its best to include the best possible makers,
+the fill will give the best price amongst the limited set.
 
-So the two routers differ in what they see, not in what they do. The off-chain
-router sees everything and binds nobody. The router pass sees one transaction and
+The two routers differ in what they see, not in what they do. The off-chain
+router sees everything and binds nobody. The on-chain router pass sees one transaction and
 binds every quoter in it.
 
 Velocity operates a router. Any person can operate one. A router holds no key and
 signs nothing. It selects no price. A router that answers badly makes a
-transaction fill less or fail. It cannot change the price that the taker
-receives.
+transaction fill at a worse price (if a quoter is excluded) or fail.
 
-Two paths use that answer.
+There are two paths for a Velocity order.
 
 ### A signed order
 
@@ -187,6 +206,9 @@ a filler to the intent of the taker:
 - The transaction must reach the makers that the books want. The
   [withheld report](#what-the-withheld-report-does-instead) section gives the
   two tests.
+
+A signed message user does not have to trust the filler, only the router that they used
+to fill out the route digest.
 
 ### A transaction that the taker builds
 
@@ -247,9 +269,7 @@ fails, and the complete fill fails.
 
 The order of step 3 and step 4 matters. Velocity truncates unsupported depth
 before it divides the size. Unsupported depth therefore wins no part of the
-fill. A division that ran first would give a part to that
-depth. The part would come from a quoter that can fill it. The taker would then
-receive less.
+fill.
 
 ## Size division
 
@@ -311,15 +331,9 @@ applies two tests. The fill fails if either test is true.
 | The transaction had room for another maker. A transaction may lock 62 accounts. A maker costs two of them. So 60 locks or fewer leaves room for one. | `FillerOmittedReachableMaker` |
 | The transaction is full, and a loaded user filled nothing and holds no role in the fill. The roles are the taker, the filler, the taker's referrer, and a registered quoter's user. | `FillerPaddedTheUserSet` |
 
-The second test is what the first one alone would miss. A filler can reach the
-account ceiling with users that fill nothing. That forces the withhold, and it
-leaves the flow for a quoter of the filler's own. Those accounts spent the locks
-that the missing maker needed.
-
-Both tests need the account count, and only the instructions sysvar gives it.
-A fill that withholds depth without that account fails with
-`FillerObligationUncountable`. A fill that withholds nothing never reads it, so
-the account costs a lock only where it earns one.
+The second test prevents a filler from padding to reach the account ceiling with users that fill nothing.
+This prevents a filler from maliciously skipping users on the CLOB and filling with users that have worse price
+or time priority.
 
 ## The quoter interface
 
