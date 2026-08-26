@@ -156,3 +156,25 @@ Centered column, max-width 34rem: brand mark (with mark-glow) → mono label (er
 - **Don't** apply glassmorphism or decorative blur; the system is flat by design.
 - **Don't** introduce a second accent color for "variety" — every non-green hue in this system is semantic (info/warn/danger) and callout-only.
 - **Don't** let large clamp-scaled titles overflow on narrow viewports; test the actual copy at the smallest supported width.
+
+## 7. Diagrams
+
+Diagrams are part of the docs' tool-like register: quiet, flat, and legible, drawn from
+the same tokens as the rest of the page. They live in `components/diagrams` and are
+authored as data specs, never as hand-drawn SVG.
+
+### Tokens
+- Ink and labels: `--dg-ink` (gray-900), `--dg-muted` (gray-600, values and captions).
+- Structure: `--dg-rule` (gray-600 at 18%), `--dg-node` (gray-600 at 12%), the same tonal card as tables.
+- Flows: `--dg-flow` (gray-400 at 55%), `--dg-flow-out` (gray-400 at 30%, value leaving the system), `--dg-flow-signal` (Velocity Green at 55%).
+- Type: labels in the body sans at 13px/500; values in the mono label stack at 12px.
+- Motion: `--dg-ease` (`cubic-bezier(0.22, 1, 0.36, 1)`), `--dg-draw` 900ms, `--dg-stagger` 120ms per column.
+
+### Named Rules
+**The One Signal Leg Rule.** A diagram may color at most one flow in Velocity Green: the leg the reader is meant to follow. Everything else is neutral. Info, warn, and danger hues never appear in diagrams; they stay callout-only.
+
+**The Caption Is the Contract.** Every diagram carries a caption that states what is shown, where the numbers come from, and every simplifying assumption (midpoints for ranges, target versus live values). A diagram without that caption is not finished.
+
+**Drawn by Default.** Diagrams render fully drawn with no JavaScript and under reduced motion. The single allowed animation is a one-time draw-in when the figure scrolls into view, staggered by column, using the same ease and rise-and-fade as the rest of the site.
+
+**Scroll, Don't Shrink.** Below about 560px the figure scrolls horizontally rather than scaling text below legibility.
