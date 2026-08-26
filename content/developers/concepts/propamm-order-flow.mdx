@@ -33,7 +33,15 @@ the limits can change.
 
 <FillTopologyFlow />
 
-A fill reads four kinds of quoter.
+Two routers run, and they do the same work. An off-chain router quotes every
+quoter on the market and picks the ones to carry. The router pass inside Velocity
+quotes the quoters that arrived, divides the taker size across them, and holds
+each one to its own answer. Only the second router moves collateral. The first
+one decides what the second one can reach, because a transaction can carry only
+part of a market. A filler or the taker signs the transaction between the two,
+which [Off-chain routers and fillers](#off-chain-routers-and-fillers) covers.
+
+The router pass reads four kinds of quoter.
 
 | Quoter | Order records live in | Liquidity belongs to | Program author |
 | --- | --- | --- | --- |
@@ -49,13 +57,6 @@ account, which holds the orders of every maker on that market.
 
 Two of the four kinds are separate programs. Both answer on the same
 interface.
-
-Two routers run, and they do the same work. An off-chain router quotes every
-quoter on the market and picks the ones to carry. The router pass inside Velocity
-quotes the quoters that arrived, divides the taker size across them, and holds
-each one to its own answer. Only the second router moves collateral. The first
-one decides what the second one can reach, because a transaction can carry only
-part of a market.
 
 A maker that quotes a spline writes no program. Velocity supplies a deployed
 program called midpoint, and the maker creates an instance of it. The

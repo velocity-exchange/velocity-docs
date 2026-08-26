@@ -12,24 +12,37 @@ import type { SankeySpec } from "../layout/sankey";
 // return edge, which crosses the figure, or in the caption.
 // `router-fill.data.test.ts` checks each of these limits.
 
-/** The two routers, the four kinds of quoter, and the program that holds each one. */
+/**
+ * The whole path of one fill, left to right: who asks, who routes off chain,
+ * the pass that routes on chain, the four kinds of quoter it reads, and
+ * settlement.
+ *
+ * The taker reaches the router pass through the off-chain router, not beside
+ * it. The off-chain router is what turns a market into an account list, so
+ * nothing reaches the pass that it did not choose. Who signs and sends the
+ * transaction is the next figure's subject; this one is the chain of custody.
+ *
+ * Five columns, so the boxes are narrower here than in the other flows. A sixth
+ * column for the filler would take the label room below what a label needs.
+ */
 export const fillTopologySpec: FlowSpec = {
   nodes: [
-    { id: "offchain", label: "Off-chain router", note: "quotes every quoter", value: "picks a subset", kind: "offchain", column: 0 },
-    { id: "taker", label: "Taker order", note: "size and limit price", column: 0 },
+    { id: "taker", label: "Taker order", note: "size and limit", column: 0 },
 
-    { id: "router", label: "Router pass", note: "Velocity", value: "quotes the subset", column: 1, tone: "signal" },
+    { id: "offchain", label: "Router", note: "off-chain", value: "picks a subset", kind: "offchain", column: 1 },
 
-    { id: "vamm", label: "vAMM", note: "curve, no orders", column: 2 },
-    { id: "dlob", label: "DLOB makers", note: "User.orders", column: 2 },
-    { id: "clob", label: "CLOB book", note: "market account", value: "quote/execute", column: 2 },
-    { id: "custom", label: "Quoter programs", note: "quoter accounts", value: "quote/execute", column: 2 },
+    { id: "router", label: "Router pass", note: "Velocity", value: "the subset", column: 2, tone: "signal" },
 
-    { id: "settle", label: "Settlement", note: "Velocity", value: "margin checked", column: 3 },
+    { id: "vamm", label: "vAMM", note: "curve, no orders", column: 3 },
+    { id: "dlob", label: "DLOB makers", note: "User.orders", column: 3 },
+    { id: "clob", label: "CLOB book", note: "market account", value: "quote/execute", column: 3 },
+    { id: "custom", label: "Custom quoters", note: "their accounts", value: "quote/execute", column: 3 },
+
+    { id: "settle", label: "Settlement", note: "Velocity", value: "margin checked", column: 4 },
   ],
   edges: [
-    { from: "offchain", to: "router", label: "a subset", dashed: true },
-    { from: "taker", to: "router" },
+    { from: "taker", to: "offchain", label: "asks", dashed: true },
+    { from: "offchain", to: "router", label: "subset" },
     { from: "router", to: "vamm" },
     { from: "router", to: "dlob" },
     { from: "router", to: "clob", tone: "signal" },

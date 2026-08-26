@@ -16,20 +16,22 @@ import {
 /** `router-fill.data.test.ts` checks that the text fits these widths. */
 const FLOW_WIDTH = 790;
 const FLOW_NODE = 150;
+/** The topology flow has five columns, so its boxes are narrower. */
+const WIDE_FLOW_NODE = 118;
 
 export function FillTopologyFlow() {
   return (
     <Diagram
       title="The two routers and the four kinds of quoter"
-      caption="Two routers do the same work. The off-chain router quotes every quoter on the market and picks the ones that one transaction can carry. The router pass inside Velocity quotes the quoters that arrived and holds each one to its own answer. The green lines are the calls that leave the Velocity program. A book and a custom quoter answer on the same interface, and Velocity applies its limits when each call returns."
+      caption="Two routers do the same work, and they run in this order. The off-chain router quotes every quoter on the market and picks the ones that one transaction can carry. The router pass inside Velocity quotes only the quoters that arrived, and it holds each one to its own answer. The green lines are the calls that leave the Velocity program: a book and a custom quoter answer on the same interface, and Velocity applies its limits when each call returns. A filler or the taker signs and sends the transaction between the two routers, which the next figure shows."
     >
       {({ captionId }) => (
         <Flow
           spec={fillTopologySpec}
-          ariaLabel="Flow diagram of a perp fill. An off-chain router passes a subset of the market to the router pass, alongside the taker order. The router pass quotes the vAMM, DLOB makers, the CLOB book, and custom quoter programs, then settles."
+          ariaLabel="Flow diagram of a perp fill. A taker order reaches an off-chain router, which picks the subset of the market that one transaction can carry. The router pass in Velocity quotes that subset across the vAMM, DLOB makers, the CLOB book, and custom quoter programs, then settles."
           describedBy={captionId}
           width={FLOW_WIDTH}
-          nodeWidth={FLOW_NODE}
+          nodeWidth={WIDE_FLOW_NODE}
         />
       )}
     </Diagram>

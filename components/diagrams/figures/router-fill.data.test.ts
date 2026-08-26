@@ -23,7 +23,7 @@ const MIN_GAP = 45;
 
 /** Every figure on the PropAMM page, at the width its component draws it. */
 const figures: { name: string; spec: FlowSpec; width: number; nodeWidth: number }[] = [
-  { name: "fill topology", spec: fillTopologySpec, width: 790, nodeWidth: 150 },
+  { name: "fill topology", spec: fillTopologySpec, width: 790, nodeWidth: 118 },
   { name: "signing identities", spec: signingSpec, width: 640, nodeWidth: 210 },
   { name: "order lifecycle", spec: orderLifecycleSpec, width: 790, nodeWidth: 150 },
   { name: "routing lanes", spec: routingLanesSpec, width: 790, nodeWidth: 150 },
