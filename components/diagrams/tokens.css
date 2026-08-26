@@ -1,0 +1,109 @@
+/* Diagram tokens. Every value derives from styles/theme.css so light/dark
+   need no diagram-specific overrides. Green may appear on one leg only. */
+.dg {
+  --dg-ink: var(--x-color-gray-900);
+  --dg-muted: var(--x-color-gray-600);
+  --dg-rule: color-mix(in oklab, var(--x-color-gray-600) 18%, transparent);
+  --dg-node: color-mix(in oklab, var(--x-color-gray-600) 12%, transparent);
+  --dg-flow: color-mix(in oklab, var(--x-color-gray-400) 55%, transparent);
+  --dg-flow-out: color-mix(in oklab, var(--x-color-gray-400) 30%, transparent);
+  --dg-flow-signal: color-mix(in oklab, var(--vlc-brand) 55%, transparent);
+  --dg-node-signal: color-mix(in oklab, var(--vlc-brand) 22%, transparent);
+  --dg-font-value: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --dg-radius-sm: 3px;
+  --dg-radius-md: 8px;
+  --dg-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dg-draw: 900ms;
+  --dg-stagger: 120ms;
+
+  margin: 24px 0;
+  padding: 20px 24px;
+  border: 1px solid var(--dg-rule);
+  border-radius: var(--dg-radius-md);
+  color: var(--dg-ink);
+}
+
+.dg-title {
+  margin: 0 0 12px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dg-caption {
+  margin: 12px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--dg-muted);
+  text-wrap: pretty;
+}
+
+/* Narrow viewports scroll instead of shrinking labels below legibility. */
+.dg-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dg-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 560px;
+  overflow: visible;
+}
+
+.dg-node-rect {
+  fill: var(--dg-node);
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  rx: var(--dg-radius-sm);
+}
+.dg-node[data-tone="signal"] .dg-node-rect { fill: var(--dg-node-signal); stroke: var(--vlc-brand); }
+
+.dg-link {
+  fill: none;
+  stroke: var(--dg-flow);
+  stroke-linecap: butt;
+  transition: opacity 180ms var(--dg-ease);
+}
+.dg-link[data-tone="out"] { stroke: var(--dg-flow-out); }
+.dg-link[data-tone="signal"] { stroke: var(--dg-flow-signal); }
+.dg-link:focus-visible { outline: none; stroke: var(--vlc-action); }
+
+.dg-label {
+  fill: var(--dg-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dg-value {
+  fill: var(--dg-muted);
+  font-family: var(--dg-font-value);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.dg-note {
+  fill: var(--dg-muted);
+  font-size: 11.5px;
+}
+
+/* Hover/focus: keep the active path, dim the rest. */
+.dg-svg:has(.dg-link:hover, .dg-link:focus-visible) .dg-link:not(:hover, :focus-visible) { opacity: 0.3; }
+
+/* Motion: fully drawn by default; draws in once, only when allowed. */
+@media (prefers-reduced-motion: no-preference) {
+  .dg[data-animate]:not([data-inview]) .dg-link { opacity: 0; }
+  .dg[data-animate]:not([data-inview]) .dg-node { opacity: 0; }
+  .dg[data-animate][data-inview] .dg-link {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: dg-draw var(--dg-draw) var(--dg-ease) forwards;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+  .dg[data-animate][data-inview] .dg-node {
+    animation: dg-rise 480ms var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+}
+@keyframes dg-draw { to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes dg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
