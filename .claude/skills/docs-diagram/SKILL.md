@@ -18,8 +18,8 @@ diagram per concept; the prose stays the source of truth and the diagram is the 
 
 - Tokens and styles: `components/diagrams/tokens.css` (do not add colors here without
   updating DESIGN.md section 7).
-- Frame: `components/diagrams/Diagram.tsx` (`title?`, `caption` required, render-prop children).
-- Renderers: `components/diagrams/Sankey.tsx` (props: `spec`, `ariaLabel`, `describedBy`, `width`, `height`, `labelWidth`). `labelWidth` is the room reserved outside the first and last columns: one number for both sides, or `{ left, right }` when the two sides need different room.
+- Frame: `components/diagrams/Diagram.tsx` (`title?`, `caption?`, render-prop children).
+- Renderers: `components/diagrams/Sankey.tsx` (props: `spec`, `ariaLabel`, `describedBy`, `width`, `height`, `labelWidth`). `width` is the minimum drawn width: the figure fills a wider container at the same label size and scrolls below it. `labelWidth` is the room reserved outside the first and last columns: one number for both sides, or `{ left, right }` when the two sides need different room.
 - Layout: `components/diagrams/layout/sankey.ts` (`SankeySpec`, `layoutSankey`). Pure; tested in `sankey.test.ts`.
 - Figures: `components/diagrams/figures/<name>.data.ts` (the spec) + `<Name>.tsx` (composes Diagram + renderer).
 - Registration: add the figure to `mdx-components.tsx`, then use `<Name />` in MDX.
@@ -47,7 +47,7 @@ export const spec: SankeySpec = {
 
 ## Caption rules
 
-The caption is required and must say: what is shown, the data source and date, and
+Add a caption whenever the diagram carries an assumption the surrounding prose does not (target versus live values, midpoints for ranges, a data source). When present it must say: what is shown, the data source and date, and
 every assumption (midpoints, target vs live values). Plain language, no em dashes.
 
 ## Color and motion rules

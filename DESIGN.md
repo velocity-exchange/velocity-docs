@@ -173,7 +173,7 @@ authored as data specs, never as hand-drawn SVG.
 ### Named Rules
 **The One Signal Leg Rule.** A diagram may color at most one flow in Velocity Green: the leg the reader is meant to follow. Everything else is neutral. Info, warn, and danger hues never appear in diagrams; they stay callout-only.
 
-**The Caption Is the Contract.** Every diagram carries a caption that states what is shown, where the numbers come from, and every simplifying assumption (midpoints for ranges, target versus live values). A diagram without that caption is not finished.
+**The Caption Is the Contract.** A diagram carries a caption whenever it makes an assumption the surrounding prose does not state: where the numbers come from, midpoints for ranges, target versus live values. When the prose already says it, the diagram may stand with its title alone. A diagram whose assumptions live nowhere on the page is not finished.
 
 **Drawn by Default.** Diagrams render fully drawn with no JavaScript and under reduced motion. The single allowed animation is a one-time draw-in when the figure scrolls into view, staggered by column, using the same ease and rise-and-fade as the rest of the site.
 

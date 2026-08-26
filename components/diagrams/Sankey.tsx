@@ -1,8 +1,13 @@
+"use client";
+
+import { useLayoutEffect, useRef, useState } from "react";
 import { layoutSankey, type LabelSide, type PlacedLink, type PlacedNode, type SankeySpec } from "./layout/sankey";
 
 export type SankeyProps = {
   spec: SankeySpec;
+  /** Minimum drawn width. The figure grows to fill a wider container and scrolls below this. */
   width?: number;
+  /** Height at the minimum width. Grows by HEIGHT_GROWTH of any extra width. */
   height?: number;
   /** Horizontal room reserved outside the first and last columns for their labels. */
   labelWidth?: number | { left: number; right: number };
@@ -20,8 +25,24 @@ const CAP_HALF = 4;
 const NODE_GAP = 26;
 /** Top and bottom room. The first middle-column label sits above its node. */
 const MARGIN_Y = 24;
+/** Extra height per extra pixel of width, so a wide figure does not go flat. */
+const HEIGHT_GROWTH = 0.12;
 
-export function Sankey({ spec, width = 760, height = 360, labelWidth = 150, describedBy, ariaLabel }: SankeyProps) {
+export function Sankey({ spec, width: minWidth = 600, height: baseHeight = 360, labelWidth = 150, describedBy, ariaLabel }: SankeyProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [hostWidth, setHostWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = hostRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => setHostWidth(Math.floor(entry.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Server and first client render use the minimum; the observer widens it before paint.
+  const width = Math.max(minWidth, hostWidth);
+  const height = Math.round(baseHeight + (width - minWidth) * HEIGHT_GROWTH);
   const maxCol = Math.max(...spec.nodes.map((n) => n.column));
   const marginLeft = typeof labelWidth === "number" ? labelWidth : labelWidth.left;
   const marginRight = typeof labelWidth === "number" ? labelWidth : labelWidth.right;
@@ -36,26 +57,28 @@ export function Sankey({ spec, width = 760, height = 360, labelWidth = 150, desc
   });
 
   return (
-    <svg
-      className="dg-svg"
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={ariaLabel}
-      aria-describedby={describedBy}
-    >
-      <g>
-        {links.map((l) => (
-          <Link key={`${l.from}->${l.to}`} link={l} col={colOf(nodes, l.from)} />
-        ))}
-      </g>
-      <g>
-        {nodes.map((n) => (
-          <Node key={n.id} node={n} side={sideOf(n, maxCol)} />
-        ))}
-      </g>
-    </svg>
+    <div ref={hostRef} className="dg-host">
+      <svg
+        className="dg-svg"
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={ariaLabel}
+        aria-describedby={describedBy}
+      >
+        <g>
+          {links.map((l) => (
+            <Link key={`${l.from}->${l.to}`} link={l} col={colOf(nodes, l.from)} />
+          ))}
+        </g>
+        <g>
+          {nodes.map((n) => (
+            <Node key={n.id} node={n} side={sideOf(n, maxCol)} />
+          ))}
+        </g>
+      </svg>
+    </div>
   );
 }
 

@@ -4,11 +4,12 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export type DiagramProps = {
   title?: string;
-  /** Required. States what is shown, data source, and assumptions. */
-  caption: string;
+  /** States what is shown, data source, and assumptions. Omit only when the surrounding prose already carries them. */
+  caption?: string;
   /** Draw-in animation on first view. Default true. */
   animate?: boolean;
-  children: (ids: { captionId: string }) => ReactNode;
+  /** captionId is undefined when there is no caption, so aria-describedby is omitted. */
+  children: (ids: { captionId?: string }) => ReactNode;
 };
 
 /**
@@ -51,10 +52,12 @@ export function Diagram({ title, caption, animate = true, children }: DiagramPro
       data-inview={phase === "drawn" ? "" : undefined}
     >
       {title ? <p className="dg-title">{title}</p> : null}
-      <div className="dg-scroll">{children({ captionId })}</div>
-      <figcaption id={captionId} className="dg-caption">
-        {caption}
-      </figcaption>
+      <div className="dg-scroll">{children({ captionId: caption ? captionId : undefined })}</div>
+      {caption ? (
+        <figcaption id={captionId} className="dg-caption">
+          {caption}
+        </figcaption>
+      ) : null}
     </figure>
   );
 }

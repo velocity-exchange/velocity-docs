@@ -46,8 +46,13 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* Drawn at its authored size in both directions: scaling to the column would
-   put the 13px labels anywhere from 10px to 17px depending on the viewport. */
+/* The host spans the scroll area so the renderer can measure its room and lay
+   out at that width. The SVG is then drawn 1:1, never scaled: scaling to the
+   column would put the 13px labels anywhere from 10px to 17px. */
+.dg-host {
+  width: 100%;
+}
+
 .dg-svg {
   display: block;
   margin-inline: auto;
