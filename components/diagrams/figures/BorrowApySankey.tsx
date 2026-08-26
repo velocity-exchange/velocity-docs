@@ -8,7 +8,7 @@ export function BorrowApySankey() {
   return (
     <Diagram
       title="Where borrow interest goes"
-      caption="Shows the two cuts taken off borrow interest before the rest reaches lenders. Source: this page's prose and Borrow Interest Rate. Neither page publishes the ifFeeFactor or protocolFeeFactor values, which are on-chain, per-market parameters, so the split shown is illustrative, not to scale."
+      caption="Shows the two cuts taken off borrow interest before the rest reaches lenders. Source: the prose on this page and the Borrow Interest Rate page. Neither page publishes the ifFeeFactor or protocolFeeFactor values, which are on-chain, per-market parameters, so the split shown is illustrative, not to scale."
     >
       {({ captionId }) => (
         <Sankey

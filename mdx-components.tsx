@@ -11,7 +11,6 @@ import { FeeFlowSankey } from "./components/diagrams/figures/FeeFlowSankey";
 import { RevenuePoolSankey } from "./components/diagrams/figures/RevenuePoolSankey";
 import { BorrowApySankey } from "./components/diagrams/figures/BorrowApySankey";
 import { BuilderFeeSankey } from "./components/diagrams/figures/BuilderFeeSankey";
-import { TrustedVaultSankey } from "./components/diagrams/figures/TrustedVaultSankey";
 import { AuctionPriceRamp } from "./components/diagrams/figures/AuctionPriceRamp";
 import { JitAuctionSequence } from "./components/diagrams/figures/JitAuctionSequence";
 import { LiquidityRoutingFlow } from "./components/diagrams/figures/LiquidityRoutingFlow";
@@ -31,7 +30,6 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     RevenuePoolSankey,
     BorrowApySankey,
     BuilderFeeSankey,
-    TrustedVaultSankey,
     AuctionPriceRamp,
     JitAuctionSequence,
     LiquidityRoutingFlow,

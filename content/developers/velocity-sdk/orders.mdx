@@ -14,7 +14,7 @@ Orders are stored in your user account and have both an onchain order ID and an 
 
 | Type | Description |
 |---|---|
-| `MARKET` | Executes immediately. Goes through a JIT auction first (controlled by `auctionStartPrice`, `auctionEndPrice`, `auctionDuration`), then fills against the DLOB or AMM. |
+| `MARKET` | Executes immediately. Opens a JIT auction (controlled by `auctionStartPrice`, `auctionEndPrice`, `auctionDuration`); JIT makers, resting DLOB orders, and the AMM compete on price at each level, and any size left after the auction can still fill against the DLOB or AMM up to your limit. |
 | `LIMIT` | Rests on the DLOB at a fixed price until filled or canceled. Set `postOnly: PostOnlyParams.MUST_POST_ONLY` to guarantee maker status and avoid crossing the spread. |
 | `ORACLE` | Like a market order, but auction prices and the resting limit price are expressed as **offsets from the oracle price** (not absolute prices). Useful for market makers who want tight spreads without hardcoding prices. |
 | `TRIGGER_MARKET` | A stop/take-profit market order. Executes as a market order when the oracle price crosses `triggerPrice` in the specified `triggerCondition` direction. |

@@ -98,7 +98,7 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
 });
 ```
 
-**4. Auction resolves**: best maker(s) fill the taker. If partially filled, remaining size continues through the auction. If unfilled after `auctionDuration` slots, it matches against DLOB, then AMM.
+**4. Auction resolves**: best maker(s) fill the taker. If partially filled, remaining size continues through the auction. If unfilled after `auctionDuration` slots, remaining size can fill against resting DLOB orders and the AMM, matched by price at each level rather than in a fixed order (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)).
 
 ## Maker participation
 
@@ -281,7 +281,7 @@ const jitter = new JitterShotgun({
 
 ## Related
 
-- [Orderbook & Matching](./orderbook-and-matching) - DLOB and liquidity priority (JIT → DLOB → AMM)
+- [Orderbook & Matching](./orderbook-and-matching) - DLOB and how JIT, resting, and AMM liquidity compete on price
 - [Matching Engine](/protocol/how-it-works/matching-engine) - Full liquidity priority flow
 - [JIT-only MM](./jit-only) - Building a JIT market maker bot
 - [SWIFT API](./swift-api) - See taker orders 100-500ms before they hit the auction
