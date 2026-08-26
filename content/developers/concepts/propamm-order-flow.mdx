@@ -144,6 +144,9 @@ Each part is a multiple of `order_step_size` for the market. Execution then
 cannot lose size that is smaller than one step.
 </Steps>
 
+Size that no source has depth for stays unfilled. A limit order rests with that
+size. An immediate-or-cancel order cancels it.
+
 ### An order whose owner the transaction omits
 
 Velocity settles a fill only for a `User` account in the transaction. A book can

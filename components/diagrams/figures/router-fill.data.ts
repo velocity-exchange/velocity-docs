@@ -44,8 +44,10 @@ export const fillTopologySpec: FlowSpec = {
 /**
  * Example values, not a measurement. Tiers fill in order, from the lowest
  * number. Sources in one tier divide a price level in proportion to their
- * depth. Depth that the transaction cannot settle competes for the taker size,
- * and Velocity then discards it.
+ * depth. The size that no source has depth for stays unfilled.
+ *
+ * Withheld depth is deliberately absent. It takes no part of the division, so a
+ * leg for it here would state the opposite.
  */
 export const splitSpec: SankeySpec = {
   nodes: [
@@ -54,21 +56,22 @@ export const splitSpec: SankeySpec = {
     { id: "t0", label: "Tier 0 — vAMM", value: "40", column: 1 },
     { id: "t10", label: "Tier 10 — books", value: "45", column: 1 },
     { id: "t20", label: "Tier 20 — quoters", value: "10", column: 1 },
-    { id: "unfilled", label: "Unfilled", value: "5", note: "rests or cancels", column: 1, tone: "out", labelSide: "below" },
+    { id: "short", label: "No depth", value: "5", note: "stays unfilled", column: 1, tone: "out", labelSide: "below" },
 
     { id: "vamm", label: "vAMM", value: "40", column: 2 },
-    { id: "clob", label: "CLOB book", value: "30", column: 2 },
-    { id: "reserve", label: "Withheld depth", value: "15", note: "owner not loaded", column: 2, tone: "out" },
+    { id: "clob", label: "CLOB book", value: "25", column: 2 },
+    { id: "dlob", label: "DLOB maker", value: "20", column: 2 },
     { id: "quoter", label: "Quoter", value: "10", column: 2 },
   ],
   links: [
     { from: "size", to: "t0", value: 40 },
     { from: "size", to: "t10", value: 45 },
     { from: "size", to: "t20", value: 10 },
-    { from: "size", to: "unfilled", value: 5, tone: "out" },
+    { from: "size", to: "short", value: 5, tone: "out" },
     { from: "t0", to: "vamm", value: 40 },
-    { from: "t10", to: "clob", value: 30 },
-    { from: "t10", to: "reserve", value: 15, tone: "out" },
+    // One tier, two sources at the same price: pro rata by depth.
+    { from: "t10", to: "clob", value: 25 },
+    { from: "t10", to: "dlob", value: 20 },
     { from: "t20", to: "quoter", value: 10 },
   ],
 };

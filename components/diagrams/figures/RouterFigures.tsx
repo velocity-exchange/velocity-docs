@@ -38,7 +38,7 @@ export function SplitSankey() {
   return (
     <Diagram
       title="How Velocity divides the taker size"
-      caption="The values are an example. They are not a measurement. Tiers fill in order, from the lowest number. Sources in one tier divide a price level in proportion to their depth. Withheld depth is liquidity for a user account that the transaction does not include. It competes for the taker size, and Velocity then discards it."
+      caption="The values are an example. They are not a measurement. Tiers fill in order, from the lowest number. Sources in one tier divide a price level in proportion to their depth, which is what the two sources in tier 10 show. The size that no source has depth for stays unfilled. Withheld depth is absent from this figure because it takes no part of the division."
     >
       {({ captionId }) => (
         <Sankey
