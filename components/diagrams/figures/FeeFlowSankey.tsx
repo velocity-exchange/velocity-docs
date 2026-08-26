@@ -15,9 +15,9 @@ export function FeeFlowSankey() {
           spec={feeFlowSpec}
           ariaLabel="Sankey diagram of the perp taker fee split"
           describedBy={captionId}
-          width={760}
+          width={600}
           height={380}
-          labelWidth={170}
+          labelWidth={{ left: 170, right: 114 }}
         />
       )}
     </Diagram>

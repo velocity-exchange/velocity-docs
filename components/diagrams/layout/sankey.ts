@@ -11,7 +11,14 @@ export type SankeyNode = {
   /** Secondary text under the label, e.g. a range. */
   note?: string;
   tone?: Tone;
+  /**
+   * Overrides where the label sits. Middle columns default to "above", which is
+   * the only clear side unless the node's own ribbons rise through it.
+   */
+  labelSide?: LabelSide;
 };
+
+export type LabelSide = "left" | "right" | "above" | "below";
 
 export type SankeyLink = {
   from: string;
@@ -28,7 +35,10 @@ export type LayoutOptions = {
   height: number;
   nodeWidth?: number;
   nodeGap?: number;
+  /** Room outside the first and last columns. marginLeft/marginRight override it. */
   marginX?: number;
+  marginLeft?: number;
+  marginRight?: number;
   marginY?: number;
 };
 
@@ -60,7 +70,16 @@ type DLink = { source: DNode | string; target: DNode | string; value: number; wi
  * Wraps d3-sankey so renderers never import d3.
  */
 export function layoutSankey(spec: SankeySpec, opts: LayoutOptions): { nodes: PlacedNode[]; links: PlacedLink[] } {
-  const { width, height, nodeWidth = 12, nodeGap = 16, marginX = 0, marginY = 0 } = opts;
+  const {
+    width,
+    height,
+    nodeWidth = 12,
+    nodeGap = 16,
+    marginX = 0,
+    marginLeft = marginX,
+    marginRight = marginX,
+    marginY = 0,
+  } = opts;
 
   const ids = new Set(spec.nodes.map((n) => n.id));
   for (const l of spec.links) {
@@ -80,8 +99,8 @@ export function layoutSankey(spec: SankeySpec, opts: LayoutOptions): { nodes: Pl
     .nodeSort((a, b) => order.get(a.id)! - order.get(b.id)!)
     .linkSort((a, b) => order.get((a.target as DNode).id)! - order.get((b.target as DNode).id)!)
     .extent([
-      [marginX, marginY],
-      [width - marginX, height - marginY],
+      [marginLeft, marginY],
+      [width - marginRight, height - marginY],
     ]);
 
   const graph = gen({ nodes: dNodes, links: dLinks });

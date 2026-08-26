@@ -32,6 +32,7 @@
 
 .dg-caption {
   margin: 12px 0 0;
+  max-width: 66ch;
   font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--dg-muted);
@@ -45,11 +46,11 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Drawn at its authored size in both directions: scaling to the column would
+   put the 13px labels anywhere from 10px to 17px depending on the viewport. */
 .dg-svg {
   display: block;
-  width: 100%;
-  height: auto;
-  min-width: 560px;
+  margin-inline: auto;
   overflow: visible;
 }
 
@@ -82,9 +83,10 @@
   font-size: 12px;
   letter-spacing: 0.02em;
 }
+/* Secondary text shares the value size: labels carry the only step up. */
 .dg-note {
   fill: var(--dg-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* Hover/focus: keep the active path, dim the rest. */
@@ -105,5 +107,7 @@
     animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
   }
 }
-@keyframes dg-draw { to { stroke-dashoffset: 0; opacity: 1; } }
+/* Only the dash advances: an animated opacity would win the cascade forever
+   and the hover dim below could never apply. */
+@keyframes dg-draw { to { stroke-dashoffset: 0; } }
 @keyframes dg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

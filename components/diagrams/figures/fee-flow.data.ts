@@ -11,7 +11,8 @@ export const feeFlowSpec: SankeySpec = {
     { id: "referrer", label: "Referrer reward", value: "10%", column: 1, tone: "out" },
     { id: "filler", label: "Filler reward", value: "2–10%", column: 1, tone: "out" },
     { id: "maker", label: "Maker rebate", value: "6.3–12.5%", column: 1, tone: "out" },
-    { id: "net", label: "Net taker fee", value: "≈70%", column: 1 },
+    // Labelled below: the Insurance Fund and vAMM ribbons rise across the space above it.
+    { id: "net", label: "Net taker fee", value: "≈70%", column: 1, labelSide: "below" },
     { id: "if", label: "Insurance Fund", value: "15% of net", column: 2 },
     { id: "vamm", label: "vAMM capital", value: "15% of net", column: 2 },
     { id: "protocol", label: "Protocol", value: "70% of net", column: 2, tone: "signal" },
