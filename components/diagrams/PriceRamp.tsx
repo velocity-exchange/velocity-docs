@@ -3,6 +3,7 @@
 import {
   layoutPriceRamp,
   type PlacedAxis,
+  type PlacedCurve,
   type PlacedMarker,
   type PlacedSegment,
   type PriceRampSpec,
@@ -86,8 +87,13 @@ export function PriceRamp({
           ))}
         </g>
         <g>
+          {layout.curves.map((curve, i) => (
+            <Curve key={i} curve={curve} col={layout.segments.length + i + 1} />
+          ))}
+        </g>
+        <g>
           {layout.markers.map((marker, i) => (
-            <Marker key={i} marker={marker} col={layout.segments.length + 1} />
+            <Marker key={i} marker={marker} col={layout.segments.length + layout.curves.length + 1} />
           ))}
         </g>
       </svg>
@@ -145,6 +151,20 @@ function Segment({ segment, col }: { segment: PlacedSegment; col: number }) {
   );
 }
 
+function Curve({ curve, col }: { curve: PlacedCurve; col: number }) {
+  return (
+    <path
+      className="dg-pr-line"
+      d={curve.path}
+      pathLength={1}
+      data-tone={curve.tone}
+      style={{ ["--dg-col" as string]: col } as React.CSSProperties}
+    >
+      {curve.label ? <title>{curve.label}</title> : null}
+    </path>
+  );
+}
+
 function Marker({ marker, col }: { marker: PlacedMarker; col: number }) {
   return (
     <g
@@ -153,6 +173,9 @@ function Marker({ marker, col }: { marker: PlacedMarker; col: number }) {
       style={{ ["--dg-col" as string]: col } as React.CSSProperties}
     >
       <title>{marker.label}</title>
+      {marker.guides.map((d) => (
+        <path key={d} className="dg-pr-guide" d={d} />
+      ))}
       <circle className="dg-pr-dot" cx={marker.cx} cy={marker.cy} r={MARKER_RADIUS} />
       <text className="dg-label" x={marker.labelX} y={marker.labelY} textAnchor={marker.labelAnchor}>
         {marker.label}

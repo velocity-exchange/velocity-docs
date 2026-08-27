@@ -24,6 +24,15 @@ export type RampSegment = {
   tone?: RampTone;
 };
 
+/** A sampled curve drawn as one polyline, e.g. a constant product reserve curve. */
+export type RampCurve = {
+  /** At least two points, in drawing order. */
+  points: RampPoint[];
+  /** Accessible name of the curve. Read out as its title, never drawn. */
+  label?: string;
+  tone?: RampTone;
+};
+
 /** A horizontal line at one price, e.g. the oracle or the order's limit. */
 export type RampReference = { y: number; label: string; dashed?: boolean };
 
@@ -37,12 +46,16 @@ export type RampMarker = {
   tone?: RampTone;
   /** Which side of the point the label sits on. Default is the side the line is not climbing into. */
   place?: "above" | "below";
+  /** Dashed drops from the point to both axes, so its coordinates can be read off the ticks. */
+  guides?: boolean;
 };
 
 export type PriceRampSpec = {
   x: RampAxis;
   y: RampAxis;
-  segments: RampSegment[];
+  /** Straight lines. A spec needs at least one segment or one curve. */
+  segments?: RampSegment[];
+  curves?: RampCurve[];
   references?: RampReference[];
   spans?: RampSpan[];
   markers?: RampMarker[];
@@ -97,6 +110,12 @@ export type PlacedSegment = {
   y2: number;
 };
 
+export type PlacedCurve = {
+  label?: string;
+  tone: RampTone;
+  path: string;
+};
+
 export type PlacedReference = {
   value: number;
   label: string;
@@ -129,6 +148,8 @@ export type PlacedMarker = {
   labelY: number;
   /** Flips to "end" when the point sits too near the right edge to label outward. */
   labelAnchor: "start" | "end";
+  /** Dashed guide paths to the x axis and the y axis. Empty without `guides`. */
+  guides: string[];
 };
 
 export type PriceRampLayout = {
@@ -136,6 +157,7 @@ export type PriceRampLayout = {
   x: PlacedAxis;
   y: PlacedAxis;
   segments: PlacedSegment[];
+  curves: PlacedCurve[];
   references: PlacedReference[];
   spans: PlacedSpan[];
   markers: PlacedMarker[];
@@ -177,7 +199,11 @@ export function layoutPriceRamp(spec: PriceRampSpec, opts: PriceRampOptions): Pr
 
   checkAxis(spec.x, "x");
   checkAxis(spec.y, "y");
-  if (spec.segments.length === 0) throw new Error("PriceRamp needs at least one segment");
+  const specSegments = spec.segments ?? [];
+  const specCurves = spec.curves ?? [];
+  if (specSegments.length === 0 && specCurves.length === 0) {
+    throw new Error("PriceRamp needs at least one segment or curve");
+  }
 
   const plot = {
     x0: marginLeft,
@@ -192,7 +218,7 @@ export function layoutPriceRamp(spec: PriceRampSpec, opts: PriceRampOptions): Pr
   const sx = (v: number) => plot.x0 + ((v - spec.x.min) / (spec.x.max - spec.x.min)) * (plot.x1 - plot.x0);
   const sy = (v: number) => plot.y1 - ((v - spec.y.min) / (spec.y.max - spec.y.min)) * (plot.y1 - plot.y0);
 
-  const segments: PlacedSegment[] = spec.segments.map((s, i) => {
+  const segments: PlacedSegment[] = specSegments.map((s, i) => {
     const where = `segment ${i}${s.label ? ` (${s.label})` : ""}`;
     checkIn(s.from.x, spec.x, "x", `${where} start`);
     checkIn(s.from.y, spec.y, "y", `${where} start`);
@@ -212,6 +238,19 @@ export function layoutPriceRamp(spec: PriceRampSpec, opts: PriceRampOptions): Pr
       x2: r(x2),
       y2: r(y2),
     };
+  });
+
+  const curves: PlacedCurve[] = specCurves.map((c, i) => {
+    const where = `curve ${i}${c.label ? ` (${c.label})` : ""}`;
+    if (c.points.length < 2) throw new Error(`PriceRamp ${where} needs at least two points`);
+    const path = c.points
+      .map((p, j) => {
+        checkIn(p.x, spec.x, "x", `${where} point ${j}`);
+        checkIn(p.y, spec.y, "y", `${where} point ${j}`);
+        return `${j === 0 ? "M" : "L"} ${r(sx(p.x))} ${r(sy(p.y))}`;
+      })
+      .join(" ");
+    return { label: c.label, tone: c.tone ?? "default", path };
   });
 
   const references: PlacedReference[] = (spec.references ?? []).map((ref, i) => {
@@ -264,6 +303,7 @@ export function layoutPriceRamp(spec: PriceRampSpec, opts: PriceRampOptions): Pr
       labelX: anchor === "end" ? cx - MARKER_GAP : cx + MARKER_GAP,
       labelY: below(m, cy, spec, plot) ? cy + MARKER_LABEL_DROP : cy - MARKER_LABEL_LIFT,
       labelAnchor: anchor,
+      guides: m.guides ? [`M ${cx} ${cy} L ${cx} ${r(plot.y1)}`, `M ${cx} ${cy} L ${r(plot.x0)} ${cy}`] : [],
     };
   });
 
@@ -314,6 +354,7 @@ export function layoutPriceRamp(spec: PriceRampSpec, opts: PriceRampOptions): Pr
       labelY: r((plot.y0 + plot.y1) / 2),
     },
     segments,
+    curves,
     references,
     spans,
     markers,
@@ -331,14 +372,23 @@ function below(
   spec: PriceRampSpec,
   plot: { y0: number; y1: number },
 ): boolean {
-  const under = spec.segments.find(
-    (s) => marker.x >= Math.min(s.from.x, s.to.x) - EPS && marker.x <= Math.max(s.from.x, s.to.x) + EPS,
-  );
-  const rising = under ? under.to.y > under.from.y : false;
+  const rising = risingAt(marker.x, spec);
   const want = marker.place ? marker.place === "below" : rising;
   if (want && cy + MARKER_LABEL_DROP > plot.y1) return false;
   if (!want && cy - MARKER_LABEL_LIFT - CAP_HALF * 2 < plot.y0) return true;
   return want;
+}
+
+/** Whether the segment or curve leg under x climbs to the right. False when nothing is under it. */
+function risingAt(x: number, spec: PriceRampSpec): boolean {
+  const legs: RampSegment[] = [...(spec.segments ?? [])];
+  for (const curve of spec.curves ?? []) {
+    for (let i = 1; i < curve.points.length; i++) legs.push({ from: curve.points[i - 1], to: curve.points[i] });
+  }
+  const under = legs.find(
+    (s) => x >= Math.min(s.from.x, s.to.x) - EPS && x <= Math.max(s.from.x, s.to.x) + EPS,
+  );
+  return under ? under.to.y > under.from.y : false;
 }
 
 function checkAxis(axis: RampAxis, name: "x" | "y") {

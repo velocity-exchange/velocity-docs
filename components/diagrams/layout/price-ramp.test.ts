@@ -178,3 +178,39 @@ describe("layoutPriceRamp", () => {
     expect(() => layoutPriceRamp(spec, { ...opts, width: 150 })).toThrow(/no room to draw/);
   });
 });
+
+describe("layoutPriceRamp curves and guides", () => {
+  const curveSpec: PriceRampSpec = {
+    x: { label: "Base", min: 0, max: 10, ticks: [2, 5] },
+    y: { label: "Quote", min: 0, max: 10, ticks: [2, 5] },
+    curves: [{ points: [{ x: 1, y: 10 }, { x: 2, y: 5 }, { x: 5, y: 2 }, { x: 10, y: 1 }], label: "k = 10" }],
+    markers: [{ x: 5, y: 2, label: "Bid", guides: true }, { x: 2, y: 5, label: "Ask" }],
+  };
+
+  it("draws a curve as one polyline through every point", () => {
+    const [curve] = layoutPriceRamp(curveSpec, opts).curves;
+    expect(curve.path).toBe("M 150 50 L 200 200 L 350 290 L 600 320");
+    expect(curve.label).toBe("k = 10");
+  });
+
+  it("drops guides from a marker to both axes only when asked", () => {
+    const [bid, ask] = layoutPriceRamp(curveSpec, opts).markers;
+    expect(bid.guides).toEqual(["M 350 290 L 350 350", "M 350 290 L 100 290"]);
+    expect(ask.guides).toEqual([]);
+  });
+
+  it("labels a marker above a falling curve", () => {
+    const [bid] = layoutPriceRamp(curveSpec, opts).markers;
+    expect(bid.labelY).toBeLessThan(bid.cy);
+  });
+
+  it("accepts a spec with curves and no segments, and rejects one with neither", () => {
+    expect(() => layoutPriceRamp(curveSpec, opts)).not.toThrow();
+    expect(() => layoutPriceRamp({ ...curveSpec, curves: [] }, opts)).toThrow(/segment or curve/);
+  });
+
+  it("rejects a curve point outside the range", () => {
+    const bad = { ...curveSpec, curves: [{ points: [{ x: 1, y: 10 }, { x: 11, y: 1 }] }] };
+    expect(() => layoutPriceRamp(bad, opts)).toThrow(/curve 0 point 1/);
+  });
+});

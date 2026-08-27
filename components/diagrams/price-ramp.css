@@ -31,6 +31,14 @@
   stroke-dasharray: 4 4;
 }
 
+/* Dashed drop from a marker to each axis, the faintest line in the figure. */
+.dg-pr-guide {
+  fill: none;
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
 .dg-pr-line {
   fill: none;
   stroke: var(--dg-ink);
@@ -70,7 +78,15 @@
   .dg[data-animate]:not([data-inview]) .dg-pr-marker {
     opacity: 0;
   }
-  .dg[data-animate][data-inview] .dg-pr-line {
+  .dg[data-animate][data-inview] /* Dashed drop from a marker to each axis, the faintest line in the figure. */
+.dg-pr-guide {
+  fill: none;
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.dg-pr-line {
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
     animation: dg-draw var(--dg-draw) var(--dg-ease) forwards;

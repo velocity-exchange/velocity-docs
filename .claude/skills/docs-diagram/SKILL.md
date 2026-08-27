@@ -106,14 +106,17 @@ import type { PriceRampSpec } from "../layout/price-ramp";
 export const spec: PriceRampSpec = {
   x: { label, min, max, ticks? },
   y: { label, min, max, ticks? },
-  segments: [{ from: { x, y }, to: { x, y }, label?, dashed?, tone? }],
+  segments?: [{ from: { x, y }, to: { x, y }, label?, dashed?, tone? }],
+  curves?: [{ points: [{ x, y }, ...], label?, tone? }],
   references?: [{ y, label, dashed? }],
   spans?: [{ from, to, label }],
-  markers?: [{ x, y, label, tone?, place? }],
+  markers?: [{ x, y, label, tone?, place?, guides? }],
 };
 ```
 
-- Price over slots, drawn as straight segments. Both ranges are authored; anything outside
+- Any two-axis chart with authored ranges: price over slots as straight `segments`, or a
+  sampled `curves` polyline (e.g. a constant product reserve curve). Needs at least one of
+  the two. Both ranges are authored; anything outside
   `min`/`max` throws rather than silently rescaling.
 - `ticks` default to about four round numbers per axis. Author them as numbers or as
   `{ at, label }` to name a slot ("Placed", "Expiry").
@@ -122,7 +125,8 @@ export const spec: PriceRampSpec = {
   `label` is its hover `<title>`, not drawn.
 - `references` are horizontal price lines (oracle, limit), labelled outside the plot on the
   right; widen `margin.right` for long labels. `spans` shade an x range. `markers` sit on the
-  line; `place` (`above` | `below`) overrides the label side on collision.
+  line; `place` (`above` | `below`) overrides the label side on collision, and `guides`
+  drops dashed lines to both axes so the point can be read off named ticks.
 - Slot counts are wall-clock only at today's slot time. State that in the caption and link
   `/developers/concepts/slot-duration` in the prose.
 

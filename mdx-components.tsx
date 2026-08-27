@@ -15,6 +15,7 @@ import { AuctionPriceRamp } from "./components/diagrams/figures/AuctionPriceRamp
 import { JitAuctionSequence } from "./components/diagrams/figures/JitAuctionSequence";
 import { LiquidityRoutingFlow } from "./components/diagrams/figures/LiquidityRoutingFlow";
 import { AuctionSanitizationFlow } from "./components/diagrams/figures/AuctionSanitizationFlow";
+import { AmmBidAskCurve } from "./components/diagrams/figures/AmmBidAskCurve";
 
 export function useMDXComponents(components?: Record<string, unknown>) {
   return useDocsMDXComponents({
@@ -34,6 +35,7 @@ export function useMDXComponents(components?: Record<string, unknown>) {
     JitAuctionSequence,
     LiquidityRoutingFlow,
     AuctionSanitizationFlow,
+    AmmBidAskCurve,
     ...components,
   });
 }

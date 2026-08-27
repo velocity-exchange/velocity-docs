@@ -6,4 +6,4 @@ export { layoutFlowchart, type FlowchartSpec, type FlowNode, type FlowEdge, type
 export { Sequence, type SequenceProps } from "./Sequence";
 export { layoutSequence, type SequenceSpec, type SequenceActor, type SequenceMessage, type SequenceNote, type SequencePhase, type SequenceStep } from "./layout/sequence";
 export { PriceRamp, type PriceRampProps } from "./PriceRamp";
-export { layoutPriceRamp, type PriceRampSpec, type RampAxis, type RampTick, type RampSegment, type RampReference, type RampSpan, type RampMarker, type RampTone } from "./layout/price-ramp";
+export { layoutPriceRamp, type PriceRampSpec, type RampAxis, type RampTick, type RampSegment, type RampCurve, type RampReference, type RampSpan, type RampMarker, type RampTone } from "./layout/price-ramp";
