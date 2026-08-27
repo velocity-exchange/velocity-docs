@@ -8,7 +8,7 @@ import type { FlowchartSpec } from "../layout/flowchart";
 export const liquidityRoutingSpec: FlowchartSpec = {
   nodes: [
     { id: "order", label: "Taker order", col: 0, row: 0, kind: "terminal", note: "your limit caps fills" },
-    { id: "level", label: "Take the next best price level", col: 0, row: 1, note: "price, then time" },
+    { id: "level", label: "Take the next best price level", col: 0, row: 1, note: "best price the filler brings" },
     { id: "compare", label: "Is the AMM quote better than this level?", col: 0, row: 2, kind: "decision" },
     { id: "ammFirst", label: "AMM fills first", col: 1, row: 3, note: "up to this price", tone: "signal" },
     { id: "maker", label: "Best quote at this level fills", col: 0, row: 3, note: "resting or JIT maker" },
