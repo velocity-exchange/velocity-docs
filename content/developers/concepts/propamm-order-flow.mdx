@@ -549,10 +549,14 @@ An instance holds three keys. Each key permits one type of action.
 | `hot_authority` | Write the mid price and the spline. Nothing else. |
 | `user_authority` | Identify the quoted `User`. It signs the creation of the instance, and the PDA seeds hold it. |
 
-Two rules limit the damage from a failed price feed.
+Three rules limit the damage from a failed price feed.
 
 - An instance stops quoting when `mid_slot` falls more than
   `max_mid_staleness_slots` behind the current slot.
+- An instance stops quoting when its mid sits outside `max_mid_deviation_ppm`
+  of the reference price velocity passes, which is its oracle. The `authority`
+  key sets this bound, not the hot key. A hot key that writes a bad mid then
+  moves no size. Zero disables the bound.
 - Each rung holds a filled amount. A consumed rung stays consumed until the
   maker writes that side again. A taker cannot consume one rung twice while the
   maker changes the mid price.
