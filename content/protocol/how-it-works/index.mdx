@@ -51,12 +51,18 @@ Velocity is designed to be robust, computationally efficient, and to incentivise
 
 Trades on Velocity are supported by three liquidity mechanisms. Each mechanism is described below.
 
+They are not three stages in a fixed order. One taker order can fill from more than one of them, because the matching engine compares their prices at each price level of the fill. See [Matching Engine](/protocol/how-it-works/matching-engine).
+
 <Steps>
 ### Just-in-Time (JIT) Auction Liquidity
 
 All perp market orders placed on Velocity are routed through a short-term auction. The client sets the auction's duration, and the program floors it at a minimum duration that's admin-configurable per deployment. During this period, market-makers can bid to fill the order at or better than the auction price, providing "Just-in-Time Liquidity" as the fulfilment is provided for the market order submitted.
 
 Auctions are run via a Dutch Auction (where the auction price starts at the better price and linearly moves toward a set worse end price) and market makers compete amongst themselves in speed to fulfil user orders.
+
+<AuctionPriceRamp />
+
+The figure uses the worked example of a 10-slot auction from $100.00 to $100.10. Slot counts are wall-clock time only at today's slot time; see [Slot duration and wall-clock time](/developers/concepts/slot-duration).
 
 _For a more technical breakdown, check out:_ [Matching Engine](/protocol/how-it-works/matching-engine)
 

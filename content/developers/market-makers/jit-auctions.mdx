@@ -27,17 +27,9 @@ Every taker order that enters a JIT auction has three key parameters that define
 
 ## Auction timeline
 
-```
-Slot 0          Slot 5          Slot 10 (end)
-  |               |               |
-  Best price ──────────────────► Worst price (for taker)
-  for taker                       Falls to DLOB/AMM
+<AuctionPriceRamp />
 
-  Hardest for     Easier for      Auction over,
-  makers to       makers to       remaining size
-  win fills       win fills       goes to DLOB
-```
-
+The figure uses the worked example of a 10-slot auction from $100.00 to $100.10. Slot counts are wall-clock time only at today's slot time; see [Slot duration and wall-clock time](/developers/concepts/slot-duration).
 
 **For a taker going LONG:**
 - Slot 0: auction price = `auctionStartPrice` (e.g., oracle), taker pays at or near oracle
@@ -70,6 +62,8 @@ where progress = min(1, (current_slot - auction_start_slot) / auction_duration)
 A maker offering \$100.05 would be eligible to fill starting at slot 5 (when the auction price reaches \$100.05). Makers offering \$100.02 could fill as early as slot 2.
 
 ## Auction lifecycle
+
+<JitAuctionSequence />
 
 **1. Taker places order**
 <SDKDoc>
@@ -106,7 +100,7 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
 });
 ```
 
-**4. Auction resolves**: best maker(s) fill the taker. If partially filled, remaining size continues through the auction. If unfilled after `auctionDuration` slots, it matches against DLOB, then AMM.
+**4. Auction resolves**: best maker(s) fill the taker. If partially filled, remaining size continues through the auction. If unfilled after `auctionDuration` slots, remaining size can fill against resting DLOB orders and the AMM, matched by price at each level rather than in a fixed order (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)).
 
 ## Maker participation
 
@@ -289,7 +283,7 @@ const jitter = new JitterShotgun({
 
 ## Related
 
-- [Orderbook & Matching](./orderbook-and-matching) - DLOB and liquidity priority (JIT → DLOB → AMM)
+- [Orderbook & Matching](./orderbook-and-matching) - DLOB and how JIT, resting, and AMM liquidity compete on price
 - [Matching Engine](/protocol/how-it-works/matching-engine) - Full liquidity priority flow
 - [JIT-only MM](./jit-only) - Building a JIT market maker bot
 - [SWIFT API](./swift-api) - See taker orders 100-500ms before they hit the auction

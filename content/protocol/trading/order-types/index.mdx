@@ -30,6 +30,8 @@ The auction is not the only way a Market Order gets filled. Both during the auct
 
 The AMM is not a pure last resort that only steps in when no market maker does. At each price level, the matching engine compares the AMM's quote against the best available maker price and fills against whichever is better, so one Market Order can fill partly against makers and partly against the AMM. See [Matching Engine](/protocol/how-it-works/matching-engine) for the full ordering rules.
 
+<LiquidityRoutingFlow />
+
 Whichever source fills the order, it can only fill at a price within your slippage tolerance.
 
 Executing a Market Order does not mean the order will execute at exactly the price displayed, as the mark price of an asset may change before the order is filled.
