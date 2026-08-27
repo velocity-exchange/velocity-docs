@@ -5,11 +5,13 @@ import { PriceRamp } from "../PriceRamp";
 import { ammBidAskCurveSpec } from "./amm-bid-ask-curve.data";
 
 const CAPTION =
-  "Three points on one constant product curve (base reserve times quote reserve is a fixed k). " +
-  "The reservation price is the AMM's own mid, which tracks the oracle. " +
-  "The ask sits up the curve where the quote reserve is higher, and the bid sits down it where the quote reserve is lower. " +
-  "Each side moves by half of its spread from the reservation quote reserve, and the two spreads can differ: here the ask side is drawn wider than the bid side. " +
-  "The reserves are normalised so the reservation point is at 1, 1 and the spreads are exaggerated to be visible, not live market values.";
+  "The AMM keeps its reserves on one constant product curve, where base reserve times quote reserve always equals k. " +
+  "Instead of quoting a single price from that curve, it tracks three points on it. " +
+  "The reservation price is its own mid, and it follows the oracle. " +
+  "The ask sits further up the curve, where the quote reserve is higher, so buyers pay a little more than mid. " +
+  "The bid sits further down, where the quote reserve is lower, so sellers receive a little less. " +
+  "Each side is shifted by half of its spread from the reservation quote reserve, and the two spreads move independently with the AMM's inventory, which is why the ask here sits further from mid than the bid does. " +
+  "The reserves are normalised so the reservation point lands at 1, 1, and the spreads are exaggerated so the gaps are visible. These are not live market values.";
 
 export function AmmBidAskCurve() {
   return (
