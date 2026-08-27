@@ -172,6 +172,13 @@ Carry the makers in that order and stop where the transaction runs out of room.
 A book stops its walk at the first maker that the transaction omits. A prefix of
 the list therefore fills, and a gap forfeits the depth behind it.
 
+The order is not simply the book's walk. Every owner that can stop a walk comes
+first, then every owner that cannot, each group in walk order. An owner whose
+orders all sit below the book's `blocking_min_size` stops nothing, so carrying it
+buys that owner's own size and no reach — which makes it the one to drop when
+locks are short. The book reports which orders can stop a walk, one flag per row,
+so a router never applies the floor itself.
+
 <RouterReachSankey />
 
 The room is the reason the off-chain router exists. A transaction locks at most
@@ -195,7 +202,7 @@ There are two paths for a Velocity order.
 
 The taker signs an order message. The taker does not sign a transaction, and the
 taker sends no transaction. The message can also name a route: the registry
-entries that the taker permits. Velocity stores a four-byte digest of that list
+entries that the taker permits. Velocity stores a five-byte digest of that list
 on the order.
 
 A filler receives the message. The filler builds the transaction, selects the
@@ -298,19 +305,37 @@ size. An immediate-or-cancel order cancels it.
 ### An order whose owner the transaction omits
 
 Velocity settles a fill only for a `User` account in the transaction. A book can
-hold an order for a user that the transaction omits. The age of that order
-decides what the book does. A market sets the limit with
-`unknown_user_grace_slots`. The book measures the age from the slot at which the
-order became matchable.
+hold an order for a user that the transaction omits. The size and the age of that
+order decide what the book does. Two market settings set the limits:
+`blocking_min_size` and `unknown_user_grace_slots`. The book measures the age
+from the slot at which the order became matchable.
 
-| Age of the order | What the book does | Result for the taker |
+| The order | What the book does | Result for the taker |
 | --- | --- | --- |
-| Inside the grace window | The book passes over the order and continues | The depth behind the order is available |
-| Outside the grace window | The book stops the walk and reports the price and size as withheld depth | The depth behind the order is not available, and the filler must answer for the omission |
+| Below `blocking_min_size`, at any age | The book passes over the order and continues | The depth behind the order is available |
+| At or above the floor, inside the grace window | The book passes over the order and continues | The depth behind the order is available |
+| At or above the floor, outside the grace window | The book stops the walk and reports the price and size as withheld depth | The depth behind the order is not available, and the filler must answer for the omission |
 
 The grace window exists because a filler cannot know of a new order. The
 transaction has a fixed account list, and a filler assembles that list before it
 sends the transaction.
+
+The size floor exists because stopping a walk is a right, and a right has a
+price. Without the floor that price is `min_order_size`. A transaction carries at
+most 48 users, so one more order than that, each on a fresh sub-account at the
+top of the book, makes the depth behind them unreachable for every caller — for
+the cost of rent. The floor prices the right in inventory instead: holding one
+means resting real size at the top of the book, exposed to being filled, which
+is market making.
+
+What a maker gives up below the floor is exact and bounded. At or above the
+floor, a maker keeps price priority against a filler that does not carry it.
+Below the floor, a maker relies on being carried. A maker that is carried fills
+normally either way, because the floor decides which orders may stop a walk and
+never which orders may fill.
+
+An administrator raises the floor when someone buys blocking rights in bulk. A
+floor of zero disables it, which is what a market that has never set one reports.
 
 Withheld depth takes no part of the division. The taker asked to trade, so the
 size goes to the quoters that can fill it. The aged order keeps its place in the
@@ -330,10 +355,19 @@ applies two tests. The fill fails if either test is true.
 | --- | --- |
 | The transaction had room for another maker. A transaction may lock 62 accounts. A maker costs two of them. So 60 locks or fewer leaves room for one. | `FillerOmittedReachableMaker` |
 | The transaction is full, and a loaded user filled nothing and holds no role in the fill. The roles are the taker, the filler, the taker's referrer, and a registered quoter's user. | `FillerPaddedTheUserSet` |
+| The transaction is full, every loaded user worked, and the transaction carries a quoter entry the signed route did not name. | `FillerCarriedUnroutedQuoter` |
 
 The second test prevents a filler from padding to reach the account ceiling with users that fill nothing.
 This prevents a filler from maliciously skipping users on the CLOB and filling with users that have worse price
 or time priority.
+
+The third test covers the same move made with quoter entries instead of users. A
+quoter entry costs account locks, so a filler that carries one the taker never
+asked for spends the room the missing maker needed, and the fill then prices
+against that entry instead of against the book. Every entry a loaded user filled
+for passes the second test, so only this one catches it. It applies only to an
+order that named a route: a taker that named no entries has said nothing about
+which entries are uninvited. Signing a route is how a taker earns this test.
 
 ## The quoter interface
 
@@ -348,7 +382,7 @@ so no program mirrors them by hand.
 | --- | --- | --- |
 | `quote_v0` | What can you fill, and at which prices? | `QuoteResponseV0` |
 | `execute_v0` | Fill this much base. | `ExecuteResponseV0` |
-| `quote_l3_v0` | Which resting orders stand behind the ladder, and who owns each one? | `L3ResponseV0`. Optional. A reader that gets no answer credits the whole ladder to the `user` of the entry, which is correct for a quoter that fills from one account. A book is the exception. |
+| `quote_l3_v0` | Which resting orders stand behind the ladder, who owns each one, and which of them can stop a walk? | `L3ResponseV0`. Optional. A reader that gets no answer credits the whole ladder to the `user` of the entry, which is correct for a quoter that fills from one account. A book is the exception. Each row carries `L3_ROW_FLAG_BLOCKS_WALK`, so a caller learns which owners are load-bearing without applying the size floor itself. |
 
 ### The request
 
@@ -398,7 +432,7 @@ the quoter can give.
 | Section | What it holds |
 | --- | --- |
 | `levels` | The ladder. Each rung is a price and the base available at that price. Velocity reads at most 128 rungs. |
-| `withheld` | The best price that the quoter did not offer, and the base resting there, because that liquidity belongs to a user outside `users`. Zero when the quoter left nothing out. See [An order whose owner the transaction omits](#an-order-whose-owner-the-transaction-omits). |
+| `withheld` | The best price that the quoter did not offer, and the base resting there, because that liquidity belongs to a user outside `users`. Zero when the quoter left nothing out. Velocity reads this from a `Clob` entry only: a quoter of any other type fills for the one `User` in its own registry entry, so it has no other owner to stop at. See [An order whose owner the transaction omits](#an-order-whose-owner-the-transaction-omits). |
 
 `execute_v0` answers with what the fill did.
 
@@ -445,6 +479,19 @@ the program.
 | **Margin reduction before execution** | Depth that the quoter account cannot support |
 | **Margin check after the fill** | An account left below its margin requirement |
 | **Registry approval** | Any order flow. An administrator approves the entry, and the maker can make the entry inactive. |
+| **No sight of another quoter** | Reading a rival's answer before giving its own |
+
+Velocity calls the quoters in the order the transaction lists them, so a quoter
+could otherwise be placed last on purpose. A quoter's registered accounts
+therefore may not name another quoter in the same transaction: not its entry, not
+its program, and not its response account. An entry that names one is skipped for
+that fill.
+
+The response account is the reason. Velocity reads each answer out of the
+quoter's own account, so an account list that reached a rival's response account
+would read the ladder that rival is about to be held to, and could then quote one
+tick better. That is an unbounded last look. Velocity holds its own vAMM's last
+look to 5% of its own top price, and a third party must not get a wider one.
 
 A maker may upgrade the program behind an approved entry. Velocity does not
 require a frozen program, because the limits above hold across an upgrade. A
@@ -603,7 +650,7 @@ that fills nothing. Pass the instructions sysvar so
 Velocity can count the accounts.
 
 ### Use the signed route
-An order holds a four-byte digest of the entries that the signer selected. The
+An order holds a five-byte digest of the entries that the signer selected. The
 fill must include each entry in that digest. Presence is the requirement, not
 participation. Extra entries are permitted, because the router allocates by
 price.
