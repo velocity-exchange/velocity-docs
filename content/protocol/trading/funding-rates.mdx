@@ -6,14 +6,14 @@ Perpetuals futures have no expiry date, final settlement, or delivery. As such, 
 
 | Field               | Description                                     |
 | ------------------- | ----------------------------------------------- |
-| Funding Rate % Calc | `1/24 \* (market_twap - oracle_twap)/oracle_twap`, plus the floor and dead-zone described below |
+| Funding Rate % Calc | `(1/24) × (market_twap − oracle_twap) / oracle_twap`, plus the floor and dead-zone described below |
 | TWAP Parameters     | EMA with span = 1 hour                          |
 | Mark TWAP Calc      | `(bid TWAP + ask TWAP) / 2`                       |
 | Frequency           | End of Hour\* (9:00 AM, 10:00 AM, ...)          |
 
 ## Funding Floor and Dead Zone
 
-Velocity always adds a baseline offset to the funding premium so funding never fully flattens to zero: the floor is **10.95% annualized** (`FUNDING_RATE_OFFSET_DENOMINATOR = 3333`).
+Velocity always adds a baseline offset to the funding premium so funding never fully flattens to zero: the floor is **10.95% annualized** (`FUNDING_RATE_OFFSET_DENOMINATOR = 3333`). The offset is `oracle_twap / 3333`, a price-spread-sized amount added in before the `/24` hourly conversion, so `365 / 3333 ≈ 10.95%` when compounded over a year.
 
 On top of the floor, each market has a **continuous dead zone** around zero divergence, rather than the flat per-tier clamp used elsewhere:
 
@@ -21,6 +21,21 @@ On top of the floor, each market has a **continuous dead zone** around zero dive
 - **`fundingRampSlope`** (default 1.0×): once the spread exceeds the threshold, the excess is shrunk by the threshold and then scaled by the ramp slope, so the premium leaves the dead zone smoothly instead of jumping by the full threshold at the boundary.
 
 Both are per-market and admin-configurable (`update_perp_market_funding_dead_zone`).
+
+### Example
+
+Take `oracle_twap = $100` with the default settings (`fundingClampThreshold = 5 bps`, `fundingRampSlope = 1.0×`, floor = 10.95% annualized ≈ 0.00125% per hour).
+
+**Inside the dead zone:** `market_twap = $100.03` → divergence is `$0.03`, inside the `$0.05` band (5 bps of $100). The premium collapses to the floor-only value, so the hourly funding rate is just **0.00125%**, the same as if `market_twap` matched `oracle_twap` exactly.
+
+**Outside the dead zone:** `market_twap = $100.20` → divergence is `$0.20`, past the `$0.05` band by `$0.15`.
+
+1. Shrink the excess: `$0.20 − $0.05 = $0.15`
+2. Scale by the ramp slope (1.0×): `$0.15 × 1.0 = $0.15`
+3. Add back the floor: `$0.15 + $0.03 = $0.18`
+4. Apply `(1/24) / oracle_twap`: `$0.18 / $100 / 24 ≈ 0.0075%` hourly funding rate
+
+Without the dead zone, the raw formula would have given `(1/24) × $0.20 / $100 ≈ 0.00833%` hourly. The dead zone shaves off the first 5 bps of divergence (treating it as noise) before the floor is added back on top, so the effective rate is smaller than the naive calculation but still tracks the direction and size of the price gap.
 
 <Callout type="important">
 Note: this dead zone can also be delayed at large oracle divergences (see [Oracles](/protocol/how-it-works/oracles)). Individual Market TWAP updates utilize the side of the book for trade executions. Bid and Ask TWAPs in the market are calculated and/or estimated on every trade, and can also be updated by the permissionless `update_perp_bid_ask_twap`, `update_amms`, and `update_perp_market_amm_oracle_twap` cranks. The crank path caps how much weight a single sample can carry after a gap, so one crank after a long silence cannot on its own set the funding input.
@@ -55,12 +70,6 @@ Velocity aims to provide a symmetric funding rate to both sides of the market. W
 Each funding period, the AMM can spend at most **1/3 of its retained equity** paying asymmetric funding. If the imbalance would cost more than that, the payout side's funding rate is capped so the AMM's retained equity never goes negative: the receipts for funding will be capped to the available amount. This budget lives entirely inside the AMM's own books; the Insurance Fund is never drawn on to cover a funding shortfall.
 
 As the AMM collects more fees over time, its retained equity (and therefore its funding budget) grows, so any existing predicted capped rate should move closer to being balanced.
-
-<Callout type="info">
-**Example:**
-
-For SOL-PERP you can check the recent history to get a better idea of what shorts will receive.
-</Callout>
 
 ### Oracle Resilience
 

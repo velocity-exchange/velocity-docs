@@ -40,24 +40,7 @@ So an observed fee above the published tier number is normally an add-on or a po
 
 ## Fee Redesign
 
-Velocity's fee model is a clean per-fill split, not an insurance-fund waterfall. The full taker-fee decomposition, in order:
-
-```
-taker_fee  = ceil(notional × fee_numerator / FEE_DENOMINATOR)   tiered by 30d volume,
-             + notional × taker_fee_addon_tenth_bps / 100_000    plus a per-market add-on,
-                                                                  ± per-market fee_adjustment
-          − referee_discount          (reduces what the taker pays; never collected)
-          − referrer_reward           (→ referrer, via RevenueShareEscrow)
-          − filler_reward             (→ keeper, as perp quote PnL)
-          − maker_rebate              (→ maker; match path only)
-          − vamm_maker_rebate        (→ AMM; only when the VammMakerRebate flag
-                                       is on and the vAMM is the maker)
-          ───────────────────────────
-remainder ── × amm_fee_numerator%      → AMM fee provision (spendable AMM liquidity; the
-          │                              bankruptcy backstop of last resort)
-          ── × if_fee_numerator%       → insurance fund (via the pnl-pool sweep)
-          ── residual                  → protocol (withdrawable `protocol_fee_pool`)
-```
+Velocity's fee model is a clean per-fill split, not an insurance-fund waterfall.
 
 <FeeFlowSankey />
 
@@ -67,7 +50,7 @@ The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to
 
 ### vAMM maker rebate
 
-`State.featureBitFlags` carries a `VammMakerRebate` bit, off by default and toggled exchange-wide (not per market) by `updateFeatureBitFlagsVammMakerRebate`. Enabling it turns on one extra line in the waterfall above: when the vAMM is the maker on a fill, it earns a maker rebate the same way a user maker does.
+When the vAMM is the maker on a fill, it earns a maker rebate the same way a user maker does.
 
 - The rebate is carved off the remainder **before** the AMM / IF / protocol split, then added back into `amm_fee`, so it reaches the AMM through the existing fee-provision plumbing.
 - It is computed from the **base tier** (`feeTiers[0]`) maker rebate, not the taker's tier. A rebate belongs to the maker, and the vAMM has no volume tier of its own, so pinning it to tier 0 keeps it independent of who the taker is.
@@ -75,7 +58,7 @@ The AMM/IF split (`FeeStructure.ammFeeNumerator` / `ifFeeNumerator`) defaults to
 - It is clamped to whatever remainder is left, because the fee-structure numerators are admin-mutable and the rebate is not guaranteed to fit.
 - The taker's fee is unchanged. Only the distribution of the remainder shifts, away from the protocol and insurance-fund legs and toward the AMM.
 
-If you reconcile `OrderActionRecord` fee legs or estimate the protocol and insurance-fund cut from a fill, read the flag before assuming the remainder splits three ways. See [Velocity AMM](/protocol/how-it-works/velocity-amm#vamm-maker-rebate).
+If you reconcile `OrderActionRecord` fee legs or estimate the protocol and insurance-fund cut from a fill, account for this rebate before assuming the remainder splits three ways. See [Velocity AMM](/protocol/how-it-works/velocity-amm#vamm-maker-rebate).
 
 ### Key differences from the pre-redesign model
 
@@ -89,7 +72,3 @@ If you reconcile `OrderActionRecord` fee legs or estimate the protocol and insur
 There's no spot order book (per [Order Types](/protocol/trading/order-types)), so there's no maker/taker fee to charge on spot trades in the first place. Direct swaps via `begin_swap` / `end_swap` are charged **no trading fee**. The swap fee on that path is hardcoded to zero.
 
 Other spot-market fees (liquidator fee, insurance/protocol factors on lending yield) still apply. See [Other Trading Fees](/protocol/trading/trading-fees/other-trading-fees).
-
-## Disclaimers
-
-_There are risks associated with Insurance Fund Staking. Read more about the [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) and [Risks](/protocol/risk-and-safety/risks))._
