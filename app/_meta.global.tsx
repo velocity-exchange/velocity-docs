@@ -81,6 +81,7 @@ const META = {
           "withdrawal-limits": "",
           "amplify": {
             "title": "Amplify",
+            "display": "hidden",
             "items": {
               "index": "",
               "opening-a-position": "",
@@ -117,6 +118,7 @@ const META = {
           "fee-pool": "",
           "profit-loss-pool": "",
           "borrow-interest-rate": "",
+          "withdrawal-limit-mechanics": "",
           "isolated-pools": {
             "display": displayWip,
           },

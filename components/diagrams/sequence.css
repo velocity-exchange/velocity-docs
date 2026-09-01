@@ -1,0 +1,68 @@
+/* Sequence renderer. Every color comes from the diagram tokens in tokens.css:
+   grays throughout, Velocity Green on the one signal message. */
+.dg-sq {
+  /* Rows are short and there are many of them, so the cascade runs faster
+     than the per-column stagger a Sankey uses. */
+  --dg-sq-stagger: 70ms;
+  --dg-sq-rise: 420ms;
+}
+
+.dg-sq-lifeline {
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  shape-rendering: crispEdges;
+}
+
+.dg-sq-actor-box,
+.dg-sq-note-box {
+  fill: var(--dg-node);
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  rx: var(--dg-radius-sm);
+}
+
+.dg-sq-line {
+  fill: none;
+  stroke: var(--dg-muted);
+  stroke-width: 1.25;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+}
+.dg-sq-line[data-dashed] { stroke-dasharray: 5 4; }
+.dg-sq-head { fill: var(--dg-muted); }
+
+/* Leaves the system: still readable, but it recedes. */
+.dg-sq-row[data-tone="out"] .dg-sq-line { stroke: var(--dg-flow); }
+.dg-sq-head[data-tone="out"] { fill: var(--dg-flow); }
+
+/* The one message the reader is meant to follow, drawn a touch heavier so the
+   green holds its own at hairline weight. */
+.dg-sq-row[data-tone="signal"] .dg-sq-line { stroke: var(--dg-flow-signal); stroke-width: 1.75; }
+.dg-sq-head[data-tone="signal"] { fill: var(--dg-flow-signal); }
+
+.dg-sq-phase-box {
+  fill: none;
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  rx: var(--dg-radius-md);
+}
+.dg-sq-phase-label { letter-spacing: 0.02em; }
+
+/* Motion: fully drawn by default; rows cascade top to bottom once, only when
+   allowed. Arrowheads live in a shared <marker>, so a row enters as one piece
+   rather than drawing its line under a head that is already in place. */
+@media (prefers-reduced-motion: no-preference) {
+  .dg[data-animate]:not([data-inview]) .dg-sq-actor,
+  .dg[data-animate]:not([data-inview]) .dg-sq-phase,
+  .dg[data-animate]:not([data-inview]) .dg-sq-row { opacity: 0; }
+
+  .dg[data-animate][data-inview] .dg-sq-actor {
+    animation: dg-rise var(--dg-sq-rise) var(--dg-ease) both;
+  }
+  .dg[data-animate][data-inview] .dg-sq-phase,
+  .dg[data-animate][data-inview] .dg-sq-row {
+    animation: dg-rise var(--dg-sq-rise) var(--dg-ease) both;
+    animation-delay: calc(var(--dg-step, 0) * var(--dg-sq-stagger));
+  }
+}

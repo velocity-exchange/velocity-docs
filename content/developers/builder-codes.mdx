@@ -20,6 +20,8 @@ builder_fee = notional × fee_tenth_bps / 100_000
 
 The builder fee is charged **on top of** the taker fee. It does not reduce the taker's fee tier or the protocol's cut of the fill, and it accrues to the builder's `RevenueShareEscrow` rather than to any protocol pool. `fee_tenth_bps` is capped at 1000 tenth-bps (1% of the filled notional); a builder code above that cap is rejected. See [Trading Fees](/protocol/trading/trading-fees) for the taker fee it sits on top of.
 
+<BuilderFeeSankey />
+
 A fill that carries a builder code also requires the taker's `RevenueShareEscrow` to be passed into the instruction, or the fill fails.
 
 ### Getting started with VBC

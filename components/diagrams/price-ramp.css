@@ -1,0 +1,99 @@
+/* Price-over-slots chart. Tokens come from tokens.css; nothing here invents a
+   color. Three weights of line carry the whole hierarchy: the axis is the
+   faintest, a reference sits between, and the price line is the darkest thing
+   in the figure. */
+
+/* Axis rules and tick marks. Hairlines snap to the pixel grid so a 1px rule
+   never renders as a 2px blur. */
+.dg-pr-rule {
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.dg-pr-axis-label {
+  fill: var(--dg-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Shaded range of x, e.g. the auction against the expiry extension. */
+.dg-pr-span {
+  fill: var(--dg-node);
+}
+
+.dg-pr-ref {
+  fill: none;
+  stroke: var(--dg-flow);
+  stroke-width: 1;
+}
+.dg-pr-ref[data-dashed] {
+  stroke-dasharray: 4 4;
+}
+
+.dg-pr-line {
+  fill: none;
+  stroke: var(--dg-ink);
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+}
+.dg-pr-line[data-tone="out"] {
+  stroke: var(--dg-muted);
+}
+/* The one signal leg. Full brand strength: at 1.5px a tinted green reads as gray. */
+.dg-pr-line[data-tone="signal"] {
+  stroke: var(--vlc-brand);
+  stroke-width: 1.75;
+}
+.dg-pr-line[data-dashed] {
+  stroke-dasharray: 5 4;
+}
+
+/* A ring, not a disc: the price line runs under the marker and stays readable. */
+.dg-pr-dot {
+  fill: var(--dg-node);
+  stroke: var(--dg-ink);
+  stroke-width: 1.5;
+}
+.dg-pr-marker[data-tone="out"] .dg-pr-dot {
+  stroke: var(--dg-muted);
+}
+.dg-pr-marker[data-tone="signal"] .dg-pr-dot {
+  fill: var(--dg-node-signal);
+  stroke: var(--vlc-brand);
+}
+
+/* Motion: the frame is always drawn, and only the price line and its markers
+   arrive. Fully drawn by default and under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .dg[data-animate]:not([data-inview]) .dg-pr-line,
+  .dg[data-animate]:not([data-inview]) .dg-pr-marker {
+    opacity: 0;
+  }
+  .dg[data-animate][data-inview] .dg-pr-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: dg-draw var(--dg-draw) var(--dg-ease) forwards;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+  /* A dashed line cannot also dash its way in, so it fades on the same beat. */
+  .dg[data-animate][data-inview] .dg-pr-line[data-dashed] {
+    stroke-dasharray: 5 4;
+    stroke-dashoffset: 0;
+    animation: dg-pr-fade var(--dg-draw) var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+  .dg[data-animate][data-inview] .dg-pr-marker {
+    animation: dg-rise 480ms var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+}
+
+@keyframes dg-pr-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

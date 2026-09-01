@@ -9,23 +9,25 @@ Spot deposit/borrow interest is paid out continuously and directly to the spot b
 </Callout>
 
 ---
-### Supply APY  
+### Lending APY  
 
 All deposits on Velocity, both perpetuals and in Velocity's borrow & lend markets, will earn interest. The annualised percentage yield (APY) differs per market and is displayed on the platform's UI.  
 
-![Supply APY](/assets/IjPTQ7BZXMIhgNOt8IhYf_image.png)
+![Lending APY](/assets/IjPTQ7BZXMIhgNOt8IhYf_image.png)
 
 APY is auto-compounding from the time of deposit and is calculated on the user's total settled collateral.  
 
 Since assets supplied to Velocity's borrow & lend can also be cross-margined to use for perpetual futures trading, users will earn interest on both their deposits and on their positions.
 
-The Supply APY is a function of the utilisation ratio which is calculated: `Total Borrowed / Total Deposits`
+The Lending APY is a function of the utilisation ratio which is calculated: `Total Borrowed / Total Deposits`
 
 The interest rate rises gently up to each market's **optimal utilization** point, then increases much more steeply above it to encourage new deposits and repayment. Each market sets its own optimal utilization on-chain; see [Borrow Interest Rate](/protocol/how-it-works/borrow-interest-rate) for the full curve.  
 
 ### Borrow APY
 
-Users must pay a Borrow APY to the pool when borrowing assets. Each spot market takes two independent cuts off this interest before the rest is distributed to lenders via the Supply APY: an `ifFeeFactor` carveout that goes to that market's Insurance Fund, and a separate `protocolFeeFactor` carveout that goes to a protocol-owned, withdrawable fee pool.
+Users must pay a Borrow APY to the pool when borrowing assets. Each spot market takes two independent cuts off this interest before the rest is distributed to lenders via the Lending APY: an `ifFeeFactor` carveout that goes to that market's Insurance Fund, and a separate `protocolFeeFactor` carveout that goes to a protocol-owned, withdrawable fee pool.
+
+<BorrowApySankey />
 
 Velocity's interest rate is calibrated to manage liquidity risk and optimise asset utilisation. The formula for the borrow interest rates can be found at [Borrow Interest Rate](/protocol/how-it-works/borrow-interest-rate).  
 

@@ -20,6 +20,8 @@ With Velocity, users can determine the duration of their auction in 'slots', and
 The duration you request is a floor, not a fixed value. The program can lengthen it, and can move your start and end prices. See [How the program sanitizes your auction](#how-the-program-sanitizes-your-auction) below.
 </Callout>
 
+<AuctionPriceRamp />
+
 As an example, consider an order configured this way:
 
 -   the user wants the auction to start at a price 0.05% better than the estimated fill price.
@@ -65,6 +67,8 @@ Building your own client? The DLOB server exposes the same derivation over HTTP 
 ## How the program sanitizes your auction
 
 The auction params you submit are a request. On every perp order placement the program rewrites them in place before the order is stored, so the auction that actually runs can differ from the one you sent. Nothing is rejected for this reason; the params are simply adjusted.
+
+<AuctionSanitizationFlow />
 
 ### Start and end prices
 

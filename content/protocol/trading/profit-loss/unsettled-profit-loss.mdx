@@ -10,7 +10,12 @@ In short: for each dollar withdrawn from realised profits, there must be a corre
 
 If positive P&L is unsettled, it may account for less initial margin for trading perpetuals than USDT. Please see the treatment of non-USD assets here [Cross-Collateral Deposits](/protocol/getting-started/cross-collateral-deposits).
 
-Each market has a maximum imbalanced P&L limit. When the net user P&L in a market breaches the limit, the asset weight will be decreased. Additionally, P&L in excess of the limit is subject to deficit resolutions from the Insurance Fund (up to the market's max insurance fund limit). 
+Each market has a maximum imbalanced P&L limit: a cap on how much net positive P&L (winners minus losers) the market's pool is expected to safely cover. If the net user P&L in a market breaches this limit, the asset weight used to value that P&L as collateral is decreased. If a shortfall still occurs at settlement, the excess above the limit is covered by the Insurance Fund, up to the market's own max insurance fund limit.
+
+For example, say the BTC-PERP market has a maximum imbalanced P&L limit of \$5,000,000 and a max Insurance Fund limit of \$1,000,000 for the market. After a sustained rally, BTC-PERP users are collectively up \$6,000,000 of net unsettled P&L, \$1,000,000 over the limit:
+
+- Because net P&L has breached the \$5,000,000 limit, the asset weight applied to unsettled BTC-PERP P&L is reduced, so it counts for less initial margin toward opening or increasing positions elsewhere.
+- If traders then try to settle or withdraw that P&L and the P&L Pool can't cover the \$1,000,000 excess, the Insurance Fund pays out the shortfall, up to its own \$1,000,000 cap for that market. Any deficit beyond that cap remains unsettled until the pool is replenished by other users' losses.
 
 <Callout type="important">
 Discounting the unsettled P&L lowers the maximum leverage extended for users (and only decreases a user's initial margin).  
