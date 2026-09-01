@@ -114,3 +114,70 @@
    and the hover dim below could never apply. */
 @keyframes dg-draw { to { stroke-dashoffset: 0; } }
 @keyframes dg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ---- Layered flow (Flow.tsx) ------------------------------------------- */
+/* A flow carries structure, not magnitude: one stroke weight everywhere, and
+   the box is the same tonal card the Sankey nodes and the tables use. */
+.dg-box-rect {
+  fill: var(--dg-node);
+  stroke: var(--dg-rule);
+  stroke-width: 1;
+  rx: var(--dg-radius-sm);
+}
+.dg-box[data-tone="signal"] .dg-box-rect { fill: var(--dg-node-signal); stroke: var(--vlc-brand); }
+/* Off-chain has no box: nothing on chain depends on it, and the dashed outline
+   is the one thing a reader must see without reading a label. */
+.dg-box[data-kind="offchain"] .dg-box-rect {
+  fill: none;
+  stroke-dasharray: 4 4;
+}
+
+.dg-edge-line {
+  fill: none;
+  stroke: var(--dg-flow);
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  transition: opacity 180ms var(--dg-ease);
+}
+.dg-edge[data-tone="out"] .dg-edge-line { stroke: var(--dg-flow-out); }
+.dg-edge[data-tone="signal"] .dg-edge-line { stroke: var(--dg-flow-signal); }
+/* An advisory edge: the reader may ignore it and the system still works. */
+.dg-edge-line[data-dashed] { stroke-dasharray: 5 4; }
+
+.dg-arrow path { fill: var(--dg-flow); }
+.dg-arrow[data-tone="out"] path { fill: var(--dg-flow-out); }
+.dg-arrow[data-tone="signal"] path { fill: var(--dg-flow-signal); }
+
+.dg-edge-label {
+  fill: var(--dg-muted);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--x-color-gray-50);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* Hover: keep the active edge, dim the rest. */
+.dg-svg:has(.dg-edge:hover) .dg-edge:not(:hover) { opacity: 0.3; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dg[data-animate]:not([data-inview]) .dg-edge { opacity: 0; }
+  .dg[data-animate]:not([data-inview]) .dg-box { opacity: 0; }
+  .dg[data-animate][data-inview] .dg-edge-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: dg-draw var(--dg-draw) var(--dg-ease) forwards;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+  /* A dashed edge keeps its dashes, so it fades in rather than drawing. */
+  .dg[data-animate][data-inview] .dg-edge-line[data-dashed] {
+    stroke-dasharray: 5 4;
+    stroke-dashoffset: 0;
+    animation: dg-rise 480ms var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+  .dg[data-animate][data-inview] .dg-box {
+    animation: dg-rise 480ms var(--dg-ease) both;
+    animation-delay: calc(var(--dg-col, 0) * var(--dg-stagger));
+  }
+}
