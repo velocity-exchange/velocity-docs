@@ -12,10 +12,10 @@ limits, and the account layouts on this page can change before release.
 
 Velocity seeks to have the best on-chain market structure in order to give users the tightest possible spreads.
 
-In spot markets, we have already seen that PropAMMs give makers superior optionality and therefore
-lead to tight spreads. PropAMMs also have the advantage of being able to react intraslot to price changes
-without waiting for a round-trip latency of an off-chain entity writing quotes. This means that when price
-discovery happens fully on chain, a PropAMM is like a colocated computer at the exchange.
+In spot markets, we have seen that PropAMMs give makers superior optionality and therefore
+lead to tighter spreads. PropAMMs also have the advantage of being able to react intraslot to price changes
+without waiting for the round-trip latency from an off-chain entity writing quotes. When price
+discovery happens fully on chain, a PropAMM acts like a colocated computer at the exchange.
 
 Equally, CLOBs have their use cases, especially for takers. Users need to be able to place resting orders.
 The needs of professional traders and market makers are different. Market makers need frequent cheap updates.
@@ -173,29 +173,30 @@ fill at a recent slot, and it answers with three things:
   accounts that each maker costs
 - the registry entries to carry, and the accounts of each entry
 
-Carry the makers in that order and stop where the transaction runs out of room.
-A book stops its walk at the first maker that the transaction omits. A prefix of
-the list therefore fills, and a gap forfeits the depth behind it.
+A router will pass extra Quoters if possible in price priority. This allows changes
+between route-time and on-chain execution to be handled appropriately by the on-chain router.
+For example, at route time the split may be 50% to maker A, 50% to maker B. At execution time,
+the optimum split may be 40% A, 40% B, 20% C.
 
-The order is not simply the book's walk. Every owner that can stop a walk comes
-first, then every owner that cannot, each group in walk order. An owner whose
-orders all sit below the book's `blocking_min_size` stops nothing, so carrying it
-buys that owner's own size and no reach — which makes it the one to drop when
-locks are short. The book reports which orders can stop a walk, one flag per row,
-so a router never applies the floor itself.
+Makers are carried in price order, and the router stops adding makers when the tx runs out
+of room.
+
+One constraint of this design is that a user must be present for a fill to occur against that order.
+It is therefore important that the router pass all users an order may cross. There are some
+edge cases to be aware of.
+
+  1. Small orders below `blocking_min_size` can be skipped, with depth behind them being filled.
+  This prevents a griefing attack where many dust orders are placed on the book to fill transactions
+  2. Missing users on orders newer than a grace period of slots can also be skipped. An order
+  placed after a transaction is built should not fail the transaction.
 
 <RouterReachSankey />
 
-The room is the reason the off-chain router exists. A transaction locks at most
+A transaction locks at most
 64 accounts, and one maker costs two of them, so no transaction reaches a whole
 market. The off-chain router reads the whole market and chooses the part to
-carry. The router pass on chain then quotes that part, and it can fill nothing
-outside it. The off-chain router should do its best to include the best possible makers,
+carry. The router pass on chain then quotes and fills within that section of the market. The off-chain router should do its best to include the best possible makers,
 the fill will give the best price amongst the limited set.
-
-The two routers differ in what they see, not in what they do. The off-chain
-router sees everything and binds nobody. The on-chain router pass sees one transaction and
-binds every quoter in it.
 
 Velocity operates a router. Any person can operate one. A router holds no key and
 signs nothing. It selects no price. A router that answers badly makes a
@@ -208,7 +209,7 @@ There are two paths for a Velocity order.
 The taker signs an order message. The taker does not sign a transaction, and the
 taker sends no transaction. The message can also name a route: the registry
 entries that the taker permits. Velocity stores a five-byte digest of that list
-on the order.
+on the order so that fillers must include those quoters.
 
 A filler receives the message. The filler builds the transaction, selects the
 account list, and pays the fee. Any person can operate a filler. Two rules hold
