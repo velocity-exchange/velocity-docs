@@ -5,7 +5,7 @@ The DLOB is to be removed. An order will rest in one CLOB market account instead
 of in the `User` account of its owner. The fill route already moves that way: a
 taker remainder that can rest goes onto the book, not into `User.orders`. This
 page describes the DLOB as it works now. New work belongs on the CLOB book. See
-[PropAMM Order Flow](/developers/concepts/propamm-order-flow).
+[PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow).
 </Callout>
 
 Understanding how Velocity's orderbook and matching engine work is essential for market makers. This page covers the DLOB architecture, liquidity priority, and how to access orderbook data.
@@ -66,7 +66,7 @@ The vAMM only quotes at all if it passes the gates checked at fill time: `AmmFil
 The AMM no longer competes as a **JIT maker inside a match**. It is a source with its own ladder and its own allocation. `OrderActionExplanation.OrderFilledWithAMMJit` is retained for historical records and is no longer emitted on the fill path.
 </Callout>
 
-For the full model — the quoter interface, the registry, and the account limits a client must respect — see [PropAMM Order Flow](/developers/concepts/propamm-order-flow). That page calls a liquidity source a **quoter**; this page keeps "source" because the L2 API field is named `sources`.
+For the full model — the quoter interface, the registry, and the account limits a client must respect — see [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow). That page calls a liquidity source a **quoter**; this page keeps "source" because the L2 API field is named `sources`.
 
 Spot markets have no order-book matching at all: `place_spot_order` / `place_and_make_spot_order` / `fill_spot_order` don't exist on-chain, and there's no external-DEX (Serum/Phoenix/OpenBook) fulfillment path either. Both were removed. Spot markets exist only for collateral and borrow-lend; the matching logic above applies to perp markets only.
 

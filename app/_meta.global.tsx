@@ -178,7 +178,7 @@ const META = {
           "index": "",
           "program-structure": "",
           "account-model": "",
-          "propamm-order-flow": "PropAMM Order Flow",
+          "propamm-and-clob-order-flow": "PropAMM and CLOB Order Flow",
           "slot-duration": "Slot Duration",
           "optimizations": "",
           "program-vault-addresses": ""

@@ -1,5 +1,5 @@
 ---
-title: PropAMM Order Flow
+title: PropAMM and CLOB Order Flow
 description: How Velocity fills a perp order across the vAMM, resting user orders, and third-party quoter programs. The call interface, the limits on an external program, and the accounts a client must supply.
 ---
 
@@ -27,7 +27,7 @@ with a CLOB which quotes side-by-side with PropAMMs.
 Because a CLOB is slower and more expensive to write to, orders on the CLOB receive priority over quotes
 from a PropAMM.
 
-# PropAMM Order Flow
+# PropAMM and CLOB Order Flow
 
 Similar to spot PropAMMs, Velocity fills a perp order using a router pass.
 The on-chain router does three things:
