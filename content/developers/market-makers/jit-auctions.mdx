@@ -234,15 +234,22 @@ JIT runs first, DLOB provides backup liquidity if auction doesn't fully fill.
 - You get better prices but not instant fills
 - Use market orders for auction participation (limit orders bypass auction if they don't cross spread)
 
-## AMM as a JIT maker
+## The vAMM as a competing quote
 
-The AMM isn't only the fallback of last resort (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)): inside a DLOB match it can also compete as a JIT maker against your resting order for the same fill. Whether it does depends on a set of hard gates checked at fill time:
+The AMM isn't the fallback of last resort, and it no longer competes as a JIT maker *inside* a match either. It is one liquidity source among several, with its own price ladder and its own share of the fill (see [Orderbook & Matching](./orderbook-and-matching#how-matching-works)).
+
+Two things about it matter when you price against it:
+
+- **It quotes last.** The vAMM builds its ladder after seeing every other source's, so your resting quotes are its last look. It shades its rungs toward rival prices, but only within 5% of its own top price. Outside that band it quotes its own curve.
+- **It fills first at an equal price.** Routing priority is tier 0 for the vAMM, 10 for the CLOB book, 20 for a custom quoter program. At the same price the lowest tier fills first, so matching the vAMM's price does not win you the fill — you have to beat it.
+
+Whether the vAMM quotes at all depends on hard gates checked at fill time:
 
 - `AmmFill` isn't paused for the market (`PerpOperation.AMM_FILL`)
 - the AMM doesn't currently have too much drawdown
 - the oracle (including the MM oracle, when active and recent) is valid and not too volatile vs. the exchange oracle
 
-If any of these gates trips, the AMM is excluded from that DLOB match entirely: you're only competing against other DLOB makers for that fill, not the AMM. This is separate from the auction-timing rules that decide whether the AMM can fill a *fresh* taker order immediately outside of a DLOB match. Practically: don't assume the AMM is always a competing quote inside the auction, during a pause, drawdown, or oracle-stress event it drops out, and DLOB-only makers pick up the full remaining size.
+If any gate trips, the vAMM contributes an empty ladder and the size divides across the remaining sources only. Practically: don't assume the vAMM is always a competing quote — during a pause, drawdown, or oracle-stress event it drops out, and the other makers pick up the full remaining size.
 
 ## JIT Proxy library
 
