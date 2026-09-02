@@ -30,10 +30,10 @@ from a PropAMM.
 ## Avoiding Toxic Flow
 
 In the interest of achieving the tightest possible spreads, Velocity implements maker priority via taker speed bumps.
-There are two paths with which takers undergo a speed bump. Makers can choose to ignore or quote wider for
+There are two paths where takers can undergo a speed bump. Makers can choose to ignore or quote wider for
 taker flows that did not undergo a speed bump.
 
-First, an order placed directly on chain have an `activation_delay_slots` such that the order is
+First, an order placed directly on chain can have an `activation_delay_slots` such that the order is
 only allowed to execute `activation_delay_slots` slots after it is placed. Markets can have a `default_activation_delay_slots`
 greater than 0; which enables a guaranteed taker speed bump.
 
@@ -250,7 +250,10 @@ The taker builds and signs the transaction. There is no message and no filler.
 The order holds no route digest, and neither rule above applies. The account
 list is the choice of the taker, and the fill is the responsibility of the
 taker. A client on this path calls a router, or it calls `splitAcrossQuoters` in
-the SDK, to decide what to carry.
+the SDK, to decide what to carry. The router view takes the flow as an
+argument (`taker_served_window`), so a client that prices unprotected flow
+sees no depth from a bumped book or a protected quoter — the books it would
+actually reach.
 
 This path is unattested. On a market with an activation delay, it cannot take
 in the same transaction: the order rests through its delay window and matches
@@ -489,8 +492,11 @@ boundary, and forwards the verdict to every quoter on the wire as
 other field Velocity asserts on the wire — the user set, the caps, the taker.
 The field states a wider fact than the co-signature: the taker's flow served a
 protection window. An attested transaction served the SWIFT hold. A crank that
-fills a rested order serves the book's activation delay — the order it settles
-waited, in front of every maker. Both earn the flag.
+fills a rested order earns the flag by measured rest: the orders it settles
+must have rested at least two slots, above the SWIFT hold. Construction alone
+is not enough — on a market with a zero default delay, "rested" could mean
+the previous transaction, and a fresh order could wear the flag into a
+protected quoter by resting and cranking back to back.
 
 The co-signature states that the order served its delay off chain, in
 front of the makers. SWIFT receives an order message, broadcasts it to the
