@@ -501,16 +501,11 @@ order's flow, costs no signature fee, and the same blob serves every keeper —
 the order still fills once.
 
 Velocity verifies the attestation once, at its own boundary, and forwards the
-verdict to every quoter on the wire as `taker_served_window`. A quoter trusts
-that field the way it trusts every other field Velocity asserts on the wire —
-the user set, the caps, the taker. The field states a wider fact than the
-attestation: the taker's flow served a protection window. An attested
-transaction served the SWIFT hold. A crank that fills a rested order earns
-the flag by measured rest: the orders it settles must have rested at least
-two slots, above the SWIFT hold. Construction alone is not enough — on a
-market with a zero default delay, "rested" could mean the previous
-transaction, and a fresh order could wear the flag into a protected quoter by
-resting and cranking back to back.
+verdict to every quoter on the wire as `taker_served_window`. This field can indicate multiple cases,
+all ensure a taker was delayed. Either (a) attested
+transaction served the SWIFT hold or (b) a crank that fills a rested order earns
+the flag by measured rest; the orders it settles must have rested at least
+two slots, above the SWIFT hold.
 
 On a market whose default delay is more than zero:
 
