@@ -2,6 +2,7 @@
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Accordions, Accordion } from "fumadocs-ui/components/accordion";
 
 export type SDKTab = {
   label: string;
@@ -36,43 +37,42 @@ export function SDKDocTabs({ tabs }: SDKDocTabsProps) {
         <Tab key={tab.label} value={tab.label}>
           {tab.example ? <div>{tab.example.content}</div> : null}
           {tab.heading || tab.description || tab.content ? (
-            <details className="">
-              {tab.heading ? (
-                <summary className="">
-                  <svg
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    fill="none"
-                    strokeWidth="3"
-                    height="1em"
-                    className=";summary:first-child&gt;&amp;]:rotate-90 "
-                  >
-                    <path
-                      d="M9 5l7 7-7 7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    ></path>
-                  </svg>
-                  <div className="">
-                    <code className="fd-code ">
-                      {tab.heading}
-                    </code>
-                    {tab.link ? (
-                      <a
-                        href={tab.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Reference ↗
-                      </a>
-                    ) : null}
-                  </div>
-                </summary>
-              ) : null}
-              {tab.description ? <i>{tab.description}</i> : null}
-              {tab.content ??
-                (tab.placeholder ? <Placeholder label={tab.label} /> : null)}
-            </details>
+            // A hand-rolled <details>/<summary> used to live here, copied from
+            // fumadocs' own rendered accordion markup with the arrow-variant
+            // class HTML-escaped in transit ("&gt;"/"&amp;" instead of ">"/"&"),
+            // so it never matched and the rotation never applied. On top of
+            // that, nothing suppressed the browser's native <summary> marker,
+            // so readers saw that plus the dead custom arrow stacked on top of
+            // each other. Real Accordion component, one icon, one owner.
+            <Accordions type="single">
+              <Accordion
+                value={tab.heading ?? tab.label}
+                title={
+                  tab.heading ? (
+                    <span className="flex flex-1 items-center justify-between gap-2">
+                      <code className="fd-code">{tab.heading}</code>
+                      {tab.link ? (
+                        <a
+                          href={tab.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-fd-muted-foreground text-xs font-normal hover:text-fd-foreground"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Reference ↗
+                        </a>
+                      ) : null}
+                    </span>
+                  ) : (
+                    tab.label
+                  )
+                }
+              >
+                {tab.description ? <i>{tab.description}</i> : null}
+                {tab.content ??
+                  (tab.placeholder ? <Placeholder label={tab.label} /> : null)}
+              </Accordion>
+            </Accordions>
           ) : null}
         </Tab>
       ))}
