@@ -27,6 +27,22 @@ with a CLOB which quotes side-by-side with PropAMMs.
 Because a CLOB is slower and more expensive to write to, orders on the CLOB receive priority over quotes
 from a PropAMM.
 
+## Avoiding Toxic Flow
+
+In the interest of achieving the tightest possible spreads, Velocity implements maker priority via taker speed bumps.
+There are two paths with which takers undergo a speed bump. Makers can choose to ignore or quote wider for
+taker flows that did not undergo a speed bump.
+
+First, an order placed directly on chain have an `activation_delay_slots` such that the order is
+only allowed to execute `activation_delay_slots` slots after it is placed. Markets can have a `default_activation_delay_slots`
+greater than 0; which enables a guaranteed taker speed bump.
+
+Second, orders placed via Swift will be held for a configurable period of time. When those orders reach the chain,
+they will have an attestation that they underwent a speed bump. This allows for what feels like
+synchronous placement to a user, while avoiding toxic flow.
+
+In both cases makers are able to see the orders before they execute. For more information see [The taker speed bump](#the-taker-speed-bump)
+
 # PropAMM and CLOB Order Flow
 
 Similar to spot PropAMMs, Velocity fills a perp order using a router pass.
@@ -389,11 +405,6 @@ which entries are uninvited. Signing a route is how a taker earns this test.
 
 ## The activation delay
 
-Velocity gives a maker one guarantee: no order matches against a maker's quote
-before the maker could see that order. Two mechanisms carry the guarantee. The
-activation delay carries it on chain. [Attested flow](#attested-flow) carries
-it off chain, and it is the only exception to the delay.
-
 Each order on the book carries an `activation_slot`: the placement slot plus a
 delay in slots. Before that slot the order is visible and is not matchable. A
 quote passes over it. An execute cannot fill it. A cross cannot fire against
@@ -401,9 +412,6 @@ it. A cancel of a maker's quote is not delayed. A rested remainder is the one
 exception: its owner cannot cancel it before the activation slot, because
 [the remainder auction](#the-remainder-auction) needs an order that makers can
 line up against.
-
-The market sets the delay bounds, and `order_rules_v0` reports them, so a
-client builds against the live values.
 
 | Value | Meaning |
 | --- | --- |
@@ -416,10 +424,10 @@ that asks for a shorter one fails with `UnattestedFastActivation`.
 
 ### The taker speed bump
 
-The delay also binds the taker. On a market whose default delay is more than
-zero, an unattested order cannot take in the transaction that places it. The
+On a market whose default delay is more than
+zero, an unattested order cannot take in the same transaction that places it. The
 order rests on the book through its delay window, and it matches at its
-activation slot. Attested flow is the one path to a synchronous take.
+activation slot. Attested flow is the only path to a synchronous take.
 
 A taker on such a market therefore has two choices. Serve the delay on the
 book, in front of every maker. Or send the order through
@@ -427,11 +435,6 @@ book, in front of every maker. Or send the order through
 of every maker. Both choices show the order to the makers before it can match.
 A market with a default delay of zero drops the speed bump and permits a
 synchronous unattested take.
-
-An unattested shape that demands a synchronous outcome fails with
-`UnattestedSynchronousTake` instead of resting. An immediate-or-cancel order
-has nothing to rest. A `place_and_take` success condition measures a fill that
-the transaction will not perform.
 
 A keeper fill of an order that already rests — `fill_perp_order`, and
 `fill_legacy_dlob_order` for orders in `User.orders` — still runs unattested.
@@ -441,13 +444,12 @@ auction.
 
 ### Price decides the match
 
-Inside the delay window, speed buys nothing.
+Inside the delay window, transaction landing ordering/speed buys nothing.
 
-A maker that must react to a new order has the whole window to act, because a
-cancel takes effect at once. At the activation slot, Velocity's cranks fire the
-match, and the best-priced order on the book wins it. The winner is not the
-first transaction to land. Landing infrastructure and priority fees decide
-nothing inside the window.
+A maker that must react to a new order has the whole window to act.
+At the activation slot, Velocity's cranks fire the match, and the best-priced 
+order on the book wins it. With price-time priority on the CLOB and pro rata elsewhere,
+there is no priority fee race to land a transaction first.
 
 ### The remainder auction
 
@@ -466,12 +468,10 @@ that quoted 100 lost on price, not on latency.
 
 While a counter-order crosses it, a rested remainder cannot be taken. The book
 skips it in `quote_v0` and in `execute_v0`, exactly as it skips an order before
-its activation slot. Without that rule, a caller at the activation slot could
-take the remainder at its limit price and keep the improvement, and the fill
-would go to landing infrastructure again.
+its activation slot.
 
-The window binds the taker too. The owner cannot cancel a rested remainder
-before its activation slot, and neither can a delegate. An order that its
+The window binds the taker as well. The owner cannot cancel a rested remainder
+before its activation slot. An order that its
 owner can pull the moment a maker lines up offers the makers nothing to line
 up against. Two limits stand: `max_ts` still expires the order, and a
 liquidation force-cancel is exempt, so a distressed account is never blocked.
@@ -483,15 +483,19 @@ An attestation is a co-signature. Velocity names one flow-authority key on its
 signs with that key. A transaction that the flow authority co-signed is
 attested.
 
-Velocity and each quoter read the co-signature from the instructions sysvar. An
-attestation is not a flag in the arguments, because any caller can write a
-flag. A caller cannot write the co-signature.
+Velocity reads the co-signature from the instructions sysvar, once, at its own
+boundary, and forwards the verdict to every quoter on the wire as
+`taker_served_window`. A quoter trusts that field the way it trusts every
+other field Velocity asserts on the wire — the user set, the caps, the taker.
+The field states a wider fact than the co-signature: the taker's flow served a
+protection window. An attested transaction served the SWIFT hold. A crank that
+fills a rested order serves the book's activation delay — the order it settles
+waited, in front of every maker. Both earn the flag.
 
-The co-signature states one fact: the order served its delay off chain, in
+The co-signature states that the order served its delay off chain, in
 front of the makers. SWIFT receives an order message, broadcasts it to the
 maker WebSocket feed, holds it, and co-signs the fill transaction after the
-hold. The default hold is 300 milliseconds. A maker therefore saw an attested order during
-the hold, before the fill transaction existed.
+hold. The default hold is 300 milliseconds.
 
 On a market whose default delay is more than zero:
 
@@ -507,24 +511,28 @@ book through its delay window. An attested order was visible on the SWIFT feed
 through its hold window. Every order that can match against a maker was
 therefore visible to that maker first.
 
-### What a maker does with the attestation
+### What a maker does with the flag
 
-A quoter can read the co-signature itself and answer differently for attested
+A quoter can read `taker_served_window` and answer differently for protected
 flow. The midpoint program has the check built in: the maker sets
 `require_attested_flow` on an instance, and the instance quotes and fills
-attested flow only. Every taker that the instance faces then passed the SWIFT
-hold. The maker can quote a tighter spread for that flow, because the flow
-cannot race the maker's own mid update inside the hold. A custom quoter
-program applies the same check with the instructions sysvar.
+protected flow only. Every taker that the instance faces then served a window
+— the SWIFT hold, or the delay window on the book. The maker can quote a
+tighter spread for that flow, because the flow cannot race the maker's own mid
+update inside the window it served. A custom quoter program applies the same
+check by reading the same field.
+
+The second window matters. An unattested order rests through its delay and is
+filled by Velocity's cranks, and the crank carries the flag, so a protected
+instance still fills that order. A taker that waited is not locked out of the
+liquidity that demanded the wait.
 
 ## The quoter interface
 
 <QuoterCallFlow />
 
-A quoter answers two calls. Both calls carry the same request shape, and both
-answer in the same framing. The `quoter-spec` crate declares every type on this
-wire. Velocity, the CLOB, and the midpoint program all use those declarations,
-so no program mirrors them by hand.
+A quoter answers two calls. The `quoter-spec` crate declares every type on this
+wire. Velocity, the CLOB, and the midpoint program all use those declarations.
 
 | Call | The question | The answer |
 | --- | --- | --- |
@@ -709,10 +717,11 @@ Three rules limit the damage from a failed price feed.
   maker writes that side again. A taker cannot consume one rung twice while the
   maker changes the mid price.
 
-An instance can also refuse unattested flow. The maker sets
-`require_attested_flow`, and the instance quotes and fills only transactions
-that the flow authority co-signed. [Attested flow](#attested-flow) gives what
-the maker gains from that.
+An instance can also refuse unprotected flow. The maker sets
+`require_attested_flow`, and the instance quotes and fills only takers whose
+flow served a window — the SWIFT hold or the book's delay, as
+`taker_served_window` on the quoter wire reports. [Attested
+flow](#attested-flow) gives what the maker gains from that.
 
 Velocity treats an instance as it treats any other quoter program. An
 administrator approves the registry entry. The maker can make the entry
