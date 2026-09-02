@@ -98,8 +98,10 @@ function renderEnumVariants(variants?: Array<{ name?: string; docs?: string }>) 
         </tr>
       </thead>
       <tbody>
-        {variants.map((variant) => (
-          <tr key={variant.name ?? "variant"}>
+        {variants.map((variant, index) => (
+          // Fallback "variant" collided across every unnamed variant in one
+          // enum, all keyed identically. Index makes each one unique.
+          <tr key={`${variant.name ?? "variant"}-${index}`}>
             <td>
               <code className="nextra-code">{variant.name ?? "-"}</code>
             </td>
@@ -187,8 +189,12 @@ function renderSignatureTable(params: Array<{ name: string; type: string }>) {
         </tr>
       </thead>
       <tbody>
-        {params.map((param) => (
-          <tr key={param.name}>
+        {params.map((param, index) => (
+          // Unlike TypeScript's TypeField, this param has no fallback at all:
+          // an unnamed or destructured Rust argument reports param.name as
+          // undefined, so key={param.name} was literally key={undefined} on
+          // more than one row of the same signature.
+          <tr key={`${param.name ?? "param"}-${index}`}>
             <td>
               <code className="nextra-code">{param.name}</code>
             </td>

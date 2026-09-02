@@ -4,15 +4,9 @@ title: "Privacy Policy"
 
 import CanvasText from "../../../components/CanvasText";
 
-
-<CanvasText
-  width={600}
-  mobileWidth={320}
-  height={32}
-  mobileHeight={32}
-  fontSize={24}
-  textContent={`Privacy Policy`}
-/>
+{/* The page's real title, from frontmatter above, already renders as the H1.
+    This used to carry a second CanvasText block drawing "Privacy Policy"
+    again as its own canvas-painted heading, directly under the real one. */}
 
 <CanvasText
   width={600}

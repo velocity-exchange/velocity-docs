@@ -94,8 +94,12 @@ function renderSignatureTable(params: TypeField[]) {
         </tr>
       </thead>
       <tbody>
-        {params.map((param) => (
-          <tr key={param.name}>
+        {params.map((param, index) => (
+          // `param.name` is empty for an object-destructured argument
+          // (`generateDefinition` has no name to report), so two such
+          // parameters in one signature both keyed as "" and React warned
+          // about a missing key. Index makes the key unique regardless.
+          <tr key={`${param.name}-${index}`}>
             <td>
               <code className="fd-code">{param.name}</code>
             </td>
@@ -133,8 +137,8 @@ function renderPropertyTable(allEntries: TypeField[]) {
         </tr>
       </thead>
       <tbody>
-        {entries.map((entry) => (
-          <tr key={entry.name}>
+        {entries.map((entry, index) => (
+          <tr key={`${entry.name}-${index}`}>
             <td>
               <code className="fd-code">{entry.name}</code>
             </td>
@@ -178,8 +182,8 @@ function renderReturnFieldTable(fields: TypeField[]) {
         </tr>
       </thead>
       <tbody>
-        {fields.map((field) => (
-          <tr key={field.name}>
+        {fields.map((field, index) => (
+          <tr key={`${field.name}-${index}`}>
             <td>
               <code className="fd-code">{field.name}</code>
             </td>

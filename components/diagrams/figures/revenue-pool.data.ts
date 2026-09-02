@@ -17,7 +17,12 @@ import type { SankeySpec } from "../layout/sankey";
 export const revenuePoolSpec: SankeySpec = {
   nodes: [
     { id: "fees", label: "Protocol fees", note: "deposit interest, liquidations, trading fees", column: 0 },
-    { id: "revenue_pool", label: "Revenue pool", note: "SpotMarket.revenuePool, staging only", column: 1 },
+    // Note is deliberately short, not "SpotMarket.revenuePool, staging only": this
+    // page is protocol tree, no program identifiers, and at 4 columns in 600px a
+    // note past ~20 characters runs into whatever sits at the next column's label,
+    // which is exactly what the field name did to "Insurance fund vault" one
+    // column over.
+    { id: "revenue_pool", label: "Revenue pool", note: "staging only", column: 1 },
     { id: "protocol_pool", label: "Protocol fee pool", note: "direct, withdrawable", column: 1, tone: "signal" },
     { id: "if_vault", label: "Insurance fund vault", note: "100% staker-owned", column: 2 },
     { id: "pnl_pool", label: "Perp market P&L pool", note: "only on a P&L deficit", column: 3, tone: "out" },
