@@ -1,0 +1,203 @@
+---
+title: "Reading state"
+---
+
+Every read in `velocity-rs` comes from one of two places: the local cache filled by a subscription, or an RPC call. Which one a given call uses is decided by the method name, and getting that wrong is the most common performance mistake in a bot built on this crate.
+
+## The accessor pattern
+
+Synchronous `try_get_*` methods read the cache. They do no I/O, so they are safe to call inside a per-slot loop, and they fail if that account was never subscribed. Async `get_*` methods go to RPC on every call.
+
+| Cached, synchronous | RPC, async | Returns |
+|---|---|---|
+| `try_get_account::<T>(&pubkey)` | `get_account_value::<T>(&pubkey)` | Any zero-copy program account |
+| `try_get_perp_market_account(index)` | `get_perp_market_account(index)` | `PerpMarket` |
+| `try_get_spot_market_account(index)` | `get_spot_market_account(index)` | `SpotMarket` |
+| `try_get_oracle_price_data_and_slot(market)` | `get_oracle_price_data_and_slot(market)` | `Oracle` |
+| `state_account()` | | `State` |
+| `account_raw(&pubkey)` | | `Arc<[u8]>` of the raw account bytes |
+
+The `*_and_slot` variants return the slot the data was observed at alongside the data, which is what to check before acting on a price. `try_get_account` is generic over anything that is `AccountDeserialize + Pod + Discriminator`, so it covers `User`, `UserStats`, `PerpMarket`, `SpotMarket` and `State` with one call.
+
+<SDKDoc>
+  <Rust name="try_get_account" type="method" owner="VelocityClient">
+```rust
+use velocity_rs::types::accounts::User;
+
+let sub_account = client.wallet().sub_account(0);
+client.subscribe_account(&sub_account).await?;
+
+// no network round trip after this point
+let user: User = client.try_get_account(&sub_account)?;
+let position = user.get_perp_position(0).ok();
+```
+  </Rust>
+</SDKDoc>
+
+The client also carries convenience reads that walk a `User` account: `all_orders`, `all_positions`, `perp_position`, `spot_position`, `unsettled_positions`, `get_order_by_id` and `get_order_by_user_id`. These are async and go to RPC, so they belong in setup and reconciliation code, not in a quoting loop.
+
+## Market configs against live markets
+
+`client.program_data()` returns a `ProgramData`: the market accounts as they were when the client started, plus the address lookup tables and a cached `State`. It is the right source for static metadata, the mint of a spot market, its token program, the market index alignment. It is the wrong source for anything that moves, because open interest, borrows and AMM reserves in it are frozen at startup.
+
+<SDKDoc>
+  <Rust name="ProgramData" type="struct">
+```rust
+// static metadata: fine from ProgramData
+let spot_config = client
+    .program_data()
+    .spot_market_config_by_index(0)
+    .expect("market 0 exists");
+let mint = spot_config.mint;
+
+// live values: read the subscribed market account instead
+let perp_market = client.try_get_perp_market_account(0)?;
+```
+  </Rust>
+</SDKDoc>
+
+`client.market_lookup("sol-perp")` resolves a symbol to a `MarketId`, which saves hardcoding indices that differ between mainnet and devnet. `get_all_perp_market_ids`, `get_all_spot_market_ids` and `get_all_market_ids` return the active markets, skipping de-listed and settled ones, so a bot that iterates them picks up a new listing on restart without a code change.
+
+`MarketId` pairs an index with a market type. `MarketId::perp(0)`, `MarketId::spot(1)` and the `MarketId::QUOTE_SPOT` constant for the quote spot market are the usual constructors; `index()`, `kind()`, `is_perp()` and `is_spot()` read it back.
+
+## The maps
+
+Three maps hold the cache, and the client accessors above are thin wrappers over them. Code normally does not touch them directly, but knowing which one owns a piece of state points to which subscription is missing.
+
+**`MarketMap<T>`** (`velocity_rs::marketmap`) holds `PerpMarket` or `SpotMarket` accounts keyed by market index, along with the slot each was seen at. `oracles()` returns the oracle pubkey and source for every market it holds, which is how the oracle map learns what to subscribe to.
+
+**`OracleMap`** (`velocity_rs::oraclemap`) holds an `Oracle` per oracle pubkey and source. An oracle shared by several markets is stored once. `Oracle` carries `pubkey`, `data` (the `OraclePriceData` with the price), `source`, the `slot` it was read at, and the `raw` account bytes.
+
+**`AccountMap`** (`velocity_rs::account_map`) holds arbitrary subscribed accounts as raw bytes, which is what makes `try_get_account` generic. `account_data::<T>`, `account_data_and_slot::<T>` and `account_ref::<T>` decode on read; `iter_accounts_with::<T>` walks everything of one type, which is how a DLOB is bootstrapped.
+
+<SDKDoc>
+  <Rust name="AccountMap" type="struct">
+```rust
+// requires the `unsafe_pub` feature
+let account_map = client.backend().account_map();
+
+// pull every User account that has at least one open order
+account_map
+    .sync_user_accounts(vec![velocity_rs::memcmp::get_user_with_order_filter()])
+    .await
+    .expect("synced user accounts");
+```
+  </Rust>
+</SDKDoc>
+
+The `velocity_rs::memcmp` module holds the ready-made RPC filters for that call: `get_user_filter`, `get_non_idle_user_filter`, `get_user_with_order_filter`, `get_user_with_auction_filter`, `get_user_stats_filter` and the referrer variants. Passing the right filter is the difference between fetching a few thousand accounts and fetching all of them.
+
+### The standalone user map
+
+`GlobalUserMap` (`velocity_rs::usermap`) is a separate thing from the client's account map: it subscribes to every non-idle `User` account over a WebSocket program subscription and keeps them in a `DashMap` keyed by the base58 address string. It carries its own `RpcClient` and syncs itself over `getProgramAccounts` before subscribing.
+
+Use it for a whole-protocol view of user accounts without a gRPC endpoint. Where gRPC is already in place, `GrpcSubscribeOpts::usermap_on()` provides the same coverage through the client's own cache, and everything else in the crate reads that cache rather than this map.
+
+## Prices, slots, and the oracle a fill actually uses
+
+`client.oracle_price(market).await` returns the price as an `i64` in `PRICE_PRECISION`, which is 1e6, so 123_000_000 is $123.00. The cached form is `try_get_oracle_price_data_and_slot`, which also returns the slot.
+
+That is the exchange oracle. It is not always the number the program prices a fill against.
+
+**`try_get_mmoracle_for_perp_market(market_index, current_slot)`** applies the program's market-maker oracle logic and the `State` validity guard rails, and returns the safe oracle price data. This is what a filler should quote against, and it is what `DLOBBuilder`'s slot handler feeds into the book.
+
+**`try_get_projected_perp_market(market_index, slot, oracle_price_override)`** returns a copy of the perp market with its AMM curve re-projected onto the current oracle, mirroring the refresh the program performs before quoting. The cached account holds the curve as of its last onchain update, so a crossing check against the cached reserves mis-prices the vAMM quote whenever the oracle has moved since. Use the projected market for fill decisions.
+
+Slot timing has the same shape. `client.slot_clock()` returns the full `SlotClock` from the live `State`, including synchronized transitions, and `client.slot_duration_at(slot)` gives the duration in effect at a slot. Prefer both over reading `State.slot_duration_ms` directly, which lags the live duration until the matching transition is synchronized. The free functions `slot_clock_from_state` and `slot_duration_from_state` do the same from a `State` already on hand. [Slot duration and wall-clock time](/developers/concepts/slot-duration) explains why this is not a constant.
+
+## Precision
+
+Program integers are fixed point. `velocity_rs::math::constants` holds the scaling factors, and mixing two of them up produces numbers that look plausible and are wrong by three orders of magnitude.
+
+| Constant | Value | Applies to |
+|---|---|---|
+| `PRICE_PRECISION` | 1e6 | Prices, oracle prices, auction prices |
+| `BASE_PRECISION` (`AMM_RESERVE_PRECISION`) | 1e9 | Perp base asset amounts, AMM reserves |
+| `QUOTE_PRECISION` | 1e6 | Quote amounts, collateral, P&L |
+| `PEG_PRECISION` | 1e6 | AMM peg multiplier |
+| `MARGIN_PRECISION` | 10,000 | Margin ratios and weights, so 500 is 5% |
+| `PERCENTAGE_PRECISION` | 1e6 | Percentages, where 1e6 is 100% |
+| `SPOT_BALANCE_PRECISION` | 1e9 | Spot balances |
+| `FUNDING_RATE_BUFFER` | 1,000 | Funding rate scaling |
+
+Each comes in the width needed: `PRICE_PRECISION_U64`, `BASE_PRECISION_I128` and so on.
+
+Tick sizes are per market and are read off the market account through the `MarketPrecision` trait, which both `PerpMarket` and `SpotMarket` implement. An order whose price is not a multiple of the tick, or whose size is not a multiple of the step, is rejected onchain.
+
+<SDKDoc>
+  <Rust name="MarketPrecision" type="trait">
+```rust
+use velocity_rs::math::constants::{BASE_PRECISION_U64, PRICE_PRECISION_U64};
+use velocity_rs::types::MarketPrecision;
+
+/// quantize `amount` to `tick_size`, rounding down
+fn standardize_amount(amount: u64, tick_size: u64) -> u64 {
+    amount.saturating_sub(amount % tick_size)
+}
+
+let market = client.try_get_perp_market_account(0)?;
+let price = standardize_amount(123 * PRICE_PRECISION_U64, market.price_tick());
+let size = standardize_amount(5 * BASE_PRECISION_U64, market.quantity_tick())
+    .max(market.min_order_size());
+```
+  </Rust>
+</SDKDoc>
+
+`velocity_rs::math` also exposes `standardize_price`, `standardize_price_i64`, `standardize_base_asset_amount` and `standardize_base_asset_amount_ceil`, which round with an explicit direction rather than always down.
+
+## Decoding a raw account update
+
+Program accounts are zero-copy and 16-byte aligned, because they hold `u128` and `i128` fields. Anchor's `try_deserialize` casts the account body by reference, which panics on the byte-aligned `Vec<u8>` a subscription callback delivers: `from_bytes` reports `TargetAlignmentGreaterAndInputNotAligned`.
+
+Use the crate's alignment-safe reader, which copies into a correctly aligned owned value.
+
+```rust
+use velocity_rs::types::accounts::PerpMarket;
+
+// Some(PerpMarket) on success, None if the data is not a PerpMarket
+let market = velocity_rs::utils::try_deser_zero_copy::<PerpMarket>(&update.data);
+```
+
+`deser_zero_copy` is the panicking form for data already validated. This applies to every raw account update, whether it arrives from a WebSocket callback or a gRPC one.
+
+## Offchain margin math
+
+`MarketState` is a lock-free snapshot of market and oracle data built for repeated margin evaluation. Readers take a consistent snapshot with `load()` for the cost of one atomic load; writers publish with a clone-modify-publish update. It exists so a liquidator can evaluate thousands of accounts per slot without going through `MarketMap` and `OracleMap` indirection on every one.
+
+<SDKDoc>
+  <Rust name="calculate_simplified_margin_requirement" type="method" owner="MarketState">
+```rust
+use velocity_rs::market_state::MarketStateData;
+use velocity_rs::types::{MarginRequirementType, MarketId};
+use velocity_rs::MarketState;
+
+let oracle = client
+    .try_get_oracle_price_data_and_slot(MarketId::perp(0))
+    .expect("oracle cached");
+
+let market_state = MarketState::new(MarketStateData::default());
+market_state.set_perp_market(client.try_get_perp_market_account(0)?);
+market_state.set_perp_oracle_price(0, oracle.data);
+
+let calc = market_state.calculate_simplified_margin_requirement(
+    &user,
+    MarginRequirementType::Initial,
+    None, // optional margin buffer, in MARGIN_PRECISION
+)?;
+
+if !calc.meets_margin_requirement() {
+    println!("shortage: {}", calc.margin_requirement as i128 - calc.total_collateral);
+}
+```
+  </Rust>
+</SDKDoc>
+
+`SimplifiedMarginCalculation` carries `total_collateral`, `margin_requirement`, the buffered forms of both, and the per-market `IsolatedMarginCalculation` array for isolated positions. Its helpers answer the questions directly: `free_collateral()`, `meets_margin_requirement()`, `meets_cross_margin_requirement()`, `meets_isolated_margin_requirement(market_index)` and `margin_shortage()`.
+
+This is an offchain-optimized alternative to the program's own margin routine. It drops the map indirection and fuel accounting, and it can override oracle prices with Pyth prices through `MarketStateData`, which is how a fill is evaluated against a price about to be posted in the same transaction. For everything else, `velocity_rs::math` mirrors the program: `get_leverage`, `get_spot_asset_value`, `calculate_margin_requirements`, `calculate_liquidation_price_inner`, `calculate_unrealized_pnl_inner`, `calculate_max_pct_to_liquidate`, `get_auction_price`, `is_auction_complete` and `is_resting_limit_order`.
+
+## Spot interest staleness
+
+The program refuses to value a spot borrow for margin through an index that has not accrued recently, and rejects the transaction with `SpotMarketInterestStaleForMargin`. It applies on withdraw, transfer, swap, isolated-position withdraw, and on any perp fill, for the taker and every maker alike. Only borrow positions count.
+
+`client.stale_spot_interest_markets(&users, now)` lists the markets that need cranking before a transaction touching those accounts can land, so a filler can prepend `update_spot_market_cumulative_interest` for each one. Two caveats: the result is a superset, because it does not model the program's exemption for un-booked interest under one token unit, and a market missing from the cache is skipped, so a client not subscribed to a market gets no crank for it. Cranking everything it names always clears the check. [Troubleshooting](/developers/trading-automation/troubleshooting#spotmarketintereststaleformargin-on-a-withdrawal) has the window lengths and the reasoning.

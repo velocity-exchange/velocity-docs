@@ -1,4 +1,6 @@
-# Quickstart: Create and Run a Vault
+---
+title: "Quickstart: Create and Run a Vault"
+---
 
 This walks through creating a vault, updating its parameters, onboarding depositors, and handling day-to-day manager operations via the `vaults-sdk` CLI. For a conceptual overview of roles and fee constraints, see [Vault Managers](/developers/vault-managers).
 
@@ -8,8 +10,8 @@ This walks through creating a vault, updating its parameters, onboarding deposit
 
 | Parameter | Description |
 | --------- | ----------- |
-| **`market-index`** / **`spotMarketIndex`** | Deposit token (e.g. 0 = USDT on mainnet-beta, dUSDT on devnet). |
-| **`redeem-period`** | Withdrawal cooldown in seconds (often 3–7 days). |
+| **`market-index`** / **`spotMarketIndex`** | Spot market index of the deposit token. Read the live spot market accounts to map an index to a token. |
+| **`redeem-period`** | Withdrawal cooldown in seconds (often three to seven days; the CLI default is 604,800 seconds, seven days). |
 | **`max-tokens`** | Capacity / risk control. |
 | **`management-fee`** | Annualized management fee. |
 | **`profit-share`** | Performance fee on realized gains. |
@@ -19,8 +21,12 @@ This walks through creating a vault, updating its parameters, onboarding deposit
 
 Vault initialization is permissionless. From the `@velocity-exchange/vaults-sdk` CLI (`packages/vaults-sdk` in the `velocity-v1` monorepo):
 
+<Callout type="warning">
+The `velocity-v1` monorepo is not public yet. It will be published once the post-fork audit report is final. Until then, ask the team for access to run these commands.
+</Callout>
+
 ```bash
-git clone https://github.com/velocity-exchange/velocity-v1.git
+git clone <velocity-v1>
 cd velocity-v1
 bun install                       # once, at the repo root
 cd packages/vaults-sdk
@@ -34,15 +40,15 @@ bun run cli -- init-vault \
   --profit-share 20
 ```
 
-`--management-fee`/`--profit-share` take a plain percentage number (`2` = 2%, not basis points): the CLI scales it against the on-chain `PERCENTAGE_PRECISION` (1e6 = 100%), and `initialize_vault` rejects any value ≥ 100%.
+`--management-fee`/`--profit-share` take a plain percentage number (`2` = 2%, not basis points): the CLI scales it against the onchain `PERCENTAGE_PRECISION` (1e6 = 100%), and `initialize_vault` rejects any value ≥ 100%.
 
 The CLI reads `-u/--url` (or `RPC_URL`) and `-k/--keypair` (or `KEYPAIR_PATH`) for the RPC endpoint and signer; `--env` selects `devnet` or `mainnet-beta` (default `mainnet-beta`).
 
-Add `--permissioned` and `--min-deposit-amount <amount>` if you want whitelisted depositors and a minimum deposit size. Vault name must be unique.
+Add `--permissioned` and `--min-deposit-amount <amount>` for whitelisted depositors and a minimum deposit size. Vault name must be unique.
 
 ### Update parameters and enable trading
 
-After creation you can lower fees, shorten the redeem period, or adjust caps immediately (within the one-way constraints described in [Vault Managers](/developers/vault-managers)):
+After creation the manager can lower fees, shorten the redeem period, or adjust caps immediately (within the one-way constraints described in [Vault Managers](/developers/vault-managers)):
 
 ```bash
 bun run cli -- manager-update-vault \
@@ -65,7 +71,7 @@ bun run cli -- manager-update-fees \
   --timelock-duration 604800
 ```
 
-`admin-init-fee-update` creates the `FeeUpdate` account the queue is stored in (an admin action); `manager-update-fees` then queues the new fee, and calling it again after the timelock matures installs it. Use `admin-delete-fee-update` to cancel a pending queue.
+`admin-init-fee-update` creates the `FeeUpdate` account the queue is stored in (an admin action); `manager-update-fees` then queues the new fee, and calling it again after the timelock matures installs it. To cancel, the CLI exposes only `admin-delete-fee-update`, which closes the account entirely. The manager can withdraw a queued update without an admin, but only through the SDK's `managerCancelFeeUpdate`; there is no CLI command for it.
 
 To enable margin trading on the vault:
 

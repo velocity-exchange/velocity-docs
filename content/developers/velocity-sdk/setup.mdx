@@ -1,94 +1,28 @@
-# Setup
+---
+title: "Setup"
+---
 
-The examples below use placeholders like `<RPC_URL>` and `<KEYPAIR_PATH>`.
+This page goes from an empty project to a subscribed `VelocityClient`. Examples use placeholders like `<RPC_URL>` and `<KEYPAIR_PATH>`.
 
-### Program Addresses
+## Install
 
-| Network | Program ID |
-|---|---|
-| Velocity (mainnet & devnet) | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` |
-| Velocity Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` |
-
-Velocity uses the same program ID on devnet and mainnet-beta. Velocity is an entirely new deployment, so user accounts must be re-initialized and balances start fresh; no prior on-chain state carries over.
-
-You can also import the Velocity program ID directly from the SDK:
-
-<SDKDoc>
-  <TypeScript name="VELOCITY_PROGRAM_ID" type="variable">
-```js
-import { VELOCITY_PROGRAM_ID } from "@velocity-exchange/sdk";
-
-// The Velocity program's public key on mainnet-beta and devnet.
-// Use this when deriving PDAs or referencing the program directly.
-console.log(VELOCITY_PROGRAM_ID);
-// vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P
+```bash
+bun add @velocity-exchange/sdk
 ```
-  </TypeScript>
-</SDKDoc>
 
-### Quote Mint
+## Wallet and authentication
 
-The protocol's quote asset mint address is environment-specific and available via the SDK's config presets:
-
-<SDKDoc>
-  <TypeScript name="getConfig" type="function">
-```js
-import { getConfig, initialize } from "@velocity-exchange/sdk";
-
-initialize({ env: "devnet" });
-console.log(getConfig().QUOTE_MINT_ADDRESS);
-// devnet: GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6 (dUSDT, a devnet placeholder)
-// mainnet-beta: Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB (USDT)
-```
-  </TypeScript>
-</SDKDoc>
-
-On devnet, spot market index 0 is `dUSDT` (a placeholder quote token, 1e6 precision) rather than real USDT. Mint it from the SDK's `TokenFaucet` helper before depositing. On mainnet-beta the quote asset is USDT (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`). If you're porting an integration that assumed a different quote asset, see the [migration guide](/developers/migrate-from-drift).
-
-<SDKDoc>
-  <TypeScript name="TokenFaucet" type="class">
-```js
-import { TokenFaucet, BN } from "@velocity-exchange/sdk";
-import { PublicKey } from "@solana/web3.js";
-
-// <FAUCET_PROGRAM_ID> is the devnet token-faucet program's own program ID
-// (a separate deployment from the Velocity program), not documented here as a
-// fixed constant. Obtain it from your devnet environment/deploy config.
-const tokenFaucet = new TokenFaucet(
-  connection,
-  wallet,
-  new PublicKey("<FAUCET_PROGRAM_ID>"),
-  new PublicKey("GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6") // dUSDT mint (devnet)
-);
-
-const [associatedTokenAccount] = await tokenFaucet.createAssociatedTokenAccountAndMintTo(
-  wallet.publicKey,
-  new BN(1_000_000_000) // 1,000 dUSDT at 1e6 precision
-);
-```
-  </TypeScript>
-</SDKDoc>
-
-### Wallet / Authentication
-
-To interact with Solana you need a keypair, which consists of a public key and a private key. The private key is used to sign transactions and should be kept secure.
-
-Generate a new keypair using the [Solana CLI](https://docs.solanalabs.com/cli/install):
+To interact with Solana you need a keypair: a public key and a private key. The private key signs transactions and should be kept secure. Generate one with the [Solana CLI](https://docs.solanalabs.com/cli/install), then point `ANCHOR_WALLET` at the file so SDK code can find it:
 
 ```bash
 solana-keygen new --outfile ~/.config/solana/my-keypair.json
-```
-
-To allow SDK code to use this keypair, set the `ANCHOR_WALLET` environment variable to the path of the keypair file:
-
-```bash
 export ANCHOR_WALLET=~/.config/solana/my-keypair.json
 ```
 
-Then load the keypair in your code:
+Load it with `loadKeypair`, and wrap it in the SDK's `Wallet`. The wallet needs some SOL: it pays transaction fees and the rent for any account the SDK initializes for that authority.
 
 <SDKDoc>
-  <TypeScript name="Wallet / Authentication" type="example">
+  <TypeScript name="Wallet and authentication" type="example">
 ```js
 import { Wallet, loadKeypair } from "@velocity-exchange/sdk";
 
@@ -98,21 +32,9 @@ const wallet = new Wallet(loadKeypair(keyPairFile));
   </TypeScript>
 </SDKDoc>
 
-Make sure the wallet has some SOL, as it is used to pay for transaction fees and rent for account initializations.
+## Create a Velocity client
 
-### Install
-
-<SDKDoc>
-  <TypeScript>
-```bash
-bun add @velocity-exchange/sdk
-```
-  </TypeScript>
-</SDKDoc>
-
-### Create a Velocity Client
-
-At a minimum you provide a Solana `connection`, a `wallet`, and the `env`. Then call `subscribe()` to start receiving account updates.
+At a minimum the client takes a Solana `connection`, a `wallet`, and the `env`. Call `subscribe()` to start receiving account updates, and `unsubscribe()` on shutdown so websocket handles and polling intervals are released. Nothing that reads cached state returns useful data before `subscribe()` resolves.
 
 <SDKDoc>
   <TypeScript>
@@ -130,27 +52,15 @@ const velocityClient = new VelocityClient({
 });
 
 await velocityClient.subscribe();
-```
-  </TypeScript>
-</SDKDoc>
 
-<SDKDoc>
-  <TypeScript name="subscribe" type="method" owner="VelocityClient">
-```js
-await velocityClient.subscribe();
-```
-  </TypeScript>
-</SDKDoc>
+// ... place orders, read positions ...
 
-<SDKDoc>
-  <TypeScript name="unsubscribe" type="method" owner="VelocityClient">
-```js
 await velocityClient.unsubscribe();
 ```
   </TypeScript>
 </SDKDoc>
 
-**Key VelocityClientConfig parameters:**
+### Client configuration
 
 | Parameter | Description | Optional | Default |
 |---|---|---|---|
@@ -160,36 +70,31 @@ await velocityClient.unsubscribe();
 | `perpMarketIndexes` | Perp market accounts to subscribe to | Yes | Derived from env |
 | `spotMarketIndexes` | Spot market accounts to subscribe to | Yes | Derived from env |
 | `oracleInfos` | Oracle accounts to subscribe to | Yes | Derived from env |
-| `accountSubscription` | WebSocket or polling subscription mode | Yes | WebSocket |
-| `activeSubAccountId` | Which subaccount to use initially | Yes | 0 |
-| `subAccountIds` | All subaccount IDs to subscribe to | Yes | [] |
-| `authority` | Authority you're signing for, only set for delegated accounts | Yes | `wallet.publicKey` |
+| `accountSubscription` | Websocket, polling, or gRPC subscription mode | Yes | Websocket |
+| `activeSubAccountId` | Which subaccount to use initially | Yes | `0` |
+| `subAccountIds` | All subaccount IDs to subscribe to | Yes | `[]` |
+| `authority` | Authority the wallet signs for, only set for delegated accounts | Yes | `wallet.publicKey` |
 | `txSender` | Transaction sender used to broadcast and confirm | Yes | `RetryTxSender` |
-| `txHandler` | Builder/signer used for every transaction | Yes | A `TxHandler` on this connection and wallet |
+| `txHandler` | Builder and signer used for every transaction | Yes | A `TxHandler` on this connection and wallet |
 | `txParams` | Compute-unit limit and priority fee | Yes | `computeUnits: 600000`, `computeUnitsPrice: 0` |
 
-> **Delegated accounts:** When signing on behalf of a delegated account, you must explicitly set `subAccountIds`, `activeSubAccountId`, and `authority`. Omitting any of these will cause the client to subscribe to the wrong accounts.
+<Callout type="warning">
+**Delegated accounts.** Signing on behalf of a delegated account requires setting `subAccountIds`, `activeSubAccountId`, and `authority` explicitly. Omit any of the three and the client subscribes to the wrong accounts. See [Users](/developers/velocity-sdk/users#update-delegate) for what a delegate can and cannot do.
+</Callout>
 
 See [Transactions](/developers/velocity-sdk/transactions) for the four available tx senders, blockhash caching, and the compute-unit and priority-fee options.
 
-### Account Subscriptions (WebSocket vs Polling)
+## Account subscriptions
 
-For most bots, websocket subscriptions are the easiest way to keep markets and users up to date. For read-only workflows or when you need tighter control over RPC load, you can switch to polling with a `BulkAccountLoader`.
-
-<SDKDoc>
-  <TypeScript name="BulkAccountLoader" type="class">
-```js
-import { BulkAccountLoader } from "@velocity-exchange/sdk";
-```
-  </TypeScript>
-</SDKDoc>
+For most bots the default websocket subscription is the easiest way to keep markets and users up to date. For read-only workflows, or for tighter control over RPC load, switch to polling with a `BulkAccountLoader`. Its constructor takes `(connection, commitment, pollingFrequencyMs)`; a frequency of `0` polls as fast as the loader is driven.
 
 <SDKDoc>
   <TypeScript name="Polling subscription" type="example">
 ```js
-import { BulkAccountLoader } from "@velocity-exchange/sdk";
+import { Connection } from "@solana/web3.js";
+import { BulkAccountLoader, VelocityClient } from "@velocity-exchange/sdk";
 
-const accountLoader = new BulkAccountLoader(connection, "confirmed", 0);
+const accountLoader = new BulkAccountLoader(connection, "confirmed", 1000);
 
 const velocityClient = new VelocityClient({
   connection,
@@ -199,7 +104,7 @@ const velocityClient = new VelocityClient({
     type: "polling",
     accountLoader,
   },
-  // Optional: explicitly list markets/oracles to load.
+  // Optional: explicitly list markets and oracles to load.
   // perpMarketIndexes: [0, 1],
   // spotMarketIndexes: [0],
   // oracleInfos: [{ publicKey: ORACLE_PUBKEY, source: ORACLE_SOURCE }],
@@ -208,12 +113,14 @@ const velocityClient = new VelocityClient({
   </TypeScript>
 </SDKDoc>
 
-### Multiple Subaccounts
+[SDK Internals](/developers/velocity-sdk/sdk-internals#account-subscription-strategies) compares polling, websocket, and gRPC, and covers what `BulkAccountLoader` batches.
 
-Velocity supports multiple subaccounts per wallet, each with its own independent position and order state. This lets you run separate strategies (e.g., a market-making bot and a hedging bot) under the same authority without cross-contaminating risk or PnL. Use `addUser()` to subscribe to additional subaccounts after initialization.
+## Multiple subaccounts
+
+Velocity supports multiple subaccounts per wallet, each with its own position and order state. That allows separate strategies, say a market-making bot and a hedging bot, under one authority without their risk or PnL mixing. Subscribe to an extra subaccount after initialization with `addUser()`, guarded by `hasUser()` so a repeat call is a no-op.
 
 <SDKDoc>
-  <TypeScript name="hasUser" type="method" owner="VelocityClient">
+  <TypeScript name="addUser" type="method" owner="VelocityClient">
 ```js
 if (!velocityClient.hasUser(1)) {
   await velocityClient.addUser(1);
@@ -222,10 +129,73 @@ if (!velocityClient.hasUser(1)) {
   </TypeScript>
 </SDKDoc>
 
+See [Users](/developers/velocity-sdk/users) for switching the active subaccount, delegates, and per-subaccount margin settings.
+
+## Program addresses
+
+| Network | Program ID |
+|---|---|
+| Velocity (mainnet and devnet) | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` |
+| Velocity Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` |
+
+Velocity uses the same program ID on devnet and mainnet-beta. It is an entirely new deployment, so user accounts must be re-initialized and balances start fresh; no prior onchain state carries over. Rather than pasting the address, import it:
+
 <SDKDoc>
-  <TypeScript name="addUser" type="method" owner="VelocityClient">
+  <TypeScript name="VELOCITY_PROGRAM_ID" type="variable">
 ```js
-await velocityClient.addUser(1);
+import { VELOCITY_PROGRAM_ID } from "@velocity-exchange/sdk";
+
+// The Velocity program's public key on mainnet-beta and devnet.
+// Use this when deriving PDAs or referencing the program directly.
+console.log(VELOCITY_PROGRAM_ID.toBase58());
+// vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P
+```
+  </TypeScript>
+</SDKDoc>
+
+## Quote mint
+
+The protocol's quote asset mint is environment-specific and available from the SDK's config presets. On mainnet-beta the quote asset is USDT (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`). On devnet, spot market index 0 is `dUSDT` (`GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6`), a placeholder quote token at 1e6 precision rather than real USDT.
+
+<SDKDoc>
+  <TypeScript name="getConfig" type="function">
+```js
+import { getConfig, initialize } from "@velocity-exchange/sdk";
+
+initialize({ env: "devnet" });
+console.log(getConfig().QUOTE_MINT_ADDRESS.toBase58());
+// devnet: GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6 (dUSDT)
+// mainnet-beta: Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB (USDT)
+```
+  </TypeScript>
+</SDKDoc>
+
+An integration ported from a different quote asset should check the [migration guide](/developers/migrate-from-drift).
+
+### Minting devnet dUSDT
+
+On devnet, mint test collateral from the SDK's `TokenFaucet` before depositing.
+
+<SDKDoc>
+  <TypeScript name="TokenFaucet" type="class">
+```js
+import { PublicKey } from "@solana/web3.js";
+import { BN, TokenFaucet } from "@velocity-exchange/sdk";
+
+// <FAUCET_PROGRAM_ID> is the devnet token-faucet program's own program ID,
+// a separate deployment from the Velocity program. It is not a fixed
+// documented constant: read it from the devnet environment or deploy config.
+const tokenFaucet = new TokenFaucet(
+  connection,
+  wallet,
+  new PublicKey("<FAUCET_PROGRAM_ID>"),
+  new PublicKey("GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6") // dUSDT mint (devnet)
+);
+
+const [associatedTokenAccount] = await tokenFaucet.createAssociatedTokenAccountAndMintTo(
+  wallet.publicKey,
+  new BN(1_000_000_000) // 1,000 dUSDT at 1e6 precision
+);
 ```
   </TypeScript>
 </SDKDoc>

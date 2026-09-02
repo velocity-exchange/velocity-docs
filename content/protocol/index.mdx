@@ -1,33 +1,49 @@
-# Introduction
+---
+title: "Introduction to Velocity"
+description: "Where perpetual futures and lending meet on one balance, what a fill costs, and where to start reading."
+---
 
-Velocity Protocol is an [open-source](https://github.com/velocity-exchange/velocity-v1), decentralised exchange built on the [Solana blockchain](https://solana.com/), deployed under its own program ID with a reduced, more secure feature set focused on perpetual futures trading and lending/borrowing.
-
-## Trade
-
-- [**Perpetual Futures**](/protocol/trading) - Trade perp markets with leverage.
-- [**Swap Tokens**](https://velocity.exchange/swap) - Swap any pair with up to 5x leverage.
-
-Velocity uses a **cross-margined risk engine** that lets a single pool of collateral back all of your positions, while limiting how much risk any account can take on:
-
-- Collateral in the lend/borrow markets can also back perpetual futures positions, so spot assets work double duty.
-- Every deposit earns lending yield and can serve as collateral for perpetual swaps at the same time.
-- Borrowers can only borrow as much as their collateral supports, staying at or above the required collateral ratio, with additional safety measures to prevent over-extension.
+Velocity is a perpetual futures exchange and a money market, deployed as a single Solana program. Each subaccount holds one pool of collateral, that pool backs every perpetual position opened against it, and the same tokens are lent to borrowers while they sit there. Trading is perpetuals only.
 
 <Callout type="info">
-Spot trading has been removed from the Velocity program. Spot markets exist only for collateral and borrow-lend. You can still exchange spot assets via [swaps](https://app.velocity.exchange/swap).
+Spot trading has been removed from the Velocity program. Spot markets exist only for collateral and borrow-lend. Spot assets can still be exchanged through [swaps](https://app.velocity.exchange/swap).
 </Callout>
 
-## Earn
+## One deposit doing two jobs
 
-- [**Lend/Borrow**](/protocol/borrow-lend) - Earn yield on your deposits through lending.
-- [**Insurance Fund Staking**](/protocol/insurance-fund) - Stake your assets into a vault and earn yield from exchange fees.
+On most venues margin is money parked: it backs positions and earns nothing, and moving it somewhere that pays means it stops being margin. Velocity never separates the two balances. A deposit lands in that asset's spot market vault, counts toward the account's margin at the asset's collateral weight, and is lendable inventory from the same moment. Three things follow:
 
-## Build
+1. **Margin earns the lending rate while it backs a trade.** Interest accrues to the spot balance continuously, priced off that market's utilization.
+2. **There is no borrow instruction.** A borrow is what a withdrawal becomes once it passes the account's balance in that market.
+3. **A withdrawal is checked twice.** The account's own margin has to survive it, and so does the market's withdrawal limit, because the tokens requested have partly been lent out. The second check is usually why a withdrawal is refused, and it usually clears on its own.
 
-- [**SDK**](/developers/velocity-sdk/setup) - TypeScript SDK (`@velocity-exchange/sdk`) for building trading apps and bots.
-- [**Rust SDK**](https://github.com/velocity-exchange/velocity-v1/tree/master/rust/velocity-rs) - Rust client (`velocity-rs`), source-only in the velocity-v1 monorepo.
-- [**Tutorials**](/developers/trading-automation/keeper-bots) - Build a [**Keeper bot**](/developers/trading-automation/keeper-bots) or [**JIT Trading bot**](/developers/trading-automation/keeper-bots/jit-maker-bot).
+Not every asset counts for its full value as collateral: the quote asset does, anything more volatile is weighted down. [Collateral and margin](/protocol/trading/margin) has the weights; [Borrow and lend](/protocol/borrow-lend) has the utilization curve.
 
-Velocity Protocol is [**open-source**](https://github.com/velocity-exchange/velocity-v1) and contributions are welcome. See [Velocity for Developers](/developers) to get started.
+## What a trade costs
 
-Velocity's smart contracts were audited by Trail of Bits and Neodyme, and OtterSec has separately reviewed Velocity's own code changes since. See [Audits](/protocol/risk-and-safety/audits) for the full audit history, and the [migration guide](/developers/migrate-from-drift) if you're porting an existing integration.
+Perpetual fills charge the taker a fee on the filled notional, in the quote asset: 4 bps of notional at the base tier, 3 bps above \$5,000,000 and 2 bps above \$80,000,000 of trailing 30-day volume. The maker on that fill is paid 0.25 bps of notional out of it, flat at every tier. Individual markets can add to the taker fee, capped at 10 bps on top, so a tier rate is a floor rather than a promise.
+
+Spot markets and the direct swap path charge no maker or taker fee. Funding is not a fee: it is an hourly payment between longs and shorts, and a position can receive it as readily as pay it. See [Trading fees](/protocol/trading/trading-fees) and [Funding rates](/protocol/trading/funding-rates).
+
+## How an order is filled
+
+There is no central matching engine. Orders live onchain as accounts, an offchain network of keepers and market makers watches them, and anyone can submit the transaction that fills one. Three sources of liquidity can end up on the other side of a taker order: resting orders on the decentralized orderbook (DLOB), market makers quoting just in time, and the protocol's own AMM. They are not three stages in a fixed order, and one taker order can fill from more than one of them in a single transaction.
+
+Every perpetual market order also carries a short Dutch auction, so its price starts somewhere favorable to the taker and walks toward the limit price while makers compete to take it. The exchange enforces a minimum auction duration, and each market sets its own default. See [How fills work](/protocol/trading/how-fills-work) and [Auctions](/protocol/trading/auction-parameters).
+
+## Where to go next
+
+The app is at [app.velocity.exchange](https://app.velocity.exchange). Starting from nothing, read [What a perpetual is](/protocol/what-is-a-perpetual), then [A first trade](/protocol/your-first-trade), which follows one \$10,000 account from deposit to withdrawal. The rest is reference:
+
+- **Opening an account**: [Wallet setup](/protocol/getting-started/wallet-setup), [Subaccounts](/protocol/getting-started/managing-subaccounts), [Delegated accounts](/protocol/getting-started/delegated-accounts)
+- **Trading**: [Collateral and margin](/protocol/trading/margin), [Order types](/protocol/trading/order-types), [Auctions](/protocol/trading/auction-parameters), [Trading fees](/protocol/trading/trading-fees), [Funding rates](/protocol/trading/funding-rates), [Liquidations](/protocol/trading/liquidations)
+- **Lending and borrowing**: [Borrow and lend](/protocol/borrow-lend), [Interest rates](/protocol/borrow-lend/interest-rates), [Withdrawal limits](/protocol/borrow-lend/withdrawal-limits)
+- **The machinery**: [How fills work](/protocol/trading/how-fills-work), [Velocity AMM](/protocol/how-it-works/velocity-amm), [Orderbook and keepers](/protocol/how-it-works/orderbook-and-keepers), [Oracles](/protocol/how-it-works/oracles), [Where the money sits](/protocol/how-it-works/where-the-money-sits)
+- **Sizing risk**: [Risks](/protocol/risk-and-safety/risks), [Contract tiers](/protocol/risk-and-safety/contract-tiers), [Guard rails](/protocol/risk-and-safety/guard-rails), [Insurance fund](/protocol/insurance-fund), [Admin keys](/protocol/risk-and-safety/admin-keys)
+- **Building on it**: [TypeScript SDK](/developers/velocity-sdk/setup), [Keeper bots](/developers/trading-automation/keeper-bots), [Market makers](/protocol/market-makers)
+
+## Source and audits
+
+The Velocity program is not open source yet. The source will be published once the post-fork audit report is final. The TypeScript SDK is on npm today, and this documentation site is open to contributions. See [Velocity for Developers](/developers).
+
+The pre-fork Drift Protocol v2 codebase that Velocity forked from was audited by Trail of Bits and Neodyme, and OtterSec has since reviewed Velocity's own program. Those findings are fixed in the deployed code and the report is pending publication. See [Audits](/protocol/risk-and-safety/audits) for the record, and the [migration guide](/developers/migrate-from-drift) for porting an existing integration.

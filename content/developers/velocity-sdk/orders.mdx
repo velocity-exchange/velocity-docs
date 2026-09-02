@@ -1,28 +1,34 @@
-# Orders
+---
+title: "Orders"
+---
 
 ## How it works
 
-A taker order fills by price, not by source. It walks the **DLOB** (Decentralized Limit Order Book) from the best price level down, and at each level the AMM's quote, the resting order, and any **JIT** (Just-In-Time) maker quote compete on price, so one order can fill from more than one source. A market order's auction bounds the price that is acceptable while it runs. The AMM comes last only as a residual fill, once the maker list is exhausted and size still crosses your limit price. See [Orderbook & Matching](/developers/market-makers/orderbook-and-matching) for the full rules.
+A taker order fills by price, not by source. It walks the **DLOB** (Decentralized Limit Order Book) from the best price level down, and at each level the AMM's quote, the resting order, and any **JIT** (Just-In-Time) maker quote compete on price. One order can therefore fill from more than one source.
+
+A market order's auction bounds what price is acceptable while it runs, and the AMM comes last: it takes only the residual fill, once the maker list is exhausted and size still crosses the order's limit price. See [Orderbook & Matching](/developers/market-makers/orderbook-and-matching) for the full rules.
 
 <LiquidityRoutingFlow />
 
-Orders are stored in your user account and have both an onchain order ID and an optional user-assigned ID for tracking. When an order fills, your position updates automatically, and you can query fill events to see execution details.
+Orders are stored in the user account and have both an onchain order ID and an optional user-assigned ID for tracking. When an order fills, the position updates automatically, and fill events carry the execution details.
 
-**Perp markets only.** Velocity's spot markets are collateral/borrow-lend only, the spot DLOB (order-book trading on spot markets) was removed. `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, `fillSpotOrder`, and their `getXIx` builders all throw a client-side error ("Spot DLOB trading is disabled; spot balances, deposits, and swaps remain available.") without sending a transaction. The onchain `SpotDlobTradingDisabled` error is separate: it is what a hand-built spot-order instruction would hit if it were submitted directly. Everything on this page applies to perp orders.
+**Perp markets only.** Velocity's spot markets are collateral and borrow-lend only: order-book trading on spot markets was removed. `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, `fillSpotOrder`, and their `getXIx` builders all throw a client-side error without sending a transaction ("Spot DLOB trading is disabled; spot balances, deposits, and swaps remain available.").
+
+The onchain `SpotDlobTradingDisabled` error (`6350` / `0x18ce`) is a separate thing. The spot order instructions are gone from the program entirely, so what raises it is a shared order instruction handed a `MarketType::Spot`. Everything on this page applies to perp orders.
 
 ## Order Types
 
 | Type | Description |
 |---|---|
-| `MARKET` | Executes immediately. Opens a JIT auction (controlled by `auctionStartPrice`, `auctionEndPrice`, `auctionDuration`); JIT makers, resting DLOB orders, and the AMM compete on price at each level, and any size left after the auction can still fill against the DLOB or AMM up to your limit. |
+| `MARKET` | Executes immediately. Opens a JIT auction (controlled by `auctionStartPrice`, `auctionEndPrice`, `auctionDuration`); JIT makers, resting DLOB orders, and the AMM compete on price at each level, and any size left after the auction can still fill against the DLOB or AMM up to the order's limit. |
 | `LIMIT` | Rests on the DLOB at a fixed price until filled or canceled. Set `postOnly: PostOnlyParams.MUST_POST_ONLY` to guarantee maker status and avoid crossing the spread. |
 | `ORACLE` | Like a market order, but auction prices and the resting limit price are expressed as **offsets from the oracle price** (not absolute prices). Useful for market makers who want tight spreads without hardcoding prices. |
-| `TRIGGER_MARKET` | A stop/take-profit market order. Executes as a market order when the oracle price crosses `triggerPrice` in the specified `triggerCondition` direction. |
+| `TRIGGER_MARKET` | A stop/take-profit market order. Executes as a market order when the market's trigger price crosses `triggerPrice` in the specified `triggerCondition` direction. That price is not always the oracle price: see [Trigger Orders](#trigger-orders-stop--take-profit). |
 | `TRIGGER_LIMIT` | A stop/take-profit limit order. Same trigger mechanism as `TRIGGER_MARKET`, but executes as a limit order at `price` once triggered. |
 
 ### Post-Only Params
 
-When placing limit orders, you can control maker/taker behavior with `postOnly`:
+When placing limit orders, `postOnly` controls maker and taker behavior:
 
 | Value | Behavior |
 |---|---|
@@ -33,7 +39,7 @@ When placing limit orders, you can control maker/taker behavior with `postOnly`:
 
 ### `oraclePriceOffset` is a `BN`
 
-`OrderParams.oraclePriceOffset` (and `Order.oraclePriceOffset` on filled orders) is a signed **`BN`** in `PRICE_PRECISION` (1e6) units: it was widened from `number` to `BN` (i64 on-chain). Always wrap raw numbers with `new BN(...)`; passing a plain JS number will fail type-checking (and, if bypassed, will not round-trip correctly through Borsh encoding).
+`OrderParams.oraclePriceOffset` (and `Order.oraclePriceOffset` on filled orders) is a signed **`BN`** in `PRICE_PRECISION` (1e6) units: it was widened from `number` to `BN` (i64 onchain). Always wrap raw numbers with `new BN(...)`; passing a plain JS number will fail type-checking (and, if bypassed, will not round-trip correctly through Borsh encoding).
 
 ```js
 import { BN, PRICE_PRECISION } from "@velocity-exchange/sdk";
@@ -46,20 +52,20 @@ const oraclePriceOffset2 = velocityClient.convertToPricePrecision(0.3); // alrea
 
 ## SDK Usage
 
-This page focuses on placing and canceling perp orders via `VelocityClient`. For concise examples we use helper builders like `getMarketOrderParams(...)`.
+This page focuses on placing and canceling perp orders via `VelocityClient`. The examples use helper builders like `getMarketOrderParams(...)` to stay concise.
 
 ### Build Market Order Params
 
 <SDKDoc>
   <TypeScript name="getMarketOrderParams" type="function">
 ```js
-import { BN, BASE_PRECISION, MarketType, PositionDirection, getMarketOrderParams } from "@velocity-exchange/sdk";
+import { MarketType, PositionDirection, getMarketOrderParams } from "@velocity-exchange/sdk";
 
 const orderParams = getMarketOrderParams({
   marketIndex: 0,
   marketType: MarketType.PERP,
   direction: PositionDirection.LONG,
-  baseAssetAmount: new BN(1).mul(BASE_PRECISION), // 1 SOL (in 1e9 precision)
+  baseAssetAmount: velocityClient.convertToPerpPrecision(1), // 1 SOL, BN at 1e9
 });
 ```
   </TypeScript>
@@ -67,19 +73,19 @@ const orderParams = getMarketOrderParams({
 
 ### Build Order Params (Generic Helper)
 
-If you want a single helper that works for limit/market/oracle/trigger, use `getOrderParams(...)`.
+`getOrderParams(...)` is the single helper that covers limit, market, oracle, and trigger orders.
 
 <SDKDoc>
   <TypeScript name="getOrderParams" type="function">
 ```js
-import { getOrderParams, OrderType, PositionDirection } from "@velocity-exchange/sdk";
+import { OrderType, PositionDirection, getOrderParams } from "@velocity-exchange/sdk";
 
 const orderParams = getOrderParams({
   orderType: OrderType.LIMIT,
   marketIndex: 0,
   direction: PositionDirection.LONG,
-  baseAssetAmount: velocityClient.convertToPerpPrecision(1),   // 1 base unit → BN(1e9)
-  price: velocityClient.convertToPricePrecision(21.23),         // $21.23 → BN(21_230_000)
+  baseAssetAmount: velocityClient.convertToPerpPrecision(1), // 1 base unit, BN(1e9)
+  price: velocityClient.convertToPricePrecision(21.23),      // $21.23, BN(21_230_000)
 });
 ```
   </TypeScript>
@@ -90,12 +96,14 @@ const orderParams = getOrderParams({
 <SDKDoc>
   <TypeScript name="placePerpOrder" type="method" owner="VelocityClient">
 ```js
+import { PositionDirection, getMarketOrderParams } from "@velocity-exchange/sdk";
+
 // Assumes `velocityClient` is subscribed.
 const txSig = await velocityClient.placePerpOrder(
   getMarketOrderParams({
     marketIndex: 0,
     direction: PositionDirection.LONG,
-    baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+    baseAssetAmount: velocityClient.convertToPerpPrecision(1),
   })
 );
 console.log(txSig);
@@ -108,6 +116,8 @@ console.log(txSig);
 <SDKDoc>
   <TypeScript name="placeOrders" type="method" owner="VelocityClient">
 ```js
+import { MarketType, OrderType, PositionDirection } from "@velocity-exchange/sdk";
+
 await velocityClient.placeOrders([
   {
     orderType: OrderType.LIMIT,
@@ -130,15 +140,17 @@ await velocityClient.placeOrders([
   </TypeScript>
 </SDKDoc>
 
-> **Bulk margin enforcement:** `placeOrders`/`placeScaleOrders` run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than a single end-of-batch check. A batch that would have slipped past a weaker/absent margin gate under the old check may now be rejected with `InsufficientCollateral`.
+<Callout type="warning">
+**Bulk margin enforcement.** `placeOrders` and `placeScaleOrders` run the initial-margin check once per risk scope the batch touches{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */}, not once at the end of the batch. A batch that slipped past a weaker or absent margin gate under the old check may now be rejected with `InsufficientCollateral` (error `6003` / `0x1773`).
+</Callout>
 
 ### Scale Orders (Price Ladder)
 
-`placeScaleOrders` places a ladder of resting limit orders in one instruction. You give it a total size and a price range; the program splits the size across `orderCount` orders at evenly spaced prices and places them all. Every order in the ladder is `OrderType.LIMIT` and rests until matched, nothing fills inside the instruction.
+`placeScaleOrders` places a ladder of resting limit orders in one instruction. It takes a total size and a price range; the program splits the size across `orderCount` orders at evenly spaced prices and places them all. Every order in the ladder is `OrderType.LIMIT` and rests until matched, nothing fills inside the instruction.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `marketType` | `MarketType` | Use `MarketType.PERP`. A `SPOT` ladder is rejected on-chain with `SpotDlobTradingDisabled`. |
+| `marketType` | `MarketType` | Use `MarketType.PERP`. A `SPOT` ladder is rejected onchain with `SpotDlobTradingDisabled`. |
 | `direction` | `PositionDirection` | Side of every order in the ladder. |
 | `marketIndex` | `number` | Perp market index. |
 | `totalBaseAssetAmount` | `BN` | Total size to distribute, in `BASE_PRECISION` (1e9). |
@@ -153,12 +165,12 @@ await velocityClient.placeOrders([
 
 Every field is required, there are no optional defaults.
 
-**Price range rules.** `startPrice` and `endPrice` must differ, and the range has to run away from the market in the direction you are scaling:
+**Price range rules.** `startPrice` and `endPrice` must differ, and the range has to run away from the market in the ladder's direction:
 
 - `PositionDirection.LONG` requires `startPrice > endPrice` (buy the ladder down).
 - `PositionDirection.SHORT` requires `startPrice < endPrice` (sell the ladder up).
 
-Prices are spaced evenly: with `orderCount` = 2 you get exactly `startPrice` and `endPrice`; with more, the step is `|startPrice - endPrice| / (orderCount - 1)` and the last rung is set to `endPrice` exactly so rounding cannot drift.
+Prices are spaced evenly: with `orderCount` = 2 the rungs are exactly `startPrice` and `endPrice`; with more, the step is `|startPrice - endPrice| / (orderCount - 1)` and the last rung is set to `endPrice` exactly so rounding cannot drift.
 
 **Size distribution.** `ASCENDING` and `DESCENDING` are defined relative to the **start price**:
 
@@ -170,7 +182,7 @@ Prices are spaced evenly: with `orderCount` = 2 you get exactly `startPrice` and
 
 `totalBaseAssetAmount` must be at least `orderStepSize * orderCount`, otherwise there is not enough size to give every rung a valid order. Each rung is rounded to the market's `orderStepSize` and the last one absorbs the rounding difference.
 
-**Errors.** The program validates the parameters while expanding them, and reports any failure as `InvalidOrder` with the specific cause (`InvalidOrderScaleOrderCount`, `InvalidOrderScalePriceRange`, or `OrderAmountTooSmall`) in the transaction logs. The 32-order ceiling is also the account's total open-order capacity, so a ladder only fits if the subaccount has that many free order slots.
+**Errors.** The program validates every parameter before it expands the ladder, and returns the specific error code, not a generic one: `InvalidOrderScaleOrderCount` (`6346` / `0x18ca`) for an `orderCount` outside 2 to 32, `InvalidOrderScalePriceRange` (`6347` / `0x18cb`) for equal prices or a range running the wrong way for the direction, and `OrderAmountTooSmall` (`6059` / `0x17ab`) when `totalBaseAssetAmount` is below `orderStepSize * orderCount`. Each carries the offending value in the transaction logs. The 32-order ceiling is also the account's total open-order capacity, so a ladder only fits if the subaccount has that many free order slots.
 
 <SDKDoc>
   <TypeScript name="placeScaleOrders" type="method" owner="VelocityClient">
@@ -202,9 +214,9 @@ await velocityClient.placeScaleOrders({
   </TypeScript>
 </SDKDoc>
 
-`preparePlaceScaleOrdersTx(params, txParams?, subAccountId?)` returns the unsigned transaction as `{ placeScaleOrdersTx }`, and `getPlaceScaleOrdersIx(params, subAccountId?)` returns the single instruction if you want to batch it with others.
+`preparePlaceScaleOrdersTx(params, txParams?, subAccountId?)` returns the unsigned transaction as `{ placeScaleOrdersTx }`, and `getPlaceScaleOrdersIx(params, subAccountId?)` returns the single instruction for batching it with others.
 
-For the trader-facing description of scale orders, see [Order Types](/protocol/trading/order-types#scale).
+For the trader-facing description of scale orders, see [Order Types](/protocol/trading/order-types#scale-orders).
 
 ### Oracle / Auction-Style Orders
 
@@ -215,7 +227,7 @@ Oracle orders have prices that track the oracle feed with an offset. They go thr
 <SDKDoc>
   <TypeScript name="Oracle order" type="example">
 ```js
-import { BN, OrderType, PositionDirection, PRICE_PRECISION } from "@velocity-exchange/sdk";
+import { OrderType, PRICE_PRECISION, PositionDirection } from "@velocity-exchange/sdk";
 
 const marketIndex = 18;
 
@@ -232,7 +244,7 @@ const orderParams = {
   auctionStartPrice,
   auctionEndPrice,
   oraclePriceOffset: velocityClient.convertToPricePrecision(0.30), // +$0.30 from oracle, BN
-  auctionDuration: 30, // slots
+  auctionDuration: 30, // 400ms wall-clock units, 12s
 };
 
 await velocityClient.placePerpOrder(orderParams);
@@ -242,7 +254,9 @@ await velocityClient.placePerpOrder(orderParams);
 
 ### Builder Codes
 
-`OrderParams` accepts an optional `builderIdx` + `builderFeeTenthBps` pair to attribute an order to an approved builder and charge an extra builder fee (in tenths of a bps, e.g. `100` = 10 bps = 0.1%). The program caps the actual fee charged at `MAX_BUILDER_FEE_TENTH_BPS` (1000, or 1% of notional): an on-chain Rust constant in the velocity program, not an SDK export, so read it as a fixed value rather than something to import. `builderIdx` indexes into the placing user's `RevenueShareEscrow.approvedBuilders` list, approve a builder first with `changeApprovedBuilder(...)`. Both fields are optional; omit them for ordinary orders.
+`OrderParams` accepts an optional `builderIdx` and `builderFeeTenthBps` pair to attribute an order to an approved builder and charge an extra builder fee. The fee is in tenths of a basis point, so `100` is 10 bps, or 0.1% of notional. Both fields are optional; omit them for ordinary orders.
+
+`builderIdx` indexes into the placing user's `RevenueShareEscrow.approvedBuilders` list, so the builder must be approved first with `changeApprovedBuilder(...)`. Whatever value is passed, the program caps the fee actually charged at `MAX_BUILDER_FEE_TENTH_BPS`, which is 1000 tenth-bps, or 1% of notional. That is an onchain Rust constant rather than an SDK export, so treat it as a fixed value instead of something to import.
 
 <SDKDoc>
   <TypeScript name="Builder-fee order" type="example">
@@ -255,8 +269,8 @@ const orderParams = {
   direction: PositionDirection.LONG,
   baseAssetAmount: velocityClient.convertToPerpPrecision(1),
   price: velocityClient.convertToPricePrecision(21.23),
-  builderIdx: 0,              // index into this user's approved-builders list
-  builderFeeTenthBps: 100,    // 10 bps = 0.1% builder fee
+  builderIdx: 0,           // index into this user's approved-builders list
+  builderFeeTenthBps: 100, // 10 bps, 0.1% of notional
 };
 
 await velocityClient.placePerpOrder(orderParams);
@@ -304,7 +318,7 @@ await velocityClient.cancelOrders();
   </TypeScript>
 </SDKDoc>
 
-`getCancelOrdersIx` (the instruction-builder variant, used when composing your own transaction) accepts `null` explicitly for any filter, in addition to `undefined`.
+`getCancelOrdersIx` (the instruction-builder variant, used when composing a transaction by hand) accepts `null` explicitly for any filter, in addition to `undefined`.
 
 ### Cancel and Place (Atomic)
 
@@ -313,6 +327,8 @@ Atomically cancels existing orders and places new ones in a single transaction. 
 <SDKDoc>
   <TypeScript name="cancelAndPlaceOrders" type="method" owner="VelocityClient">
 ```js
+import { MarketType, OrderType, PositionDirection } from "@velocity-exchange/sdk";
+
 await velocityClient.cancelAndPlaceOrders(
   { marketType: MarketType.PERP, marketIndex: 0 },
   [
@@ -330,7 +346,9 @@ await velocityClient.cancelAndPlaceOrders(
   </TypeScript>
 </SDKDoc>
 
-> `marketType` is required on every order object passed to `cancelAndPlaceOrders`. It routes through the generic order-placement path, which throws `must set param.marketType` if it's missing, unlike `placePerpOrder`, which fills it in for you.
+<Callout type="warning">
+`marketType` is required on every order object passed to `cancelAndPlaceOrders`. It routes through the generic order-placement path, which throws `must set param.marketType` when the field is missing. `placePerpOrder` fills it in; this one does not.
+</Callout>
 
 ### Modify Orders
 
@@ -377,9 +395,21 @@ await velocityClient.placePerpOrder(orderParams);
   </TypeScript>
 </SDKDoc>
 
+#### The price a trigger is evaluated against
+
+`triggerPrice` is not compared against the raw oracle price. `State.featureBitFlags` carries a `MEDIAN_TRIGGER_PRICE` bit; read it with `useMedianTriggerPrice(stateAccount)` and derive the price with `getTriggerPrice(market, oraclePrice, now, useMedian)` rather than comparing against the oracle directly.
+
+With the bit clear, the trigger price is the absolute value of the oracle price. With the bit set, it is the median of three legs:
+
+- **Last fill price**: `market.lastFillPrice`, used only while `marketStats.lastTradeTs` is within `TRIGGER_PRICE_LAST_FILL_MAX_AGE`, 5 minutes. With no fill yet, or a stale one, the oracle price stands in for this leg.
+- **Funding basis**: `oracle + basis`. The basis is the last funding rate normalized by `marketStats.lastFundingOracleTwap`, scaled by 24, reduced by `FUNDING_RATE_OFFSET_PERCENTAGE`, applied to the oracle price, then decayed linearly to zero across one funding period as time passes since `lastFundingRateTs`. It is zero when `lastFundingOracleTwap` is zero.
+- **5-minute basis**: `oracle + (marketStats.lastMarkPriceTwap5Min - marketStats.historicalOracleData.lastOraclePriceTwap5Min)`.
+
+The median is then clamped to a band around the raw oracle price set by the market's contract tier: 20 bps on tiers A and B, 100 bps on tier C, 250 bps below that. The trigger price therefore never sits further than that from the oracle, whatever the three legs say.
+
 ### Instruction Builders (Advanced)
 
-Higher-level methods like `placePerpOrder()` build, sign, and send a transaction in one call. Instruction (IX) builders give you the raw `TransactionInstruction` objects so you can:
+Higher-level methods like `placePerpOrder()` build, sign, and send a transaction in one call. Instruction (IX) builders return the raw `TransactionInstruction` objects, which makes it possible to:
 
 - **Set a custom compute budget** with priority fees for faster inclusion
 - **Batch multiple instructions** into a single transaction (e.g., cancel + place atomically)
@@ -393,7 +423,10 @@ Higher-level methods like `placePerpOrder()` build, sign, and send a transaction
 ```js
 import { ComputeBudgetProgram } from "@solana/web3.js";
 import {
-  MarketType, PositionDirection, OrderType, getOrderParams,
+  MarketType,
+  OrderType,
+  PositionDirection,
+  getOrderParams,
 } from "@velocity-exchange/sdk";
 
 // 1. Build individual instructions
@@ -527,7 +560,7 @@ const ix = await velocityClient.getFillPerpOrderIx(
 //   userAccountPublicKey: PublicKey - the user whose order to trigger
 //   userAccount: UserAccount - the deserialized user account
 //   order: Order - the full order object (must have trigger condition met)
-//   fillerPublicKey?: PublicKey - optional, defaults to your user account
+//   fillerPublicKey?: PublicKey - optional, defaults to the caller's user account
 
 const userPubkey = targetUser.userAccountPublicKey;
 const userAccount = targetUser.getUserAccount();
@@ -550,7 +583,7 @@ const ix = await velocityClient.getTriggerOrderIx(
   <TypeScript name="getRevertFillIx" type="method" owner="VelocityClient">
 ```js
 // Params:
-//   fillerPublicKey?: PublicKey - defaults to your user account
+//   fillerPublicKey?: PublicKey - defaults to the caller's user account
 const ix = await velocityClient.getRevertFillIx();
 ```
   </TypeScript>
@@ -580,11 +613,13 @@ const ixs = await velocityClient.getSettlePNLsIxs(
   </TypeScript>
 </SDKDoc>
 
-**getProviderSwapIx** builds a swap instruction, routed through an external provider (Jupiter or Titan) but settled against the user's Velocity deposits/vault balances rather than their wallet's own token accounts. `swap(...)` wraps this and sends the transaction for you.
+**getProviderSwapIx** builds a swap instruction, routed through an external provider (Jupiter or Titan) but settled against the user's Velocity deposits/vault balances rather than their wallet's own token accounts. `swap(...)` wraps this and sends the transaction.
 
 <SDKDoc>
   <TypeScript name="getProviderSwapIx" type="method" owner="VelocityClient">
 ```js
+import { BN } from "@velocity-exchange/sdk";
+
 // Params:
 //   swapProvider: SwapProvider - a UnifiedSwapClient, TitanClient, or JupiterClient
 //   inMarketIndex: number - spot market index of the input token

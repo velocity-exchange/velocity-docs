@@ -15,7 +15,7 @@ export function BuilderFeeSankey() {
           spec={builderFeeSpec}
           ariaLabel="Sankey diagram of the builder fee charged on top of the taker fee, not taken out of it"
           describedBy={captionId}
-          width={620}
+          width={600}
           height={260}
           labelWidth={{ left: 150, right: 150 }}
         />

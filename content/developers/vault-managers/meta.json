@@ -1,0 +1,10 @@
+{
+  "title": "Vault Managers",
+  "pages": [
+    "index",
+    "quickstart",
+    "manager-operations",
+    "trusted-vaults",
+    "multisig-ops"
+  ]
+}

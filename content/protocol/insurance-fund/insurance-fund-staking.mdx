@@ -1,139 +1,82 @@
-# Insurance Fund Staking
+---
+title: "Insurance Fund staking"
+description: "What a stake earns, what it risks, and the rules that decide the payout on unstaking."
+---
 
-## Overview
+Staking supplies first-loss capital to a market's [Insurance Fund](/protocol/insurance-fund), and in exchange a staker receives that market's share of the protocol's fee revenue. Velocity owns no share of any fund, so every dollar standing between a bad debt and socialized loss was put there by a staker.
 
-Users that elect to stake into the Insurance Fund will be collateralising the Insurance Fund.  
+This is not a deposit and it is not lending. Staked principal is what pays when a position in the market goes bankrupt, and a large enough draw can reduce it. [The fund's page](/protocol/insurance-fund) comes first: it covers which markets can draw on a given fund and how much they may take.
 
-The Insurance Fund is the protocol's first backstop to maintaining the solvency of the protocol. All users that stake into the IF should read through and be clear on what happens to the Insurance Fund when levered losses and AMM deficits occur ([Insurance Fund](/protocol/insurance-fund)).
+## What a stake earns
 
-## Reward
+Staked capital is priced in **shares**, a claim on a fraction of the fund's vault. Revenue arriving lifts the share price, and a bankruptcy draw lowers it. There is nothing to claim: rewards are the same shares worth more.
 
-For providing liquidity to the Insurance Fund, Insurance Fund Stakers are rewarded with their proportionate share of the [Revenue Pool](/protocol/how-it-works/revenue-pool) every hour.  
+Two streams feed a market's fund: a capped slice of the spot market's revenue pool, which collects perpetual trading fees, liquidation fees and borrow fees, and a fixed fraction of the market's deposit-interest gains. Both accrue **entirely** to stakers, with no protocol cut of any kind.
 
-The Revenue Pool is funded by various aspects of the protocol:  
-1.  borrow fees;
-2.  the spot market lending-interest carveout (`ifFeeFactor`), not spot trading fees, spot swaps charge no fee and spot order-book trading is disabled;
-3.  perpetual market exchange fees; and
-4.  liquidation fees.
+## The stake lifecycle
 
-An Insurance Fund Staker's proportionate share is calculated by: `Total Staked Amount / Total Insurance Fund`
-
-The Insurance Fund is **100% staker-owned** on Velocity. There is no protocol-owned share of the fund. Each revenue settlement (by default, at most once per hour per market) accrues entirely to Insurance Fund Stakers as share-price appreciation; the legacy protocol/staker split (and the instructions to withdraw or rebalance a protocol-owned portion) do not exist.
-
-<Callout type="important">
-**Example:**
-
-The Insurance Fund is at \$5000 USDT. You decide to stake \$10,000 USDT, bringing the total to \$15,000 USDT. Your proportionate share of the fund is 10000/15000 = 66.6%.
-
-Each hour, as the revenue pool settles fees earned to the Insurance Fund, let's say \$30 is settled. All \$30 accrues to stakers as share-price appreciation, none to the protocol. You will receive 66.6% of that value (\$20) and the remaining Insurance Fund stakers would receive 33.3% (\$10).
-
-All rewards earned accumulate and compound the account's insurance amount staked.
-</Callout>
-
-<Callout type="info">
-A portion of each spot market's deposit-interest gains (the market's `ifFeeFactor`) is also carved out directly to that market's Insurance Fund, on top of revenue-pool settlements. See [What is the Insurance Fund?](/protocol/insurance-fund).
-</Callout>
-
-### Cooldown Period
-
-There is a cooldown period of 13 days for unstaking any collateral from the Insurance Fund.  
-
-A user first requests to unstake a specific amount (denominated in shares). During the cooldown period, the staked amount does not receive rewards. After the elapsed period, the user can fully unstake. 
-
-*Note: You cannot unstake while the spot market utilization (or 24h utilization TWAP) is above 90%. This does not affect opening/timing on unstake requests.*
-
-<Callout type="warning">
-Your escrowed principal remains at risk during the 13-day cooldown. Requesting an unstake locks in a target payout value, but the amount you actually receive when the cooldown ends is capped at the current value of your shares: `min(current share value, value at request time)`. If the Insurance Fund absorbs a bankruptcy/deficit draw while your request is pending, your payout is reduced accordingly. Submitting an unstake request does not remove your capital from Insurance Fund risk until the withdrawal is completed.
-</Callout>
-
-## Stake and unstake lifecycle
-
-Staking has four instructions: add, request remove, cancel request, and remove. Each has rules that decide exactly how many shares you get and what you are paid. This section states them.
-
-Every one of the four settles any **already-due** revenue into the fund before it does its own accounting. That ordering matters: it means the share price you are quoted, the exit value you freeze, and the forfeiture a cancel prices are all computed after the revenue you were already entitled to has landed, not before.
+Staking is four actions: add, request an unstake, cancel that request, and complete it. Each settles any already-due revenue into the fund first, so every price is struck after the revenue already owed has landed.
 
 ### Adding a stake
 
-Shares are priced off the fund's balance at the moment you stake. Two rules follow from pricing exactly:
-
-- Only the part of your requested amount that prices to whole shares is transferred. The remainder stays in your token account rather than becoming free appreciation for existing shareholders. The program logs the shortfall.
-- A request too small to buy even one share is rejected with `IFDepositMintsZeroShares`, not silently accepted for zero shares.
-
-Three more guards apply:
-
-- You cannot add while you have an unstake request pending (`IFWithdrawRequestInProgress`). Cancel it first.
-- If the fund has shares outstanding but a zero balance, new stakes are refused with `InvalidIFForNewStakes`.
-- Adding is refused when the market's `Add` insurance-fund operation is paused (`InsuranceFundOperationPaused`).
-
-If the fund holds a balance but no shares at all (fees settled before any staker existed), the first stake seeds the share count 1:1 with the balance, so that staker mints shares at a price of about 1 instead of losing their deposit to a zero-share pool. Those seeded shares are protocol-owned ballast and are not withdrawable.
+Shares are priced off the fund's vault balance at the moment of the stake. There is no minimum stake: the only threshold is the price of one share, and a request too small to buy one is rejected with `IFDepositMintsZeroShares`. Adding while an unstake request is pending fails with `IFWithdrawRequestInProgress`, and adding is refused while the market's `Add` insurance-fund operation is paused, with `InsuranceFundOperationPaused`.
 
 ### Requesting an unstake
 
-The request records the share count and **freezes a valuation**: the value those shares were worth at that instant, capped at one unit below the fund's balance. That frozen value is the ceiling on your eventual payout.
-
-The request is rejected when:
+The request records the share count and **freezes a valuation**: what those shares were worth at that instant. That frozen value is the ceiling on the eventual payout, and it is the single most important number on this page. The request is rejected in six cases.
 
 | Condition | Error |
 | --- | --- |
 | The amount converts to zero shares | `IFWithdrawRequestTooSmall` |
-| The share count exceeds your balance | `InsufficientIFShares` |
+| The share count exceeds the staked balance | `InsufficientIFShares` |
 | A request is already pending | `IFWithdrawRequestInProgress` |
 | Withdrawals are paused exchange-wide | `ExchangePaused` |
 | The spot market's withdrawals are paused | `MarketWithdrawPaused` |
 | The `RequestRemove` insurance-fund operation is paused | `InsuranceFundOperationPaused` |
 
-The two pause checks exist because the pre-freeze revenue settle silently skips while withdrawals are paused. Rather than freeze a pre-settle value, the program refuses the request.
+### The cooldown, and why it cuts both ways
 
-<Callout type="important">
-The freeze cuts both ways. Revenue settled **after** your request does not reach you, because your payout is capped at the frozen value. Losses after your request do reach you, because the payout is also capped at the current value of your shares. That asymmetry is the cost of the escrow window.
+An unstake does not complete when it is requested. The cooldown is **13 days** by default, set per spot market, so that capital cannot leave in the hours between a market breaking and the bankruptcy being resolved. When it ends the payout is the **smaller** of the current value of the requested shares and the frozen request value, which means the two directions do not behave the same way.
+
+<Callout type="warning">
+**Gains after a request do not reach the staker. Losses after it do.** Revenue that settles during the 13 days lifts the share price, but the payout is capped at the frozen value, so none of that gain arrives. A bankruptcy draw during the same 13 days lowers the share price, and the payout is capped at the current value of the shares, so the draw lands in full. Submitting a request does not take capital out of Insurance Fund risk; only completing the withdrawal does.
 </Callout>
 
 ### Cancelling a request
 
-A cancel is modelled as a withdrawal at the frozen value followed by an immediate restake at the price prevailing now. Concretely:
-
-1. The withdraw leg pays out `min(current value of the requested shares, frozen request value)`, the same amount a completed unstake would pay.
-2. That amount is restaked at the current price, which mints fewer shares than you requested if the fund appreciated during escrow.
-3. You keep the restaked shares. The difference is forfeited to the stakers who stayed.
-
-If the fund did not appreciate while your request was pending, nothing is forfeited and your stake comes back intact. This is what prevents a request from working as a free option: you cannot request at a low price, watch the fund rise, then cancel and keep the upside.
-
-Two cases behave specially:
-
-- A staker whose request covers the fund's **entire** share supply forfeits nothing, because there are no remaining stakers for the forfeiture to accrue to.
-- If a fund-level rebase floored your pending request to zero shares, the cancel is still accepted. It returns your rebased stake to active and abandons only the dust frozen value. Rejecting it would strand the stake permanently, since add and re-request are both blocked while a request is pending.
-
-Cancelling with no request in progress fails with `NoIFWithdrawRequestInProgress`.
+A cancel values the requested shares at the smaller of their current value and the frozen request value, then restakes that amount at the price prevailing now. If the fund appreciated while the request was pending, that mints fewer shares than the stake started with, and the difference is forfeited to the stakers who stayed. If it did not, the stake comes back intact.
 
 <Callout type="warning">
-Cancelling after the fund has gained costs you shares. Compare the current value of your requested shares against your frozen request value before you cancel.
+Cancelling after the fund has gained costs shares. The gap between the current value of the requested shares and the frozen request value is exactly what the cancel forfeits, so the two are worth comparing first.
 </Callout>
 
 ### Completing the unstake
 
-After the 13-day escrow, `remove` pays out `min(current value of the requested shares, frozen request value)` and burns the requested shares. It is rejected when:
+After the cooldown, the unstake pays the smaller of the current value of the requested shares and the frozen request value, and burns those shares. It is rejected in seven cases, and the utilization one catches people out most often.
 
 | Condition | Error |
 | --- | --- |
-| The escrow period has not elapsed | `TryingToRemoveLiquidityTooFast` |
+| The cooldown has not elapsed | `TryingToRemoveLiquidityTooFast` |
 | There is no pending request | `InvalidIFUnstake` |
-| Your share balance is below the requested count | `InsufficientIFShares` |
-| Spot market utilization (or its 24h TWAP) is above the health threshold | `SpotMarketInsufficientDeposits` |
+| The staked share balance is below the requested count | `InsufficientIFShares` |
+| Spot market utilization or its TWAP is above 90% | `SpotMarketInsufficientDeposits` |
 | The payout would empty the fund's vault | `InvalidIFDetected` |
 | The `Remove` insurance-fund operation is paused | `InsuranceFundOperationPaused` |
 | Withdrawals are paused exchange-wide | `ExchangePaused` |
 
-The fund's vault must keep a non-zero balance after every unstake, so the last staker cannot drain it to exactly zero.
+Both the market's live utilization and its running average must sit at or below 90% for an unstake to complete, so a stretch of high borrow demand can hold a withdrawal past the 13 days. The gate applies only at removal, not when the request is opened.
 
 ## Revenue settlement limits
 
-Revenue reaches the fund through `settle_revenue_to_insurance_fund`, which anyone can crank. It runs at most once per `revenue_settle_period` per market (by default, hourly) and each run is capped twice over. The smaller of the two caps wins:
+Once a market's fund has a staker, revenue settles into it on a timer, by default once every 3,600 seconds, and each settle is capped two ways. The smaller cap wins, and what does not settle waits for the next run.
 
-- **One tenth of the revenue pool.** At most 10% of the market's current revenue-pool balance moves in a single settle. When utilization is high, meaning the market's net idle liquidity (deposits minus borrows) is smaller than the revenue pool itself, the eligible amount is first cut to half that idle liquidity.
-- **A 1000% annualized rate on the fund's own balance**, pro-rated to the settle period. So a market on an hourly period can move at most about 0.114% of the capped balance per settle.
+- **One tenth of the revenue pool** per settle.
+- **A 1000% annualized rate on the fund's own balance**, pro-rated to the settle period, so a market on the default hourly period moves at most about 0.114% of the fund per settle.
 
-The balance that APR cap is sized against is **not** the live token balance. It is `min(live balance, lowest balance the vault held since the last settle)`. Using the low-water snapshot means a direct token transfer into the vault right before a settle cannot lift the cap: the donated capital did not span the period. Capital that did span a full period already belongs to the stakers pro rata, so counting it is correct.
+## What this means in practice
 
-A market that has never settled has no snapshot, so its cap is zero for one period. That first settle moves nothing, writes the snapshot, and is allowed to succeed rather than erroring, so the market is not capped at zero forever.
+**This is underwriting, not depositing.** The yield is real fee revenue and none of it is shared with the protocol, but it is compensation for taking first loss on a market's bad debt. A stake is best sized against the largest single draw the market's tier permits.
 
-Whatever the settle moves accrues **entirely** to stakers as share-price appreciation. There is no protocol cut.
+**An exit takes at least 13 days and can take longer.** The cooldown and the 90% utilization gate are both outside the staker's control once a request is open.
+
+**Choose the market, not just the yield.** A stake into the quote market's fund backs every perpetual carrying a non-zero insurance cap; a stake into another market's fund backs only that market's borrows. The quote fund earns the most and is exposed to the most.

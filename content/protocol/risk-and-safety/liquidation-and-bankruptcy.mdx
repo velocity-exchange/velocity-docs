@@ -1,0 +1,77 @@
+---
+title: "Liquidation and bankruptcy"
+---
+
+Liquidation is the protocol taking a position away from an account that can no longer margin it. Bankruptcy is what is left when liquidation runs out of things to take: the account still owes a debt and holds nothing that can pay it. This page covers the second case, and sets out who absorbs that debt and in what order.
+
+Resolution is permissionless: anyone may resolve a latched perp or spot bankruptcy. Both are gated by a solvency flag separate from the general withdraw pauses, so an admin can pause withdrawals without also blocking bad-debt resolution, and only the cold-admin key can flip it.
+
+<Callout type="important">
+Every tranche below is drawn in order, and each one only sees the loss the tranches above it could not cover. Nothing is socialized until every tranche is exhausted.
+</Callout>
+
+## Step 0: the estate pays first
+
+Before any shared money moves, the resolver empties the bankrupt account itself, in this order:
+
+- **Recover perp claims.** Positive claims the account holds against perp P&L pools are pulled in, capped at the part of this market's debt the estate's own quote deposit does not already cover.
+- **Set off the account's own quote deposit.** Any quote deposit the account still holds is transferred into the market's P&L pool and credited against the debt.
+- **Forfeit unfundable claims.** Positive perp claims the protocol cannot fund are extinguished, capped at the loss other people are about to cover. An estate cannot keep a claim after someone else's money paid its debt.
+
+If a realizable asset turns up after this step, the resolver clears the bankruptcy flag and returns **without drawing anything**; ordinary liquidation then seizes the asset and re-latches for whatever residual is real. If the setoff clears the debt entirely, resolution ends there.
+
+## Perp bankruptcy waterfall
+
+<Steps>
+### Tranche 1: the market's in-transit insurance fee
+The market's own not-yet-swept insurance fee is consumed first. No tokens move: the pending fee claim and the forgiven loss are both claims on future P&L-pool inflows, so the value stays in the P&L pool, backing the counterparties this spares from socialization.
+### Tranche 2: the shared Insurance Fund vault
+The quote market's [Insurance Fund](/protocol/insurance-fund) vault covers the remainder, bounded by the market's own insurance claim cap and by the vault balance minus 1 token, which always stays behind. A market whose contract tier caps insurance at \$0 draws nothing here.
+### Tranche 3: the AMM fee-provision clawback
+The market claws back the fee provision the AMM has been granted, capped at the cumulative provision net of prior clawbacks. The AMM's own trading and spread capital beyond that provision is never touched.
+### Socialized loss
+Anything still outstanding is socialized across surviving open interest in that market, through a bump to both cumulative funding rates, so longs and shorts both pay.
+</Steps>
+
+**There is exactly one tranche between a perp bad debt and the shared vault.** It is the in-transit insurance fee. A market's revenue pool is not part of the perp waterfall; that tranche exists only on the spot side.
+
+## Spot bankruptcy waterfall
+
+<Steps>
+### Tranche 1: the market's revenue pool
+The bad-debt market's own revenue pool is first-loss capital, consumed before the staker-owned Insurance Fund vault and before any socialization. Unlike the periodic revenue settlement, this draw is neither timer-gated nor capped by staker APR.
+### Tranche 2: the Insurance Fund vault
+That market's Insurance Fund vault covers the rest of the borrow, again leaving at least 1 token in the vault.
+### Socialized loss
+The residual is socialized across that market's depositors by lowering the deposit-interest index, a pro-rata haircut to every lender in the market. The reduction is capped so the index never falls below 1.
+</Steps>
+
+<Callout type="info">
+**Perp bankruptcies must be resolved before spot bankruptcies.** Both resolvers draw on the same quote Insurance Fund vault, so letting a caller choose the order would let them shift loss between perp and spot stakeholders. A spot resolution rejects with `PerpBankruptcyMustPrecedeSpot` while the account still has an unresolved cross-margin perp bankruptcy.
+</Callout>
+
+## How much socialized loss costs
+
+On a perp market the residual is divided by the market's total open base, meaning the absolute long base plus the absolute short base, and both sides owe it. It is charged per unit of base held, once, at resolution, and does not depend on which way the position is facing.
+
+Take a market carrying 100,000 SOL long against 100,000 SOL short, with a \$2,000,000 residual surviving the waterfall. Total open base is 200,000, so the bump is \$10 per SOL: a desk holding 20,000 SOL pays \$200,000 either way, and a trader holding 10 SOL pays \$100.
+
+## The standing first-loss tranche
+
+Tranche 1 is only useful if there is something in it when the bankruptcy happens, and the fee sweep is permissionless. So no sweep may drain the in-transit fee to zero: each market holds a floor behind, sized as a percentage of its **open-interest notional** and priced at the market's own oracle TWAP rather than a live print, so a manipulated spot price cannot crush it.
+
+The default is **10 bps (0.1%)** of open-interest notional, so the tranche is sized without an admin call. A configured value must be at or below 100%, or the sentinel that disables the floor entirely, so read the market account for the live setting. On a market carrying \$50,000,000 of open-interest notional, the default floor is \$50,000 standing in front of the shared vault.
+
+## The claim freeze
+
+The standing floor is sized off market risk, which is only a proxy for a loss and can be smaller than one. So the moment a bankruptcy is latched against a market, the fee sweep withholds the **whole** in-transit fee, not just the floor. Without this, a permissionless sweep could drain the first-loss tranche between the latch and the resolution and push the loss onto the shared vault or into socialization.
+
+The freeze is independent of open interest and of the floor percentage, so turning the floor off does not expose a latched claim. The claim clears when the debt is absorbed through the waterfall, or when P&L settlement releases it once the position's quote reaches zero. Neither needs the admin.
+
+**Delisting is blocked while a claim is open**, because the final wind-up sweep reserves nothing and would drain the tranche backing the open debt. The market stays in `Settlement` while the two permissionless paths above clear the count. See [Delisting](/protocol/risk-and-safety/delisting-process).
+
+## What this means in practice
+
+- **Insurance Fund stakers.** One tranche stands between a perp bad debt and the staked vault: the market's in-transit insurance fee, with its standing floor. On a spot bad debt there are two, because that market's own revenue pool is drawn first. The AMM fee-provision clawback sits *after* the vault, so it protects no staker. Markets on the Speculative, Highly Speculative and Isolated [contract tiers](/protocol/risk-and-safety/contract-tiers) cannot draw on the vault at all.
+- **Market makers and keepers.** If a fee sweep returns less than expected, or a delisting is refused, the market's pending bankruptcy claim count is the thing to read. A non-zero count freezes both.
+- **Traders.** Socialized loss is the last tranche, never the first, and it is not avoidable by being positioned correctly, only by not holding the market.

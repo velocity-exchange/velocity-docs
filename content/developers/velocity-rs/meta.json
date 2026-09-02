@@ -1,0 +1,13 @@
+{
+  "title": "Velocity Rust SDK",
+  "pages": [
+    "index",
+    "setup",
+    "client",
+    "reading-state",
+    "orders",
+    "subscriptions",
+    "dlob",
+    "examples"
+  ]
+}

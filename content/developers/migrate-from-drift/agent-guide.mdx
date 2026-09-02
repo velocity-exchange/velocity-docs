@@ -1,20 +1,22 @@
-# AI Agent Migration Guide
+---
+title: "AI Agent Migration Guide"
+---
 
 ## 0. Read this first
 
-You are an AI coding agent (Claude Code, Cursor, or similar). Someone has pointed you at a TypeScript codebase that imports `@drift-labs/sdk` and asked you to migrate it to `@velocity-exchange/sdk`. This page is written for you, as executable instructions. Follow it mechanically.
+This page is written for an AI coding agent (Claude Code, Cursor, or similar) that has been pointed at a TypeScript codebase importing `@drift-labs/sdk` and asked to migrate it to `@velocity-exchange/sdk`. It is a set of executable instructions. Follow it mechanically.
 
-**Scope.** This guide covers the **TypeScript SDK only**: the trading / market-making and keeper code paths. It does not cover Rust program integration; for ABI and on-chain detail see the [full migration doc](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md).
+**Scope.** This guide covers the **TypeScript SDK only**: the trading, market-making, and keeper code paths. It does not cover Rust program integration. The ABI and onchain-layout reference for that is `docs/DRIFT-TO-VELOCITY.md` in the `velocity-v1` monorepo, which is not public; the operator has to obtain it from the team.
 
-**Read the whole guide before you edit anything.** Sections 3 and 4 are mechanical (renames and deletions the compiler will help you with). Section 5 is not. It lists behavior changes the compiler **cannot** catch.
+**Read the whole guide before editing anything.** Sections 3 and 4 are mechanical (renames and deletions the compiler catches). Section 5 is not. It lists behavior changes the compiler **cannot** catch.
 
-**The golden rule: a compile-clean port is NOT a done port.** Code that builds cleanly against `@velocity-exchange/sdk` can still lose money because a formula, default, or asset changed underneath it. Section 5 enumerates every such change. Before you tell your human the migration is complete, you **must** produce the Section 5 behavioral report. Do not skip it. Do not assume it does not apply until you have checked each item against the codebase.
+**The golden rule: a compile-clean port is NOT a done port.** Code that builds cleanly against `@velocity-exchange/sdk` can still lose money because a formula, default, or asset changed underneath it. Section 5 enumerates every such change. Before reporting the migration complete, the Section 5 behavioral report is **mandatory**. Do not skip it. Do not assume an item does not apply until each one has been checked against the codebase.
 
-Do not rely on prior knowledge of Drift's API. Every factual claim in this guide is sourced from the current Velocity codebase; treat this page (not your training data) as authoritative.
+Do not rely on prior knowledge of Drift's API. Every factual claim in this guide is sourced from the current Velocity codebase; treat this page, not training data, as authoritative.
 
 ---
 
-## 1. Inventory the Drift surface before you touch it
+## 1. Inventory the Drift surface first
 
 Enumerate exactly what the codebase uses, so nothing is missed and nothing is over-changed.
 
@@ -24,7 +26,7 @@ Enumerate exactly what the codebase uses, so nothing is missed and nothing is ov
 grep -rn "@drift-labs/sdk" --include="*.ts" --include="*.tsx" -l .
 ```
 
-**Extract the set of imported symbols** (dedupe this list: it is your work queue):
+**Extract the set of imported symbols** (dedupe this list: it is the work queue):
 
 ```bash
 grep -rhoE "import[[:space:]]*\{[^}]*\}[[:space:]]*from[[:space:]]*['\"]@drift-labs/sdk['\"]" \
@@ -38,13 +40,13 @@ grep -rhoE "import[[:space:]]*\{[^}]*\}[[:space:]]*from[[:space:]]*['\"]@drift-l
 grep -rnE "from[[:space:]]*['\"]@drift-labs/sdk(/[^'\"]+)?['\"]" --include="*.ts" --include="*.tsx" .
 ```
 
-then open each reported file and read its full import statement(s) to collect the symbols the first command missed. Do not skip this step: a symbol that never enters your work queue never gets migrated.
+then open each reported file and read its full import statement(s) to collect the symbols the first command missed. Do not skip this step: a symbol that never enters the work queue never gets migrated.
 
 **Cross-check** every symbol the commands above return against the tables in Sections 3 and 4. For each symbol:
 
 - If it appears in a **Section 3** rename table → apply the rename.
 - If it appears in the **Section 4** removal table → delete or rework its call sites.
-- **If it appears in neither → flag it.** Do not guess a replacement. Add it to the report you deliver to your human and ask, rather than inventing a symbol that may not exist.
+- **If it appears in neither → flag it.** Do not guess a replacement. Add it to the report delivered to the operator and ask, rather than inventing a symbol that may not exist.
 
 ---
 
@@ -56,10 +58,10 @@ Do these steps in order. Later steps depend on earlier ones.
 
 ```bash
 npm uninstall @drift-labs/sdk
-bun add @velocity-exchange/sdk   # 0.13.x
+bun add @velocity-exchange/sdk   # 0.20.0
 ```
 
-This also moves Anchor from **0.29 to 1.0**: the SDK depends on `@anchor-lang/core@1.0.1`, installed under the alias `@coral-xyz/anchor`. Transitive Anchor types (`Program`, `BN`, `Wallet`, IDL typing) therefore change: expect type churn wherever you touch Anchor directly.
+This also moves Anchor from **0.29 to 1.0**: the SDK depends on `@anchor-lang/core@1.0.1`, installed under the alias `@coral-xyz/anchor`. Transitive Anchor types (`Program`, `BN`, `Wallet`, IDL typing) therefore change: expect type churn wherever the code touches Anchor directly.
 
 **(b) Apply the mechanical renames** from the Section 3 tables. There are **no back-compat aliases**: the old names do not exist in the new package, so `tsc` will flag each one.
 
@@ -78,7 +80,7 @@ This also moves Anchor from **0.29 to 1.0**: the SDK depends on `@anchor-lang/co
 
 **(g) Run the Section 6 audit greps.** They must all return zero hits.
 
-**(h) Produce the Section 5 behavioral report for your human.** This is a required deliverable, not optional cleanup.
+**(h) Produce the Section 5 behavioral report for the operator.** This is a required deliverable, not optional cleanup.
 
 ---
 
@@ -91,10 +93,10 @@ There are **NO back-compat aliases**. Every old name below is absent from `@velo
 | Old | New | Notes |
 |---|---|---|
 | `@drift-labs/sdk` | `@velocity-exchange/sdk` | package name |
-| version `2.163.0-beta.0` | `0.13.0` | version reset |
+| version `2.163.0-beta.0` | `0.20.0` | version reset |
 | `@coral-xyz/anchor@0.29.0` | `@anchor-lang/core@1.0.1` (aliased as `@coral-xyz/anchor`) | Anchor 0.29 → 1.0; transitive types change |
 | IDL `drift.json` | `velocity.json` | generated artifact; do not hand-edit |
-| jit-proxy program id (SDK config) | `J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ` | only if you reference jit-proxy |
+| jit-proxy program id (SDK config) | `J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ` | only if the codebase references jit-proxy |
 
 ### 3b. Classes, modules & constants
 
@@ -210,87 +212,167 @@ If the codebase builds or calls any of these instructions, that path is gone: re
 
 ## 5. Behavioral divergences: STOP and report
 
-This section is the core of the guide. For each item below, determine whether the codebase touches it. **Compile-clean code can still lose money on these.** Before you declare the migration complete, produce a report to your human listing every item that applies, what you found, and what you changed or left for review.
+This section is the core of the guide. For each item below, determine whether the codebase touches it. **Compile-clean code can still lose money on these.** Before declaring the migration complete, produce a report for the operator listing every item that applies, what was found, and what was changed or left for review.
 
 ### 5.1 Quote/collateral asset is USDT on mainnet, not USDC (spot market 0)
 
-Old → new: Drift's spot-market-0 quote/collateral asset was **USDC** (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`); on Velocity **mainnet** it is **USDT** (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`), devnet is dUSDT (`GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6`). Both are 6-decimal, so nothing type-checks differently. Affects: any bot that funds accounts, derives ATAs, or hardcodes the quote mint. Check: grep for the old USDC mint string and for `USDC`; switch all quote-mint hardcodes/ATAs to USDT (dUSDT on devnet); never assume `QUOTE_MINT_ADDRESS == USDC`.
+**What changed.** Drift's spot-market-0 quote/collateral asset was **USDC** (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`); on Velocity **mainnet** it is **USDT** (`Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`), devnet is dUSDT (`GqmEqYsy8EyvofDpmtFxK8zhYrgWgNokAtYoduQdL7v6`). Both are 6-decimal, so nothing type-checks differently.
+
+**What it affects.** Any bot that funds accounts, derives ATAs, or hardcodes the quote mint.
+
+**What to do.** Grep for the old USDC mint string and for `USDC`; switch all quote-mint hardcodes/ATAs to USDT (dUSDT on devnet); never assume `QUOTE_MINT_ADDRESS == USDC`.
 
 ### 5.2 dlob-server v3 forces fast-fill auctions for all markets
 
-Old → new: previously major/minor markets used different auction start offsets and a ~60-slot default duration; at API `version>=3` every market gets fast-fill: the auction starts at `bestOffer` with a `-0.05` price offset (inside the touch), and `auctionDuration` is 2000 ms of wall clock converted to slots at the market's active slot duration (5 slots at the 400 ms baseline, more at a shorter slot duration). Affects: MMs quoting off stale prices get run over; fill-timing assumptions break. Check: any code assuming a long auction window, a tier-based auction params, or a hardcoded 5-slot duration; derive the window from `slotDuration` and use the new `generatedAt` response field for staleness checks.
+**What changed.** Previously major/minor markets used different auction start offsets and a ~60-unit default duration; at API `version>=3` every market gets fast-fill: the auction starts at `bestOffer` with a `-0.05` price offset (inside the touch), and `auctionDuration` is 5, which the field's 400ms encoding makes 2000 ms of wall clock. `auctionDuration` is stored in wall-clock 400ms units rather than live slots, so that 2000 ms window does not move as Solana's slot time steps down.
+
+**What it affects.** MMs quoting off stale prices get run over; fill-timing assumptions break.
+
+**What to do.** Any code assuming a long auction window or tier-based auction params, and any code that multiplies `auctionDuration` by the live slot duration to get a wall-clock window: multiply by 400 ms instead. Use the new `generatedAt` response field for staleness checks.
 
 ### 5.3 DLOB prices resting trigger orders at their post-trigger price
 
-Old → new: the old DLOB tagged resting trigger orders with their raw trigger price and mispriced `TriggerLimit` as an unbounded market order; now the book rewrites the price to the computed post-trigger auction price, preserving `TriggerMarket`/`TriggerLimit` kind and clamping to the limit for `TriggerLimit`. This rewrite lives in the Rust DLOB library (`velocity-rs`); the TypeScript SDK DLOB does not apply it. Affects: fillers computing crossing and MMs estimating stop-order impact off the `velocity-rs` DLOB or services built on it. Check: any logic that assumes a resting trigger order's book price equals its trigger price.
+**What changed.** The old DLOB tagged resting trigger orders with their raw trigger price and mispriced `TriggerLimit` as an unbounded market order; now the book rewrites the price to the computed post-trigger auction price, preserving `TriggerMarket`/`TriggerLimit` kind and clamping to the limit for `TriggerLimit`. This rewrite lives in the Rust DLOB library (`velocity-rs`); the TypeScript SDK DLOB does not apply it.
+
+**What it affects.** Fillers computing crossing and MMs estimating stop-order impact off the `velocity-rs` DLOB or services built on it.
+
+**What to do.** Any logic that assumes a resting trigger order's book price equals its trigger price.
 
 ### 5.4 AMM JIT dropped from DLOB match fills under a hard AMM gate
 
-Old → new: the old match path always added AMM JIT alongside the DLOB maker; now, when a hard gate (pause / drawdown / MM-vs-oracle volatility / oracle invalidity) fires, the match branch fills DLOB-only. Affects: fills can be capped to the resting maker's size or under-fill during those windows. Check: any filler/MM that assumes AMM JIT backstops a DLOB match; check market pause/drawdown/oracle-validity state before relying on it.
+**What changed.** The old match path always added AMM JIT alongside the DLOB maker; now, when a hard gate (pause / drawdown / MM-vs-oracle volatility / oracle invalidity) fires, the match branch fills DLOB-only.
+
+**What it affects.** Fills can be capped to the resting maker's size or under-fill during those windows.
+
+**What to do.** Any filler/MM that assumes AMM JIT backstops a DLOB match; check market pause/drawdown/oracle-validity state before relying on it.
 
 ### 5.5 MM-oracle native handler silently skips rejected writes, and clamps oversized steps instead of skipping them
 
-Old → new: the old `update_mm_oracle_native` wrote unconditionally on a higher sequence id; now a write is **silently skipped** (returns `Ok`, no error) on any of: a non-positive price, a sequence id that has not strictly increased, a slot that has not strictly advanced, a slot gap below the 800 ms minimum write gap, or a source slot more than 800 ms away from the landing slot in either direction. A per-write price step beyond the 1% cap is handled differently and is **not** a skip: it is clamped to the cap and written, so a feed gap larger than the cap converges over a few writes instead of freezing the oracle. Affects: MM crank bots pushing updates faster than 800 ms apart, or with a stale/mismatched source slot, now get silent skips with no error signal; bots pushing a large single-write move get a clamped price on chain, not a no-op. Check: MM-oracle push cadence. Throttle to at least 800 ms between writes and expect an oversized step to land clamped to 1%, not rejected.
+**What changed.** The old `update_mm_oracle_native` wrote unconditionally on a higher sequence id; now a write is **silently skipped** (returns `Ok`, no error) on any of: a non-positive price, a sequence id that has not strictly increased, a slot that has not strictly advanced, a slot gap below the 800 ms minimum write gap, or a source slot more than 800 ms away from the landing slot in either direction. A per-write price step beyond the 1% cap is handled differently and is **not** a skip: it is clamped to the cap and written, so a feed gap larger than the cap converges over a few writes instead of freezing the oracle.
+
+**What it affects.** MM crank bots pushing updates faster than 800 ms apart, or with a stale/mismatched source slot, now get silent skips with no error signal; bots pushing a large single-write move get a clamped price on chain, not a no-op.
+
+**What to do.** MM-oracle push cadence. Throttle to at least 800 ms between writes and expect an oversized step to land clamped to 1%, not rejected.
 
 ### 5.6 Funding floor raised 7.3% → 10.95% annualized
 
-Old → new: `FUNDING_RATE_OFFSET_DENOMINATOR` changed 5000 → 3333, so the always-on funding floor/ceiling is mechanically ~1.5x higher. Affects: funding carry and unrealized-PnL projections for any MM holding perp inventory. The SDK mirror is in sync, so re-pulled SDK predictions are correct. Check: any hardcoded funding-floor assumption; re-model funding carry with the higher floor.
+**What changed.** `FUNDING_RATE_OFFSET_DENOMINATOR` changed 5000 → 3333, so the always-on funding floor/ceiling is mechanically ~1.5x higher.
+
+**What it affects.** Funding carry and unrealized P&L projections for any MM holding perp inventory. The SDK mirror is in sync, so re-pulled SDK predictions are correct.
+
+**What to do.** Any hardcoded funding-floor assumption; re-model funding carry with the higher floor.
 
 ### 5.7 Per-market continuous funding dead zone
 
-Old → new: funding premium was the raw mark-vs-oracle spread plus offset; now within `AMM.funding_clamp_threshold` (default 5 bps) of oracle the premium collapses to the offset-only floor, and outside it the spread is shrunk and scaled by `funding_ramp_slope` (default 1.0x). Affects: funding predictions for low-divergence markets. SDK mirrors it exactly. Check: read `market.fundingClampThreshold` / `market.fundingRampSlope` per market rather than assuming a global constant.
+**What changed.** Funding premium was the raw mark-vs-oracle spread plus offset; now within `AMM.funding_clamp_threshold` (default 5 bps) of oracle the premium collapses to the offset-only floor, and outside it the spread is shrunk and scaled by `funding_ramp_slope` (default 1.0x).
+
+**What it affects.** Funding predictions for low-divergence markets. SDK mirrors it exactly.
+
+**What to do.** Read `market.fundingClampThreshold` / `market.fundingRampSlope` per market rather than assuming a global constant.
 
 ### 5.8 Funding-bias spread widening
 
-Old → new: no such widening on Drift; a new `AMM.funding_bias_sensitivity` (default 0 = off) widens the paying-side vAMM spread as funding approaches the offset floor once an admin enables it per market. Affects: MMs modeling vAMM quotes / expected fill price once enabled. SDK mirrors it. Check: read `market.fundingBiasSensitivity` per market rather than assuming 0.
+**What changed.** No such widening on Drift; a new `AMM.funding_bias_sensitivity` (default 0 = off) widens the paying-side vAMM spread as funding approaches the offset floor once an admin enables it per market.
+
+**What it affects.** MMs modeling vAMM quotes / expected fill price once enabled. SDK mirrors it.
+
+**What to do.** Read `market.fundingBiasSensitivity` per market rather than assuming 0.
 
 ### 5.9 Gov-token stake fee discount removed. Perp fee tier is 30-day volume, floored by an admin-set promo tier
 
-Old → new: Drift lowered your perp fee tier for staking the gov token (and short-circuited high-leverage mode to tier 0); Velocity determines the tier from 30-day volume, then takes the better of that and an admin-set `State.promo_fee_tier` floor (0 means no floor; the account is never downgraded below what the promo tier grants). Affects: an MM that staked for a fee discount now pays the tiered fee for its own volume, or the promo floor if that is higher, a real cost change either way. Check: any code reading a stake-based discount or the HLM tier path, and any fee reconciliation that assumes volume alone; re-model taker fees against volume plus the promo floor.
+**What changed.** Drift lowered the perp fee tier for staking the gov token (and short-circuited high-leverage mode to tier 0); Velocity determines the tier from 30-day volume, then takes the better of that and an admin-set `State.promo_fee_tier` floor (0 means no floor; the account is never downgraded below what the promo tier grants).
+
+**What it affects.** An MM that staked for a fee discount now pays the tiered fee for its own volume, or the promo floor if that is higher, a real cost change either way.
+
+**What to do.** Any code reading a stake-based discount or the HLM tier path, and any fee reconciliation that assumes volume alone; re-model taker fees against volume plus the promo floor.
 
 ### 5.10 Referee discount now applied in `getMarketFees`; fee method renamed and re-rounded
 
-Old → new: `getMarketFees` now subtracts the referee discount from the taker fee when the client's `UserStats` shows the `IsReferred` bit (Drift returned the raw tiered fee plus a `x2` HLM case, now gone). `calculateFeeForQuoteAmount` → `calculatePerpTakerFee`, which optionally adds a builder fee, and its non-`marketIndex` path switched fee rounding from floor to **ceil** (rounds up by up to 1 unit). Affects: predicted taker fee is now lower for referred users, higher with a builder code, and off-by-one vs the old floor rounding. Check: pass `user` (for referee discount) and `builderInfo` where relevant; expect the discounted/augmented value in fee reconciliation.
+**What changed.** `getMarketFees` now subtracts the referee discount from the taker fee when the client's `UserStats` shows the `IsReferred` bit (Drift returned the raw tiered fee plus a `x2` HLM case, now gone). `calculateFeeForQuoteAmount` → `calculatePerpTakerFee`, which optionally adds a builder fee, and its non-`marketIndex` path switched fee rounding from floor to **ceil** (rounds up by up to 1 unit).
 
-### 5.11 `isFallbackAvailableLiquiditySource` now mirrors the on-chain AMM gates
+**What it affects.** Predicted taker fee is now lower for referred users, higher with a builder code, and off-by-one vs the old floor rounding.
 
-Old → new: the old SDK helper only checked the `AMM_FILL` pause bit and over-reported AMM as an available fallback source; it now also gates on AMM drawdown and `>1%` MM-vs-exchange oracle divergence, matching the program. Affects: an MM/keeper router built on the old SDK expected AMM fills the program was actually suppressing. Check: re-pull the SDK and trust the corrected availability.
+**What to do.** Pass `user` (for referee discount) and `builderInfo` where relevant; expect the discounted/augmented value in fee reconciliation.
+
+### 5.11 `isFallbackAvailableLiquiditySource` now mirrors the onchain AMM gates
+
+**What changed.** The old SDK helper only checked the `AMM_FILL` pause bit and over-reported AMM as an available fallback source; it now also gates on AMM drawdown and `>1%` MM-vs-exchange oracle divergence, matching the program.
+
+**What it affects.** An MM/keeper router built on the old SDK expected AMM fills the program was actually suppressing.
+
+**What to do.** Re-pull the SDK and trust the corrected availability.
 
 ### 5.12 `update_perp_bid_ask_twap` crank no longer applies funding; divergence filter now symmetric
 
-Old → new: on Drift the mark-TWAP crank refreshed the TWAP **and** applied funding in one instruction, and its oracle-divergence filter clamped each side with only one bound (oracle `+/-15%`). Now funding is decoupled and the filter is two-sided. Affects: keepers that relied on the funding side-effect of the TWAP crank. Check: split the funding update out, call `update_funding_rate` separately (the bundled `fundingRateUpdater` already does).
+**What changed.** On Drift the mark-TWAP crank refreshed the TWAP **and** applied funding in one instruction, and its oracle-divergence filter clamped each side with only one bound (oracle `+/-15%`). Now funding is decoupled and the filter is two-sided.
+
+**What it affects.** Keepers that relied on the funding side-effect of the TWAP crank.
+
+**What to do.** Split the funding update out, call `update_funding_rate` separately (the bundled `fundingRateUpdater` already does).
 
 ### 5.13 `AdminClient.initializePerpMarket` default `oracleSource` PYTH → PYTH_LAZER
 
-Old → new: calling `initializePerpMarket` without an explicit `oracleSource` now defaults to `PYTH_LAZER` (a different oracle account + parse format) instead of `PYTH`. `initializeSpotMarket` has no default in either version (required param), not a divergence. Affects: market-creation / admin tooling only, not routine MM flow. Check: pass `oracleSource` explicitly on `initializePerpMarket`.
+**What changed.** Calling `initializePerpMarket` without an explicit `oracleSource` now defaults to `PYTH_LAZER` (a different oracle account + parse format) instead of `PYTH`. `initializeSpotMarket` has no default in either version (required param), not a divergence.
+
+**What it affects.** Market-creation / admin tooling only, not routine MM flow.
+
+**What to do.** Pass `oracleSource` explicitly on `initializePerpMarket`.
 
 ### 5.14 Native fast-path handlers now require the real Clock sysvar + program-owned accounts
 
-Old → new: the old native handlers trusted caller-supplied accounts and read the slot from a caller account; now `update_mm_oracle_native` / `update_amm_spread_adjustment_native` verify account owner + discriminator, rejecting with `InvalidNativeStateAccount` (6355) / `InvalidNativePerpMarketAccount` (6356), and `update_mm_oracle_native` reads the slot from the Clock sysvar. `update_amm_spread_adjustment_native` also requires `State` at account index 2. Affects: keepers/relayers hand-building the raw `[0xFF,0xFF,0xFF,0xFF,opcode]` instruction. Check: pass the real Clock sysvar and real State/PerpMarket PDAs (`getUpdateAmmSpreadAdjustmentNativeIx` is now async and adds State).
+**What changed.** The old native handlers trusted caller-supplied accounts and read the slot from a caller account; now `update_mm_oracle_native` / `update_amm_spread_adjustment_native` verify account owner + discriminator, rejecting with `InvalidNativeStateAccount` (6355) / `InvalidNativePerpMarketAccount` (6356), and `update_mm_oracle_native` reads the slot from the Clock sysvar. `update_amm_spread_adjustment_native` also requires `State` at account index 2.
+
+**What it affects.** Keepers/relayers hand-building the raw `[0xFF,0xFF,0xFF,0xFF,opcode]` instruction.
+
+**What to do.** Pass the real Clock sysvar and real State/PerpMarket PDAs (`getUpdateAmmSpreadAdjustmentNativeIx` is now async and adds State).
 
 ### 5.15 `MarketStatus` discriminants shifted
 
-Old → new: Drift's `MarketStatus` had 4 now-removed pause variants between `Active` and `ReduceOnly`, so `ReduceOnly`/`Settlement`/`Delisted` were 6/7/8; they are now **2/3/4**. `PerpMarketAccount` also grew from 1216 bytes to 1304 bytes across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign. Affects: any custom (non-IDL) decoder reading the raw status byte will silently misclassify market state (e.g. read `ReduceOnly` as `FundingPaused`), and a raw fixed-offset decoder sized for the old struct will read past valid data or miss trailing fields. The IDL/SDK class decode is fine. Check: rebuild any raw-numeric status decoders against the new discriminants and the current struct size.
+**What changed.** Drift's `MarketStatus` had 4 now-removed pause variants between `Active` and `ReduceOnly`, so `ReduceOnly`/`Settlement`/`Delisted` were 6/7/8; they are now **2/3/4**. `PerpMarketAccount` also grew from 1216 bytes to 1560 bytes across the Anchor 1.0 alignment fix, the AMM decoupling, and the fee redesign.
+
+**What it affects.** Any custom (non-IDL) decoder reading the raw status byte will silently misclassify market state (e.g. read `ReduceOnly` as `FundingPaused`), and a raw fixed-offset decoder sized for the old struct will read past valid data or miss trailing fields. The IDL/SDK class decode is fine.
+
+**What to do.** Rebuild any raw-numeric status decoders against the new discriminants and the current struct size.
 
 ### 5.16 `LiquidationRecord.bankrupt` is now state-derived, not constant `true`
 
-Old → new: `resolve_perp_bankruptcy` / `resolve_spot_bankruptcy` hardcoded `bankrupt: true`; now the emitted record reflects whether a bankrupting liability **remains** after the resolve. Wire type is still `bool`, so type-checkers see nothing. Affects: indexers/dashboards that treated the record's presence (or `bankrupt == true`) as "still bankrupt". Check: read `record.bankrupt` as a live flag; note it is the top-level field, not `perpBankruptcy.bankrupt`.
+**What changed.** `resolve_perp_bankruptcy` / `resolve_spot_bankruptcy` hardcoded `bankrupt: true`; now the emitted record reflects whether a bankrupting liability **remains** after the resolve. Wire type is still `bool`, so type-checkers see nothing.
+
+**What it affects.** Indexers/dashboards that treated the record's presence (or `bankrupt == true`) as "still bankrupt".
+
+**What to do.** Read `record.bankrupt` as a live flag; note it is the top-level field, not `perpBankruptcy.bankrupt`.
 
 ### 5.17 Bulk `place_orders` / `place_scale_orders` enforce initial margin per risk scope
 
-Old → new: Drift set the margin check only on the last order and never accumulated an earlier risk-increasing order's exposure (and could skip the check entirely if the final order was a no-op, running against maintenance margin); Velocity accumulates risk across the batch and checks **initial** margin once per touched scope (cross + each isolated market). Affects: batches that slipped a risk-increasing order past a weak gate now revert with `InsufficientCollateral`. Check: size bulk batches against initial margin; expect stricter rejection.
+**What changed.** Drift set the margin check only on the last order and never accumulated an earlier risk-increasing order's exposure (and could skip the check entirely if the final order was a no-op, running against maintenance margin); Velocity accumulates risk across the batch and checks **initial** margin once per touched scope (cross + each isolated market).
+
+**What it affects.** Batches that slipped a risk-increasing order past a weak gate now revert with `InsufficientCollateral`.
+
+**What to do.** Size bulk batches against initial margin; expect stricter rejection.
 
 ### 5.18 `transfer_deposit` / `deposit` now enforce per-market admission checks
 
-Old → new: Drift credited transfer recipients and debited sources without active-status / cap / reduce-only checks, and direct `deposit()` ignored the per-market deposit-pause bit; Velocity applies the full admission logic (active status, `max_token_deposits`, reduce-only cap, and the `SpotOperation::Deposit` pause bit). Affects: transfers into a capped / non-active / reduce-only market and deposits into a market with only the per-market deposit bit paused now **revert**. Check: pre-check spot-market status and caps before transferring/depositing.
+**What changed.** Drift credited transfer recipients and debited sources without active-status / cap / reduce-only checks, and direct `deposit()` ignored the per-market deposit-pause bit; Velocity applies the full admission logic (active status, `max_token_deposits`, reduce-only cap, and the `SpotOperation::Deposit` pause bit).
+
+**What it affects.** Transfers into a capped / non-active / reduce-only market and deposits into a market with only the per-market deposit bit paused now **revert**.
+
+**What to do.** Pre-check spot-market status and caps before transferring/depositing.
 
 ### 5.19 HYPE (market 3) reclassified as a major market for dynamic slippage
 
-Old → new: dlob-server now uses `MAJOR_MARKETS = [0,1,2,3]` (was a `marketIndex < 3` check that excluded HYPE), with `MID_MAJOR_MARKETS = []`. HYPE previously fell through to the widest slippage tier / ~63-slot auction ceiling; it is now treated like SOL/BTC/ETH. Affects: MMs/bots computing expected slippage or auction params for HYPE. Check: re-fetch dynamic-slippage config; do not hardcode tier by old market index.
+**What changed.** Dlob-server now uses `MAJOR_MARKETS = [0,1,2,3]` (was a `marketIndex < 3` check that excluded HYPE), with `MID_MAJOR_MARKETS = []`. HYPE previously fell through to the widest slippage tier / ~63-slot auction ceiling; it is now treated like SOL/BTC/ETH.
+
+**What it affects.** MMs/bots computing expected slippage or auction params for HYPE.
+
+**What to do.** Re-fetch dynamic-slippage config; do not hardcode tier by old market index.
 
 ### 5.20 keep-rs / velocity-rs filler behavior fixes (bot-side)
 
-Old → new: several `keep-rs` (+ one `velocity-rs` DLOB) filler fixes change observed fill timing/success with no on-chain ABI change: the filler now mirrors full program AMM quote-prep (stops vamm-taker no-op spam), swift/signed-msg fills are evaluated at the **projected landing slot** (not arrival slot), vAMM-crossed resting orders get a dedicated taker-fill pass with split vAMM gating, and there is dropped-trigger recovery, maker-eligibility filtering on uncross, and a `processed`-commitment preflight sim. Affects: any third-party filler/MM that modeled its bot on old keep-rs behavior. Check: mirror landing-slot swift evaluation, the split vAMM gate, maker-eligibility filtering, and `processed`-commitment preflight; port the two-step AMM quote projection.
+**What changed.** Several `keep-rs` (+ one `velocity-rs` DLOB) filler fixes change observed fill timing/success with no onchain ABI change: the filler now mirrors full program AMM quote-prep (stops vamm-taker no-op spam), swift/signed-msg fills are evaluated at the **projected landing slot** (not arrival slot), vAMM-crossed resting orders get a dedicated taker-fill pass with split vAMM gating, and there is dropped-trigger recovery, maker-eligibility filtering on uncross, and a `processed`-commitment preflight sim.
+
+**What it affects.** Any third-party filler/MM that modeled its bot on old keep-rs behavior.
+
+**What to do.** Mirror landing-slot swift evaluation, the split vAMM gate, maker-eligibility filtering, and `processed`-commitment preflight; port the two-step AMM quote projection.
 
 ---
 
@@ -304,7 +386,7 @@ The migration is complete only when **all** of the following pass.
 bunx tsc --noEmit
 ```
 
-**These audit greps all return zero hits** (run from the repo root against your source tree, e.g. `src/`):
+**These audit greps all return zero hits** (run from the repo root against the source tree, e.g. `src/`):
 
 ```bash
 grep -rn "@drift-labs/sdk" --include="*.ts" --include="*.tsx" .
@@ -333,12 +415,12 @@ grep -rnE "drift_state" src/                                 # old State PDA see
 # plus: manually confirm no cached PDA/account addresses remain. Re-derive all of them.
 ```
 
-**Behavioral report delivered:** the Section 5 report has been handed to your human, listing every item that applies to this codebase, what you found, and what you changed or left for review.
+**Behavioral report delivered:** the Section 5 report has been handed to the operator, listing every item that applies to this codebase, what was found, and what was changed or left for review.
 
-> **If all greps pass but you skipped the Section 5 report, the migration is NOT complete.** A green `tsc` proves the code compiles, not that it behaves correctly against Velocity.
+> **If all greps pass but the Section 5 report was skipped, the migration is NOT complete.** A green `tsc` proves the code compiles, not that it behaves correctly against Velocity.
 
 ---
 
 ## 7. Currency note
 
-This guide reflects `@velocity-exchange/sdk` **0.13.0**, August 2026, and covers the **TypeScript SDK** only. For deeper ABI / Rust-level detail see the [full Drift-to-Velocity migration doc](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md). A human-oriented overview lives at [/developers/migrate-from-drift](/developers/migrate-from-drift). SDK setup basics are at [/developers/velocity-sdk/setup](/developers/velocity-sdk/setup).
+This guide reflects `@velocity-exchange/sdk` **0.20.0** and covers the **TypeScript SDK** only. Deeper ABI and Rust-level detail lives in `docs/DRIFT-TO-VELOCITY.md` in the `velocity-v1` monorepo, which is not public; ask the team for it rather than looking for a clone URL. A human-oriented overview of this page is at [Migrating from Drift](/developers/migrate-from-drift), and SDK setup basics are at [Setup](/developers/velocity-sdk/setup).

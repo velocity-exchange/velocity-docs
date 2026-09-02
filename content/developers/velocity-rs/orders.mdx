@@ -1,0 +1,254 @@
+---
+title: "Building and sending orders"
+---
+
+Every transaction in `velocity-rs` is assembled by `TransactionBuilder`. It owns the account resolution, so the caller describes the intended action and it works out which markets, oracles and user accounts have to appear in the account list. It produces a `VersionedMessage`, which is then signed and sent.
+
+## Getting a builder
+
+Two routes. `client.init_tx(&sub_account, delegated)` fetches the subaccount over RPC and hands back a builder, which is convenient for a one-off. `TransactionBuilder::new` takes data already on hand, which is what a bot on a hot path uses, because the subaccount is already in the cache.
+
+<SDKDoc>
+  <Rust name="TransactionBuilder" type="struct">
+```rust
+use std::borrow::Cow;
+use velocity_rs::TransactionBuilder;
+use velocity_rs::types::accounts::User;
+
+// hot path: build from the cached subaccount, no RPC
+let sub_account_data: User = client.try_get_account(&sub_account)?;
+let builder = TransactionBuilder::new(
+    client.program_data(),
+    sub_account,
+    Cow::Borrowed(&sub_account_data),
+    false, // true when signing as a delegate
+);
+
+// one-off: fetches the subaccount over RPC
+let builder = client.init_tx(&sub_account, false).await?;
+```
+  </Rust>
+</SDKDoc>
+
+The fourth argument is the delegated flag. Set it to `true` when the wallet signs on behalf of another authority, and the builder takes the authority from the subaccount's `delegate` field instead of its `authority` field.
+
+Builder methods consume and return `self`, so a transaction is a chain. `add_ix` and `set_ix` splice in an arbitrary instruction, which is how an associated token account creation gets prepended or a cleanup appended. `with_priority_fee(microlamports_per_cu, cu_limit)` adds the compute budget instructions. `fee_payer`, `lookup_tables`, `legacy` and `force_include_markets` cover the rest of the transaction-level configuration.
+
+## Order parameters
+
+`OrderParams` is the program's own struct, re-exported as `velocity_rs::types::OrderParams`. It derives `Default`, so the pattern throughout the crate is to set the relevant fields and spread the rest.
+
+| Field | Notes |
+|---|---|
+| `order_type` | `Market`, `Limit`, `Oracle`, `TriggerMarket`, `TriggerLimit` |
+| `market_type`, `market_index` | Perp or spot, plus the index |
+| `direction` | `PositionDirection::Long` or `Short` |
+| `base_asset_amount` | In `BASE_PRECISION`, 1e9 for perps |
+| `price` | In `PRICE_PRECISION`, 1e6. Ignored by an oracle-offset order |
+| `oracle_price_offset` | `Option<i64>`, in `PRICE_PRECISION`. Makes the order float with the oracle |
+| `post_only` | `PostOnlyParam::MustPostOnly` rejects the order rather than crossing |
+| `reduce_only` | Order can only shrink the position |
+| `user_order_id` | A caller-assigned 0 to 255 handle, used by the `*_by_user_id` cancel and modify calls |
+| `bit_flags` | Immediate or cancel, high leverage mode |
+| `max_ts` | `Option<i64>` unix seconds. Auto-expiry |
+| `trigger_price`, `trigger_condition` | Trigger orders |
+| `auction_duration`, `auction_start_price`, `auction_end_price` | The auction ramp, `Option` each. Duration is counted in 400 ms wall-clock units, not slots |
+| `builder_idx`, `builder_fee_tenth_bps` | [Builder codes](/developers/builder-codes). The fee is in tenths of a bp, so 100 is 0.01% |
+
+The bit flags are named on the `OrderParamsExt` trait rather than on `OrderParams` itself, because the orphan rule prevents adding an inherent const to a type from another crate. Import the trait to reach them.
+
+```rust
+use velocity_rs::types::{OrderParams, OrderParamsExt};
+
+let params = OrderParams {
+    bit_flags: <OrderParams as OrderParamsExt>::IMMEDIATE_OR_CANCEL_FLAG,
+    ..Default::default()
+};
+```
+
+`OrderParamsExt` also provides `immediate_or_cancel()` and `high_leverage_mode()` for reading a flag back. `OrderExt` does the same for a placed `Order`, with `ORACLE_TRIGGER_MARKET_FLAG`, `SAFE_TRIGGER_ORDER_FLAG`, `NEW_TRIGGER_REDUCE_ONLY_FLAG` and `HAS_BUILDER_FLAG`.
+
+For the common shapes there is a builder. `NewOrder` takes a signed amount, so the direction comes from the sign rather than a separate field.
+
+<SDKDoc>
+  <Rust name="NewOrder" type="struct">
+```rust
+use velocity_rs::types::{MarketId, NewOrder, PostOnlyParam};
+
+// short 5 SOL-PERP at $123.00, post only
+let order = NewOrder::limit(MarketId::perp(0))
+    .amount(-5_000_000_000)
+    .price(123_000_000)
+    .post_only(PostOnlyParam::MustPostOnly)
+    .user_order_id(1)
+    .build();
+```
+  </Rust>
+</SDKDoc>
+
+`NewOrder` covers market, oracle and limit orders. Anything with auction parameters, a trigger, a `max_ts` or a builder code is constructed as an `OrderParams` literal.
+
+Quantize before sending. Prices must be a multiple of the market's tick and sizes a multiple of its step, and the program rejects an order that is not. [Reading state](/developers/velocity-rs/reading-state#precision) has the `MarketPrecision` pattern.
+
+## Placing, cancelling and replacing
+
+<SDKDoc>
+  <Rust name="place_orders" type="method" owner="TransactionBuilder">
+```rust
+use velocity_rs::types::MarketType;
+
+let tx = builder
+    .with_priority_fee(1_000, Some(100_000))
+    .cancel_orders((market.market_index, MarketType::Perp), None)
+    .place_orders(vec![bid, ask])
+    .build();
+
+let signature = client.sign_and_send(tx).await?;
+```
+  </Rust>
+</SDKDoc>
+
+That chain is the market maker requote: cancel everything in one market and place the new quotes, in a single transaction, so the account is never left one-sided between two landings.
+
+| Method | Cancels |
+|---|---|
+| `cancel_all_orders()` | Every open order on the subaccount |
+| `cancel_orders((index, market_type), direction)` | One market, optionally one side |
+| `cancel_orders_by_id(vec![u32])` | Program-assigned order ids |
+| `cancel_orders_by_user_id(vec![u8])` | Caller-assigned `user_order_id` handles |
+
+`modify_orders(&[(order_id, ModifyOrderParams)])` and `modify_orders_by_user_id(&[(user_order_id, ModifyOrderParams)])` amend in place, which keeps the order's queue position where a cancel and replace would lose it.
+
+## Taking against known makers
+
+`place_and_take` places an order and fills it against supplied maker accounts, in one instruction. The makers come from wherever the bot sources them: the DLOB server's `topMakers` endpoint, or a [local DLOB](/developers/velocity-rs/dlob).
+
+<SDKDoc>
+  <Rust name="place_and_take" type="method" owner="TransactionBuilder">
+```rust
+use velocity_rs::types::{MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam};
+
+let order = OrderParams {
+    market_index: 0,
+    market_type: MarketType::Perp,
+    order_type: OrderType::Market,
+    direction: PositionDirection::Long,
+    base_asset_amount: 10_000_000,
+    post_only: PostOnlyParam::None,
+    ..Default::default()
+};
+
+// makers: Vec<(Pubkey, User)>
+let tx = builder
+    .with_priority_fee(1_000, Some(200_000))
+    .place_and_take(order, &makers, referrer, None)
+    .build();
+```
+  </Rust>
+</SDKDoc>
+
+Keep the maker list short. Each maker adds its subaccount, stats account and markets to the account list, and past roughly four makers the transaction exceeds the size limit. The fourth argument is an `Option<u32>` success condition, carrying a `PlaceAndTakeOrderSuccessCondition` discriminant. Set it and the program fails the transaction when the fill does not meet the condition, instead of landing a partial.
+
+`place_and_make` is the mirror image: it posts a maker order against a specific taker order.
+
+## Filling Swift orders
+
+A Swift order is signed offchain by the taker and never sent by them. A maker receives the signed message, places it on the taker's behalf, and fills it, all in one transaction.
+
+`place_swift_order(&signed_order_info, &taker_account)` adds only the placement, which is what a deposit-and-trade flow needs where a deposit instruction has to precede it. `place_and_make_swift_order` adds the placement and the maker order together.
+
+<SDKDoc>
+  <Rust name="place_and_make_swift_order" type="method" owner="TransactionBuilder">
+```rust
+let taker_order = swift_order.order_params();
+let taker_subaccount = swift_order.taker_subaccount();
+
+let (taker_account_data, taker_stats, builder) = tokio::try_join!(
+    client.get_user_account(&taker_subaccount),
+    client.get_user_stats(&swift_order.taker_authority),
+    client.init_tx(&filler_subaccount, false),
+)?;
+
+let tx = builder
+    .place_and_make_swift_order(
+        OrderParams {
+            order_type: OrderType::Limit,
+            market_index: taker_order.market_index,
+            market_type: taker_order.market_type,
+            direction: match taker_order.direction {
+                PositionDirection::Long => PositionDirection::Short,
+                PositionDirection::Short => PositionDirection::Long,
+            },
+            price: taker_order.auction_start_price.expect("start price set").unsigned_abs(),
+            base_asset_amount: taker_order.base_asset_amount,
+            post_only: PostOnlyParam::MustPostOnly,
+            bit_flags: <OrderParams as OrderParamsExt>::IMMEDIATE_OR_CANCEL_FLAG,
+            ..Default::default()
+        },
+        &swift_order,
+        &taker_account_data,
+        &taker_stats.referrer,
+    )
+    .build();
+```
+  </Rust>
+</SDKDoc>
+
+Swift fills are perps only; `place_and_make_swift_order` asserts on a spot market. The two RPC reads in that snippet are the latency cost of filling inline: a maker competing for fills keeps a gRPC usermap and statsmap so both come from cache. [Subscriptions](/developers/velocity-rs/subscriptions#swift-orders) covers receiving the order stream, and the taker side is on the [Swift page](/developers/velocity-sdk/swift).
+
+## The rest of the instruction set
+
+`TransactionBuilder` covers the whole program surface, not just orders.
+
+**Account lifecycle**: `initialize_user_account`, `initialize_swift_account`, `set_max_initial_margin_ratio`, `update_user_perp_position_custom_margin_ratio`.
+
+**Collateral**: `deposit`, `withdraw`, `transfer_isolated_perp_position_deposit`.
+
+**Keeper work**: `fill_perp_order`, `trigger_order`, `revert_fill`, `settle_pnl`, `settle_pnl_multi`, `update_spot_market_cumulative_interest`, `post_pyth_lazer_oracle_update`.
+
+**Liquidation**: `liquidate_perp`, `liquidate_perp_with_fill`, `liquidate_spot`, `liquidate_spot_with_swap_begin`, `liquidate_spot_with_swap_end`, `liquidate_perp_pnl_for_deposit`, `liquidate_borrow_for_perp_pnl`.
+
+**Swaps**: `begin_swap` and `end_swap` for the raw pair, plus `jupiter_swap`, `jupiter_swap_liquidate`, and with the `titan` feature `titan_swap` and `titan_swap_liquidate`.
+
+## Signing and sending
+
+`build()` returns a `VersionedMessage` with no blockhash and no signature. `client.sign_and_send(tx)` attaches a recent blockhash, signs with the client's wallet and sends it; `sign_and_send_with_config` takes an `RpcSendTransactionConfig` to skip preflight or set a retry count.
+
+If `subscribe_blockhashes` is running, the blockhash comes from the local cache instead of an RPC round trip, which is worth a call at startup on anything latency sensitive.
+
+```rust
+match client.sign_and_send(tx).await {
+    Ok(signature) => println!("sent tx: {signature}"),
+    Err(err) => println!("send tx err: {err:?}"),
+}
+```
+
+To inspect before sending, `client.simulate_tx(tx)` and `simulate_tx_with_commitment` return the simulation result. To sign without sending, `client.wallet().sign_tx(message, blockhash)` returns a `VersionedTransaction`, which is what the Swift deposit-and-trade flow serializes and posts to the Swift API alongside the order.
+
+Failures come back as `SdkError`. `to_anchor_error_code()` maps one onto the program's error code where the failure was an onchain rejection, and `to_out_of_sol_error()` picks out the specific case of an account with no lamports for fees.
+
+## JIT fills through the proxy program
+
+A JIT maker does not place a resting order. It waits for a taker auction, then submits a fill through the jit-proxy program, which enforces the configured price bounds and position limits and fails the transaction rather than filling outside them.
+
+`JitProxyClient` (`velocity_rs::jit_client`) wraps that. `JitIxParams::new(max_position, min_position, bid, ask, price_type, post_only)` sets the bounds; `PriceType::Oracle` reads `bid` and `ask` as offsets from the oracle, `PriceType::Limit` reads them as absolute prices. `JitTakerParams::new(taker_key, taker_stats_key, taker, taker_referrer_info)` carries the counterparty.
+
+<SDKDoc>
+  <Rust name="JitIxParams" type="struct">
+```rust
+use velocity_rs::jit_client::{ComputeBudgetParams, JitIxParams, JitProxyClient, PriceType};
+use velocity_rs::types::RpcSendTransactionConfig;
+
+let jit_client = JitProxyClient::new(
+    client.clone(),
+    Some(RpcSendTransactionConfig::default()),
+    Some(ComputeBudgetParams::new(100_000, 1_400_000)),
+);
+
+// quote a fixed $1.00 band around the oracle, no position bounds
+let jit_params = JitIxParams::new(0, 0, -1_000_000, 1_000_000, PriceType::Oracle, None);
+```
+  </Rust>
+</SDKDoc>
+
+`build_jit_tx` and `jit` handle an onchain taker order; `build_swift_ix` and `try_swift_fill` handle a signed-message one. Because the proxy fails rather than fills when the price does not cross, a jitter retries every slot until the auction completes: the `jitter` example implements exactly that loop and is the best starting point. The auction mechanics it is quoting into are covered in [JIT auctions](/developers/market-makers/jit-auctions).

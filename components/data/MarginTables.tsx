@@ -1,12 +1,20 @@
 "use client";
 
 import { useOnChainData } from "../../hooks/useOnChainData";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
 
 function StatusRow({ colSpan, message }: { colSpan: number; message: string }) {
   return (
-    <tr>
-      <td colSpan={colSpan}>{message}</td>
-    </tr>
+    <TableRow>
+      <TableCell colSpan={colSpan}>{message}</TableCell>
+    </TableRow>
   );
 }
 
@@ -21,15 +29,15 @@ export function PerpMarginTable() {
   ];
 
   return (
-    <table>
-      <thead>
-        <tr>
+    <Table className="min-w-[680px]">
+      <TableHeader>
+        <TableRow>
           {headings.map((heading) => (
-            <th key={heading}>{heading}</th>
+            <TableHead key={heading}>{heading}</TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {!data ? (
           <StatusRow
             colSpan={headings.length}
@@ -39,16 +47,16 @@ export function PerpMarginTable() {
           />
         ) : (
           data.perpMargin.map((row) => (
-            <tr key={row.index}>
-              <td>{row.index}</td>
-              <td>{row.name}</td>
-              <td>{row.initial}</td>
-              <td>{row.maintenance}</td>
-              <td>{row.imfFactor}</td>
-            </tr>
+            <TableRow key={row.index}>
+              <TableCell>{row.index}</TableCell>
+              <TableCell>{row.name}</TableCell>
+              <TableCell>{row.initial}</TableCell>
+              <TableCell>{row.maintenance}</TableCell>
+              <TableCell>{row.imfFactor}</TableCell>
+            </TableRow>
           ))
         )}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

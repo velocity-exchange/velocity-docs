@@ -1,14 +1,16 @@
-# JIT-only MM
+---
+title: "JIT-only MM"
+---
 
-JIT-only market making means you **do not keep a standing book**. Instead of resting limit orders on the DLOB, you compete in [JIT auctions](/protocol/how-it-works/jit-faq) (see [Matching Engine](/protocol/how-it-works/matching-engine) for liquidity sources) by reacting to incoming taker orders in real-time.
+JIT-only market making keeps **no standing book**. Instead of resting limit orders on the DLOB, a JIT-only maker competes in [JIT auctions](./jit-auctions) by reacting to incoming taker orders in real time. See [Matching Engine](/protocol/trading/how-fills-work) for how the liquidity sources compete once an auction ends.
 
 **Why JIT-only?**
-- **No adverse selection from stale quotes:** you only commit capital when you choose to fill
-- **Selective flow:** you inspect each taker order and decide if it's profitable to fill
+- **No adverse selection from stale quotes:** capital is committed only on a fill the bot chooses to take
+- **Selective flow:** each taker order is inspected first, and filled only when it prices profitably
 - **Capital efficiency:** no capital locked in resting orders that may never fill
 - **Dynamic pricing:** price each fill based on current oracle, inventory, and market conditions
 
-**Tradeoff:** You need lower-latency infrastructure than DLOB MM (to react within the auction window), and you may miss fills in fast markets if your bot is slow.
+**Tradeoff:** JIT-only demands lower-latency infrastructure than DLOB MM, to react inside the auction window, and a slow bot misses fills in fast markets.
 
 ## Architecture overview
 
@@ -22,25 +24,18 @@ Subscribe to auction and order feeds (onchain via `AuctionSubscriber`, or offcha
 Filter incoming auctions by oracle checks, position limits, toxic flow, and profitability.
 
 ### Price
-Compute the best price you're willing to offer based on current market and inventory conditions.
+Compute the best price the bot is willing to offer, based on current market and inventory conditions.
 
 ### Fill
-Fill atomically via `placeAndMakePerpOrder` so your maker order is placed and matched in one transaction.
+Fill atomically via `placeAndMakePerpOrder` so the maker order is placed and matched in one transaction.
 </Steps>
 
 ## Subscribe to auctions / orders
 
-The `AuctionSubscriber` gives you a stream of active JIT auctions. Use `commitment: "processed"` for lowest latency.
+The `AuctionSubscriber` provides a stream of active JIT auctions. Use `commitment: "processed"` for lowest latency.
 
 <SDKDoc>
   <TypeScript name="AuctionSubscriber" type="class">
-```js
-import { AuctionSubscriber } from "@velocity-exchange/sdk";
-```
-  </TypeScript>
-</SDKDoc>
-
-
 ```typescript
 import { AuctionSubscriber } from "@velocity-exchange/sdk";
 
@@ -50,22 +45,16 @@ const auctionSubscriber = new AuctionSubscriber({
 });
 await auctionSubscriber.subscribe();
 ```
-
-For even lower latency, subscribe to [SWIFT](./swift-api) to receive signed taker orders 100-500ms before they land onchain.
-
-`OrderSubscriber` is a lower-level alternative to `AuctionSubscriber`. It streams all user order state changes rather than only active auction events. Most JIT bots use `AuctionSubscriber` because it surfaces only the orders that are currently in an open auction window. Use `OrderSubscriber` if you need visibility into the full lifecycle of orders (e.g., tracking when orders are placed, partially filled, or cancelled) rather than just reacting to active auctions.
-
-<SDKDoc>
-  <TypeScript name="OrderSubscriber" type="class">
-```js
-import { OrderSubscriber } from "@velocity-exchange/sdk";
-```
   </TypeScript>
 </SDKDoc>
 
+For even lower latency, subscribe to [SWIFT](./swift-api) to receive signed taker orders 100 to 500 ms before they land onchain.
+
+`OrderSubscriber` is the lower-level alternative. It streams every user order state change rather than only active auction events. Most JIT bots use `AuctionSubscriber`, which surfaces only the orders currently inside an open auction window. Reach for `OrderSubscriber` when the full order lifecycle is needed, such as tracking placements, partial fills, and cancellations, rather than only reacting to live auctions.
+
 ## Compute auction prices (helpers)
 
-Use `getAuctionPrice` to compute the current interpolated auction price at any slot. This tells you the worst price the taker would accept right now, so you need to offer a price at least this good.
+Use `getAuctionPrice` to compute the current interpolated auction price at any slot. That price is the worst the taker would accept at that moment, so a competing maker quote has to be at least that good.
 
 <SDKDoc>
   <TypeScript name="getAuctionPrice" type="function">
@@ -87,11 +76,11 @@ console.log(`Auction price at slot ${currentSlot}: $${auctionPrice.toFixed(4)}`)
   </TypeScript>
 </SDKDoc>
 
-See [JIT Auctions - Auction pricing](./jit-auctions#auction-pricing-formula) for the full interpolation formula, and [Orderbook & Matching - Tick size](./orderbook-and-matching#tick-size) for why the tick size argument matters.
+See [JIT Auctions: auction pricing](./jit-auctions#auction-pricing-formula) for the full interpolation formula, and [Orderbook & Matching: tick size](./orderbook-and-matching#tick-size) for why the tick size argument matters.
 
 ## Fill as maker (atomic place-and-make)
 
-This pattern places your maker order and fills against the taker in one transaction. You earn maker rebates and the taker gets filled, all atomic.
+This pattern places the maker order and fills against the taker in one transaction. The maker earns rebates and the taker gets filled, atomically.
 
 <SDKDoc>
   <TypeScript name="placeAndMakePerpOrder" type="method" owner="VelocityClient">
@@ -103,7 +92,7 @@ import {
   OrderParamsBitFlag,
 } from "@velocity-exchange/sdk";
 
-// Build your maker order (opposite direction of taker)
+// Build the maker order (opposite direction of taker)
 const makerOrderParams = {
   orderType: OrderType.LIMIT,
   marketIndex: takerOrder.marketIndex,
@@ -240,15 +229,15 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (takerUserAccount, pu
 
 ## Practical filters
 
-Apply risk and filtering checks before filling: oracle validity, position limits, toxic-flow detection, and (if you use both feeds) skip Swift-origin orders via `isSignedMsgOrder()` so you don't double-handle. See [Bot Architecture - Risk and filtering](./bot-architecture#risk-and-filtering) for shared patterns and code.
+Apply risk and filtering checks before filling: oracle validity, position limits, toxic-flow detection, and, when both feeds are subscribed, skip Swift-origin orders via `isSignedMsgOrder()` so the same order is not handled twice. See [Bot Architecture: risk and filtering](./bot-architecture#risk-and-filtering) for shared patterns and code.
 
 <SDKDoc>
   <TypeScript name="isSignedMsgOrder" type="function">
 ```typescript
 import { isSignedMsgOrder } from "@velocity-exchange/sdk";
 
-// In your AuctionSubscriber callback, skip orders that came from SWIFT
-// so your onchain handler and SWIFT handler don't both try to fill the same order.
+// In the AuctionSubscriber callback, skip orders that came from SWIFT
+// so the onchain handler and SWIFT handler don't both try to fill the same order.
 auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey, slot) => {
   for (const order of userAccount.orders) {
     if (order.baseAssetAmount.isZero()) continue;
@@ -266,11 +255,13 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey,
   </TypeScript>
 </SDKDoc>
 
-`getMMOracleDataForPerpMarket` is the recommended oracle getter for market makers: it returns the dedicated MM oracle price when it's active, fresh, and close enough to the exchange oracle, and transparently falls back to the exchange oracle otherwise. It has **no `isValid` field**. That's not part of `MMOraclePriceData`. It does carry `isMMOracleActive` (whether the market has an MM oracle configured at all, not a full validity signal) and `confidence`. For an actual go/no-go validity check, use `isOracleValid(market, oracleData, oracleGuardRails, slot)` from `math/oracles`, which is the same AMM-fill-oriented gate the program itself uses for confidence, staleness, and volatility.
+`getMMOracleDataForPerpMarket` is the oracle getter to use for market making. It returns the dedicated MM oracle price when that feed is active, fresh, and close enough to the exchange oracle, and falls back to the exchange oracle otherwise.
+
+It has **no `isValid` field**, and that is the part integrations get wrong. `MMOraclePriceData` carries no validity flag at all. For a go/no-go check, call `isOracleValid(market, oracleData, oracleGuardRails, slot)`, which is the same AMM-fill-oriented gate the program itself applies for confidence, staleness, and volatility.
 
 Key fields:
 - `oracle.price`: current oracle price as a `BN` in `PRICE_PRECISION` (1e6) units
-- `oracle.isMMOracleActive`: whether this market has a live MM oracle feed (not a validity signal on its own)
+- `oracle.isMMOracleActive`: whether this market has a live MM oracle feed. Not a validity signal on its own
 - `oracle.confidence`: price confidence interval, `BN` in `PRICE_PRECISION` (1e6) units
 
 <SDKDoc>
@@ -299,7 +290,7 @@ const confidence = convertToNumber(oracle.confidence, PRICE_PRECISION);
 
 console.log(`Oracle price: $${oraclePrice.toFixed(4)}, confidence: ±$${confidence.toFixed(4)}`);
 
-// Optionally widen your spread when confidence is low
+// Optionally widen the spread when confidence is low
 const minSpread = Math.max(0.05, confidence * 2);
 ```
   </TypeScript>
@@ -307,7 +298,7 @@ const minSpread = Math.max(0.05, confidence * 2);
 
 ## Using JIT Proxy (JitterSniper / JitterShotgun)
 
-Instead of building fill logic from scratch, use the [`@velocity-exchange/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) library which handles auction timing, transaction building, and retry logic. **Not yet published to npm**. Build it from `packages/jit-proxy` in the monorepo until it is.
+Instead of building fill logic from scratch, use the `@velocity-exchange/jit-proxy` library which handles auction timing, transaction building, and retry logic. **Not yet published to npm**. Build it from `packages/jit-proxy` in the monorepo until it is.
 
 ```typescript
 import { JitterSniper, PriceType } from "@velocity-exchange/jit-proxy";
@@ -324,10 +315,10 @@ const jitter = new JitterSniper({
 await jitter.subscribe();
 
 // The jitter handles auction timing automatically
-// You just need to configure pricing and filters
+// Only pricing and filters are left to configure
 ```
 
-See the [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
+See the `JitMaker` bot for a complete production example using `JitterSniper`/`JitterShotgun` with:
 - Per-market subaccount isolation (1 subaccount per market)
 - Volatility-based fill rejection (`isMarketVolatile`)
 - DLOB-aware pricing (excludes own orders from best bid/ask calculation)
@@ -336,14 +327,14 @@ See the [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/maste
 ## Gotchas
 
 - **Don't poll `getSlot()` per auction:** the example above calls `getSlot()` for each auction, which is expensive at scale. Instead, use a `SlotSubscriber` to cache the current slot and read from it synchronously.
-- **`isSignedMsgOrder` filtering:** if you also subscribe to SWIFT, onchain auctions for SWIFT orders will appear in `AuctionSubscriber` too. Use `isSignedMsgOrder(order)` to skip them in your onchain loop (handle them in SWIFT callback instead). See [SWIFT API](./swift-api#detecting-swift-orders-in-onchain-feeds).
+- **`isSignedMsgOrder` filtering:** when SWIFT is subscribed as well, onchain auctions for SWIFT orders appear in `AuctionSubscriber` too. Use `isSignedMsgOrder(order)` to skip them in the onchain loop and handle them in the SWIFT callback instead. See [SWIFT API](./swift-api#detecting-swift-orders-in-onchain-feeds).
 - **One subaccount per market:** JIT fills can conflict if two markets try to use the same subaccount simultaneously. The `JitMaker` enforces 1:1 subaccount-to-market mapping.
-- **Fill rate tracking:** track your fill success rate per market. If it drops below ~20%, your pricing or latency may need adjustment.
+- **Fill rate tracking:** track fill success rate per market. A rate that drops below roughly 20% points at pricing or latency as the cause.
 
 ## Related
 
-- [JIT Auctions](./jit-auctions) - Auction mechanics, pricing formula, and timeline
-- [SWIFT API](./swift-api) - Receive orders 100-500ms faster via offchain WebSocket
-- [Bot Architecture](./bot-architecture) - Priority fees, health monitoring, graceful shutdown
-- [DLOB MM](./dlob-mm) - Resting order approach (can be combined with JIT)
-- [@velocity-exchange/jit-proxy](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) - JIT proxy SDK with `JitterSniper` and `JitterShotgun`
+- [JIT Auctions](./jit-auctions): Auction mechanics, pricing formula, and timeline
+- [SWIFT API](./swift-api): Receive orders 100 to 500 ms faster via offchain WebSocket
+- [Bot Architecture](./bot-architecture): Priority fees, health monitoring, graceful shutdown
+- [DLOB MM](./dlob-mm): Resting order approach (can be combined with JIT)
+- `@velocity-exchange/jit-proxy`: JIT proxy SDK with `JitterSniper` and `JitterShotgun`. Unpublished: build from `packages/jit-proxy` in the `velocity-v1` monorepo, which is not public yet

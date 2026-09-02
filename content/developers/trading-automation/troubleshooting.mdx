@@ -1,8 +1,10 @@
-# Troubleshooting
+---
+title: "Troubleshooting"
+---
 
 ## Failed to get token account balance
 
-The account in `KEEPER_PRIVATE_KEY` does not have a token account for the spot market's mint (USDT on mainnet-beta; dUSDT on devnet).
+The account in `KEEPER_PRIVATE_KEY` does not have a token account for the spot market's mint.
 
 ```shell
 SolanaJSONRPCError: failed to get token account balance: Invalid param: could not find account
@@ -16,9 +18,19 @@ SolanaJSONRPCError: failed to get token account balance: Invalid param: could no
 }
 ```
 
+## `SpotMarketInterestStaleForMargin` on a withdrawal
+
+A withdrawal is rejected when the account holds a borrow in a spot market whose cumulative interest index has not been advanced recently enough. Margin values a borrow through the market's stored `cumulative_borrow_interest` index, and interest accrued since that index was last advanced is not in it, so a stale index understates the debt by exactly the amount not yet booked. `validate_spot_borrow_interest_fresh_for_margin` refuses to value a borrow through an index that has drifted too far.
+
+"Too far" is a per-market window rather than one fixed number, because the amount a stale index hides scales with what the market charges. The program holds the un-booked share under one basis point of the borrow (`MAX_SPOT_INTEREST_UNDERSTATEMENT_FOR_MARGIN`), so the window is one bp times one year divided by the market's rate ceiling, where the ceiling is the larger of `max_borrow_rate` and the market's minimum borrow rate. That result is then capped by `MAX_SPOT_INTEREST_STALENESS_FOR_MARGIN`, one hour.
+
+A market whose rate ceiling is 87.6% annualized or below therefore gets the full hour, since a slower rate would earn a window longer than the cap allows. A market with a 500% annualized ceiling gets about 10.5 minutes. Two boundaries are worth knowing: only borrows are gated, because a stale index understates a deposit's value and that errs in the protocol's favor, and a market past its window still passes if the un-booked interest on the particular borrow rounds to less than one token, so a dust-sized borrow is never blocked.
+
+Clearing it needs no privileges. `update_spot_market_cumulative_interest` is permissionless and can be bundled into the same transaction as the withdrawal, which is what the interface does. Keepers also crank it during normal activity, so an active market rarely reaches the bound at all.
+
 ## `User` does not exist
 
-The account in `KEEPER_PRIVATE_KEY` has not initialized a Velocity `User` (sub-account) yet. See [Trading Automation](/developers/trading-automation) for how to initialize it.
+The account in `KEEPER_PRIVATE_KEY` has not initialized a Velocity `User` (subaccount) yet. See [Trading Automation](/developers/trading-automation#running-a-reference-bot) for how to initialize it.
 
 ```shell
 [2026-01-15T22:46:19.236Z] error: User for bot69e9FXGoKzvAdGnN8uVVDCfLdLUX6K5wsXdrS3Dd3 does not exist (subAccountId: 0)
@@ -28,30 +40,35 @@ Error: Run with '--init-user' flag to initialize a User
     at async recursiveTryCatch (/Users/user/velocity-v1/apps/keeper-bots-v2/src/index.ts:473:3)
 ```
 
-Run once with `--init-user` (see [Trading Automation](/developers/trading-automation)) to create the account, then restart without the flag.
+Run once with `--init-user` (see [Trading Automation](/developers/trading-automation#running-a-reference-bot)) to create the account, then restart without the flag.
 
-## "TakerOrderNotFound" or "AskNotCrossed" errors
+## `TakerOrderNotFound` and `AskNotCrossed`
 
-- **`TakerOrderNotFound`**: the auction order you tried to take was either already filled by another user or removed due to slowness in your request.
-- **`AskNotCrossed`**: the auction order's price doesn't reach your minimum selling price specified in the JIT parameters.
+These come from the `jit-proxy` program, not from Velocity, so their numbers are in that program's own range: `BidNotCrossed` `6000` / `0x1770`, `AskNotCrossed` `6001` / `0x1771`, `TakerOrderNotFound` `6002` / `0x1772`. A log line naming the `jit-proxy` program ID is the giveaway.
 
-It's common practice to simulate transactions before submitting them, but this can carry a higher risk of being too slow to compete in real-time situations.
+- **`TakerOrderNotFound`**: the auction order the bot tried to take was already filled by someone else, or had gone by the time the transaction was simulated.
+- **`AskNotCrossed`** and **`BidNotCrossed`**: the taker's price at that slot does not reach the worst ask, or beat the worst bid, that the JIT parameters set. The auction ramps, so the same order can cross a moment later.
+- **`SpotOrdersNotSupported`** (`6011` / `0x177b`): a JIT config with `marketType: spot`. Velocity spot markets are collateral-only, so every such transaction reverts. Use `perp`.
 
-## "cannot read .data and .DataAndSlot" errors
+Simulating before submitting avoids paying for a doomed transaction, but it costs a round trip, and in a contested auction that round trip is often what loses the fill.
+
+## `cannot read .data` or `.dataAndSlot`
 
 These errors (cannot read `.data` or `.dataAndSlot`) typically occur when the free RPC keys run out of credits or reach their limits. This happens because maker/keeper bot functions require a lot of RPC calls. To address this, consider using a paid RPC service (see [RPC providers](/developers/trading-automation#rpc-providers)) or setting up a custom node.
 
-## "ExchangePaused" or "MarketFillOrderPaused" errors
+## `ExchangePaused` and `MarketFillOrderPaused`
 
-These are operational pauses, not bugs in your bot, and retrying will not clear them.
+These are operational pauses, not bugs in the bot, and retrying will not clear them.
 
 - **`ExchangePaused`** (error `6024`) is exchange-wide. Read `State.exchangeStatus` to see which bit is set. `FillPaused` blocks fills, `revert_fill`, `liquidate_perp_with_fill`, **and** `trigger_order`, so stops and take-profits will not trigger while it is set.
 - **`MarketFillOrderPaused`** (`6148`) is scoped to one market: either its `PerpOperation::Fill` bit is set, or its status is not `Active`/`ReduceOnly`, or it is in settlement.
 - **`MarketWithdrawPaused`** (`6149`) and **`MarketActionPaused`** (`6146`) are the spot-market withdraw and deposit equivalents.
 - Some bits cause a silent no-op instead of an error (funding updates, interest accrual, AMM fills, revenue sweeps). An unchanged funding rate or a skipped AMM fill can be a pause, not a failure.
 
-The full bit-by-bit matrix, including which error each pause raises, is in [Block Conditions](/protocol/risk-and-safety/block-conditions#pause-and-market-status-gating).
+The full bit-by-bit matrix, including which error each pause raises, is in [Block Conditions](/protocol/risk-and-safety/guard-rails#the-four-pause-layers).
 
-## Misc Transaction Errors
+## Losing races to other keepers
 
-Since running a Keeper is a profit-seeking endeavour, it is not unusual to run into competition while filling orders and liquidating dangerous positions. These errors can happen at various commitment levels, and how you handle them will be dependent on your skillset and craftiness. If you're looking for friends, come to [#research-and-dev-chat](https://discord.com/invite/95kByNnDy5) and leak some alpha 🤓.
+Keeping is profit-seeking, so every fill and every liquidation is contested. A transaction that reverts because someone else got there first is the normal case, not a bug, and it shows up at every commitment level. How much of it a keeper tolerates is a question about infrastructure rather than code: co-location, priority fees, Jito bundles, and how early the transaction goes out.
+
+Notes get compared in [#research-and-dev-chat](https://discord.com/invite/95kByNnDy5); come leak some alpha 🤓.

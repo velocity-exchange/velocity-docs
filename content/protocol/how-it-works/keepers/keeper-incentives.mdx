@@ -1,35 +1,87 @@
-# Keeper Incentives
+---
+title: "Keeper incentives"
+description: "What a keeper is paid for filling, triggering, cancelling and cranking, why the fill reward is a function of order age rather than order size, and which jobs pay nothing at all."
+---
 
-Keepers **keep** the Velocity network healthy.
+A **keeper** is an independent operator running a bot that sends transactions the protocol needs sent. Solana has no scheduler and the program cannot call itself, so every action not initiated by a trader has to be initiated by somebody: an order that reaches its trigger price, an account below maintenance margin, a mark TWAP that has gone stale. The protocol's job is to make those transactions worth sending.
+
+A **filler** is the keeper's role in a fill, and a **liquidator** is its role in a liquidation. The pay is different.
+
+## The filler reward
+
+A flat bounty per fill would either exceed the fee collected on a small order or be too small to be worth racing for on a large one. So the protocol pays two legs at once and takes the lesser: one proportional to the fee, which keeps the payment bounded by what was collected, and one growing with the order's age, which makes the oldest unfilled order the most attractive one to fill.
+
+$$
+f_{\text{keeper}} = \min\left(0.10 \cdot f_{\text{user}},\;
+0.01 \cdot m \cdot t_{\text{order}}^{1/4}\right)
+$$
+
+where $f_{\text{user}}$ is the taker fee paid on the fill, $m$ is the price-improvement multiplier below, and $t_{\text{order}}$ is the order's age in whole 400ms periods, floored at 1. The size leg is 10% of the taker fee; the time leg starts at \$0.01.
+
+The fourth root is a flat curve: an order that has waited a hundred times longer is worth only about three times as much, which spreads keeper attention across the book instead of concentrating it on the single oldest order.
+
+### How the two legs behave
+
+At a 1x multiplier, the time leg alone runs as follows.
+
+| Order age | Periods | Time leg |
+| --- | --- | --- |
+| 400ms or less | 1 | \$0.0100 |
+| 4 seconds | 10 | \$0.0177 |
+| 1 minute | 150 | \$0.0349 |
+| 10 minutes | 1,500 | \$0.0622 |
+| 100 minutes | 15,000 | \$0.1106 |
+
+The size leg is 10% of the taker fee, so at the Regular tier's 4 bps it is 0.4 bps of notional. On a freshly placed order the two legs cross at roughly \$250 of notional. Above that, and on any order that has waited at all, the time leg binds instead and the fill pays a couple of cents regardless of how large the order was.
+
+A \$2,000 order filling 4 seconds after placement pays a \$0.80 taker fee, of which the keeper gets **\$0.0177**. A \$100,000 order filling 4 seconds after placement pays a much larger fee, and the keeper still gets **\$0.0177**. Order size buys the keeper essentially nothing; order age is what pays.
+
+### The price-improvement multiplier
+
+The time leg is scaled by how far inside a baseline the maker's price was. The baseline is the oracle 10 bps against the maker: a maker bid 10 bps below oracle, or a maker ask 10 bps above it, earns 1x. Every further 10 bps of improvement adds one, so a maker bid at the oracle is 2x and a bid 10 bps above it is 3x, clamped between 1x and 100x. The smaller-of-the-two rule still applies afterwards, so on a \$2,000 order, whose size leg is \$0.08, the multiplier stops mattering above about 4.5x at 4 seconds of age.
 
 <Callout type="info">
-Velocity has no fuel (points/incentives) program; fuel-based keeper/user rewards were removed entirely. The only keeper incentives on Velocity are the on-chain fee/reward mechanics described below.
+The multiplier applies only when a keeper fills a taker order against a resting maker order. An AMM fill always pays the unmultiplied time leg.
 </Callout>
 
-## Keeper Rewards
+## The flat cancel fee
 
-For matching orders, Keepers receive a portion of the taker fee as a **filler reward**. See [Filler Reward](/protocol/trading/trading-fees/other-trading-fees#definitions).
+Cancelling and triggering are not sized off a fee, because there is no fee. They pay a flat **\$0.01** for each of:
 
-For cancelling orders (that can be cancelled, see [Advanced Orders FAQ](/protocol/trading/order-types/advanced-orders-faq)), Keepers will receive the `flat_filler_fee` from the exchange-wide perp fee structure (`State.perp_fee_structure.flat_filler_fee`, currently $0.01), paid out via `pay_keeper_flat_reward_for_perps` when a keeper triggers an order expiry or reduce-only cancellation.
+- an order past its expiry that the keeper expires
+- a reduce-only order that no longer reduces anything
+- a maker order cancelled because its limit price breached the oracle bands
+- a conditional order the keeper triggers
+- each non-reducing order cancelled on an under-margined account
 
-Liquidation rewards for keepers are set per-market (`liquidator_fee`) and read directly from each market's on-chain account: check `PerpMarketAccount.liquidatorFee` / `SpotMarketAccount.liquidatorFee` for current values.
+The payment comes out of the order owner's own quote balance in that market, not out of a protocol pool, so cancelling somebody's stale orders is billed to them. It is also conditional on the keeper being able to hold a position in that market: with no free position slot the cancellation still happens, unpaid. See [Guard rails](/protocol/risk-and-safety/guard-rails).
 
-Currently, the USDT reward function for keepers (_f_keeper_) is designed as:
+## Liquidation rewards
 
-$
-f_{\text{keeper}} = \textit{min}(0.01 \ast 
-\textit{max}\left(1, t_{\text{order}}\right)^
-{1/4}, 0.1 \ast f_{\text{user}})
-$
+Liquidation pays a per-market rate rather than a formula, taken from the liquidatee alongside the insurance fund's and the protocol's own liquidation cuts. Read the liquidator fee on the market being liquidated in; the initialization default is zero, so a market pays a liquidator only if an admin set a rate. See [Liquidations](/protocol/trading/liquidations).
 
-where:
-$t_{\text{order}}$ is whole 400ms periods of order age (elapsed slots converted to wall-clock time, then divided into 400ms periods)
-$f_{\text{user}}$ is the taker fee paid by the user who placed the order
+## The mark TWAP crank requires a staked keeper
 
-This is the lesser of a size-based reward (10% of the fee) and a time-based reward that grows with the fourth root of the order's age in 400ms periods, see `calculate_filler_reward` (`math/fees.rs`) for the on-chain calculation. Counting whole 400ms periods rather than raw slots keeps the reward curve's wall-clock shape the same even if the chain's slot duration changes.
+The mark TWAP crank refreshes a market's bid, ask and mark TWAPs from the current orderbook, which is what funding is sized against. It differs from everything above in two ways.
 
-<Callout type="important">
-A Keeper reward multiplier (for taker price improvement) is applied to the keeper's minimum time-based reward component in the function above. Any percent improvement versus the baseline `oracle +/- 10bps`, increases this multiplier. This multiplier only applies when the keeper fills a taker order against a resting maker order; fills routed to the AMM always use a 1x multiplier.
+**It pays nothing.** There is no filler reward and no flat fee. The keepers that run it do so because they need the funding rate to be right.
+
+**It requires a \$1,000 insurance fund stake.** The crank estimates the orderbook from user accounts the caller supplies, and the resulting TWAPs feed funding and the auction bands on other people's triggered orders. See [Insurance fund staking](/protocol/insurance-fund/insurance-fund-staking).
+
+<Callout type="warning">
+The staked amount the gate reads is a cached value on the keeper's stats account. A keeper that has just staked will still fail the gate until that cache has been refreshed.
 </Callout>
 
-30d fill volume for keepers is tracked on-chain via `UserStats`, allowing for logic to reward consistent keepers with a larger multiplier on rewards.
+Three further conditions apply. The keeper must not have this operation paused, which the admin can set per keeper. Quotes are counted only if they have rested at least 9.6 seconds, and quotes further than 15% from the oracle are discarded. And if neither TWAP moved, the call requires at least 60 seconds since the last mark TWAP stamp.
+
+## What this means in practice
+
+**For a fill bot**, the reward is a function of age, price improvement and the fee, in that order. Racing to fill the newest large order pays one cent; filling the oldest orders on the book pays several times that.
+
+**For a cancel or trigger bot**, every action pays exactly \$0.01, so the economics are about transaction cost and inclusion. An account with 32 stale orders is worth \$0.32.
+
+**For the TWAP crank**, it costs \$1,000 of insurance fund stake with its unstaking cooldown and pays no direct revenue. The reason to run it is that funding on a market is only as good as the TWAP somebody keeps fresh.
+
+<Callout type="info">
+Velocity runs no points or fuel program. Everything a keeper earns is the onchain fee and reward mechanics on this page.
+</Callout>

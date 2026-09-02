@@ -1,24 +1,28 @@
-# Indicative Quotes
+---
+title: "Indicative Quotes"
+---
 
-Indicative quotes let market makers **signal liquidity offchain** without committing onchain orders. You publish bid/ask prices and sizes to Velocity's WebSocket endpoint, where they're used for:
+Indicative quotes let market makers **signal liquidity offchain** without committing onchain orders. A maker publishes bid/ask prices and sizes to Velocity's WebSocket endpoint, where they feed:
 
 - **UI display:** takers see available liquidity before placing orders
 - **Aggregator routing:** Jupiter and other aggregators factor indicative liquidity into routing decisions
 - **Price discovery:** helps establish fair prices in thin markets
 
 **When to use indicative quotes:**
-- You want to show liquidity without paying transaction fees for onchain orders
-- You're market making in lower-volume markets where onchain orders may sit unfilled
-- You want to attract taker flow by signaling competitive prices
-- You're using a JIT-only strategy but still want to be visible in the orderbook
+- Showing liquidity without paying transaction fees for onchain orders
+- Market making in lower-volume markets where onchain orders may sit unfilled
+- Attracting taker flow with prices tighter than the resting book
+- Running a JIT-only strategy while staying visible in the orderbook
 
-**Important:** Indicative quotes are not firm commitments. They signal intent, but you're not obligated to fill at these prices. When a taker actually places an order, you'd fill through the normal JIT auction or DLOB flow.
+**Important:** indicative quotes are not firm commitments. They signal intent and carry no obligation to fill at the published prices. When a taker actually places an order, the fill happens through the normal JIT auction or DLOB flow.
 
 ## Setup
 
-> **Endpoint is provisional.** `wss://dlob.velocity.exchange/quotes/ws` below follows Velocity's `<sub>.velocity.exchange` hosted-endpoint convention but hasn't been confirmed as the final production URL. Check with the team before hardcoding it.
+<Callout type="warning">
+**Endpoint is provisional.** `wss://dlob.velocity.exchange/quotes/ws` below follows Velocity's `<sub>.velocity.exchange` hosted-endpoint convention but hasn't been confirmed as the final production URL. Check with the team before hardcoding it.
+</Callout>
 
-Initialize the `IndicativeQuotesSender` with your VelocityClient and connect to the WebSocket endpoint:
+Construct the `IndicativeQuotesSender` with the WebSocket endpoint and a signing keypair, then connect:
 
 <SDKDoc>
   <TypeScript name="IndicativeQuotesSender" type="class">
@@ -38,7 +42,7 @@ import {
   loadKeypair,
 } from "@velocity-exchange/sdk";
 
-// Constructor takes the WebSocket endpoint and your keypair (for auth)
+// Constructor takes the WebSocket endpoint and the signing keypair (for auth)
 const keypair = loadKeypair("<KEYPAIR_PATH>");
 const quoter = new IndicativeQuotesSender(
   "wss://dlob.velocity.exchange/quotes/ws",
@@ -49,7 +53,7 @@ const quoter = new IndicativeQuotesSender(
 <SDKDoc>
   <TypeScript name="connect" type="method" owner="IndicativeQuotesSender">
 ```js
-// Connects to WebSocket, authenticates via challenge-response with your keypair
+// Connects to WebSocket, authenticates via challenge-response with the keypair
 await quoter.connect();
 ```
   </TypeScript>
@@ -57,7 +61,7 @@ await quoter.connect();
 
 ## Publishing quotes
 
-Call `setQuote` to publish or update your indicative quote for a market. The WebSocket server broadcasts your quote to all subscribers (UI, aggregators, etc.).
+Call `setQuote` to publish or update the indicative quote for a market. The WebSocket server broadcasts it to all subscribers: UI, aggregators, and anything else listening.
 
 <SDKDoc>
   <TypeScript name="setQuote" type="method" owner="IndicativeQuotesSender">
@@ -119,7 +123,7 @@ setInterval(() => {
 
 ### Using oracle offsets
 
-If you set `isOracleOffset: true`, the `bidPrice` and `askPrice` are interpreted as offsets from the oracle price rather than absolute prices. This is analogous to [oracle offset orders](/developers/market-makers/dlob-mm#oracle-offset-orders), and the quote floats with the oracle automatically.
+With `isOracleOffset: true`, the `bidPrice` and `askPrice` are interpreted as offsets from the oracle price rather than absolute prices. This is analogous to [oracle offset orders](/developers/market-makers/dlob-mm#oracle-offset-orders), and the quote floats with the oracle automatically.
 
 ```typescript
 const spreadOffset = 0.25; // $0.25 from oracle
@@ -151,19 +155,19 @@ quoter.setQuote({
 
 ## How indicative quotes appear in the orderbook
 
-Indicative quotes show up in the [L2 orderbook](/developers/market-makers/orderbook-and-matching#rest-api-l2l3) when you request `includeIndicative=true`. They're merged with DLOB and vAMM liquidity at each price level, giving takers a fuller picture of available depth.
+Indicative quotes show up in the [L2 orderbook](/developers/market-makers/orderbook-and-matching#rest-api-l2l3) on requests carrying `includeIndicative=true`. They're merged with DLOB and vAMM liquidity at each price level, giving takers a fuller picture of available depth.
 
 ## Gotchas
 
-- **Indicative ≠ committed:** aggregators and UIs display indicative quotes as available liquidity, but there's no onchain enforcement. If you publish quotes you can't honor, takers will experience slippage and your reputation with routing algorithms may suffer.
-- **WebSocket reconnection:** if your WebSocket connection drops, your indicative quotes disappear from the orderbook. Implement auto-reconnect and re-publish quotes on reconnection.
-- **Oracle offset mode simplifies maintenance:** using `isOracleOffset: true` means you don't need to update quotes when the oracle moves. Only update when changing spread or size. This mirrors [oracle offset orders](./dlob-mm#oracle-offset-orders) for onchain quoting.
+- **Indicative ≠ committed:** aggregators and UIs display indicative quotes as available liquidity, but there's no onchain enforcement. Quotes that get published but not honored leave takers with slippage and degrade the maker's standing with routing algorithms.
+- **WebSocket reconnection:** if the WebSocket connection drops, the indicative quotes disappear from the orderbook. Implement auto-reconnect and re-publish quotes on reconnection.
+- **Oracle offset mode simplifies maintenance:** with `isOracleOffset: true`, an oracle move needs no republish. Only update when changing spread or size. This mirrors [oracle offset orders](./dlob-mm#oracle-offset-orders) for onchain quoting.
 - **Rate limiting:** the DLOB WebSocket server may throttle rapid `setQuote` updates. Publishing every second is sufficient for most use cases.
-- **Null fields to clear:** sending `null` for price/size fields removes your quote. This is important for graceful shutdown; clear your indicative quotes before stopping your bot to avoid showing phantom liquidity.
+- **Null fields to clear:** sending `null` for price/size fields removes the quote. This matters for graceful shutdown: clear indicative quotes before stopping the bot to avoid showing phantom liquidity.
 
 ## Related
 
-- [DLOB MM](./dlob-mm) - Resting onchain orders (committed liquidity)
-- [Orderbook & Matching](./orderbook-and-matching) - How indicative vs committed liquidity works in the L2 API
-- [JIT-only MM](./jit-only) - Pair indicative quotes with JIT fills
-- [Bot Architecture](./bot-architecture) - Graceful shutdown and reconnection patterns
+- [DLOB MM](./dlob-mm): Resting onchain orders (committed liquidity)
+- [Orderbook & Matching](./orderbook-and-matching): How indicative vs committed liquidity works in the L2 API
+- [JIT-only MM](./jit-only): Pair indicative quotes with JIT fills
+- [Bot Architecture](./bot-architecture): Graceful shutdown and reconnection patterns

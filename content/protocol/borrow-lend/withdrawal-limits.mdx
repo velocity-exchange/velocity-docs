@@ -1,39 +1,76 @@
-# Withdrawal & Borrow Limits
+---
+title: "Withdrawal and borrow limits"
+description: "A market-wide throttle on how far a spot market's deposits can drain and its borrows can grow in a rolling window, checked on top of the account's own margin."
+---
 
-Every withdrawal and every new borrow is checked twice: once against your own account health, and once against the spot market's liquidity buffer. The second check protects that buffer for all of the market's depositors, so it can throttle or reject an action even when your account is comfortably above its margin requirement.
+Every withdrawal and every new borrow is checked twice: against the account itself, which has to remain above its initial margin requirement, and against the spot market being drawn down, which has to keep enough of its deposit base intact to serve everyone else. This page is the second check.
+
+## Why a market-level check exists at all
+
+Deposits are lent out, so a spot market never holds every token it owes. That stops working when a large share of the deposit base leaves in a short window, leaving the remaining depositors holding claims on a vault that is almost entirely out on loan.
+
+So the protocol caps the rate of change rather than the level. Two bounds come out of the market's 24-hour trailing averages: how far deposits may fall, and how far borrows may rise. Both are market-wide, so an action can be refused because of what everyone else did in the window.
 
 <Callout type="important">
-This is **not** a margin or liquidation check. It applies on top of (not instead of) the standard withdraw margin requirement. See [Withdraw and Close Account](/protocol/getting-started/withdraw-and-close-account). A perfectly healthy account can still have a withdrawal or borrow rejected because the *market* it is withdrawing from is near its liquidity limit.
+This is not a margin or liquidation check, and it does not replace one. A perfectly healthy account can have a withdrawal refused because the market it is withdrawing from is near its liquidity limit. See [Withdraw and close account](/protocol/getting-started/withdraw-and-close-account).
 </Callout>
 
-There are two market-level limits, one on each side of the vault:
+## Where it applies
 
-* **Rolling withdrawal and borrow limits.** Always on. They cap how far a market's deposits can drain, and how far its borrows can grow, relative to that market's own 24-hour trailing averages.
-* **A daily deposit cap.** The mirror image on the deposit side, capping how far total deposits may grow above their 24-hour average in a window. It is off by default, so most markets have none.
+The check runs on every action that draws a spot market down: withdrawals, borrows, transfers between subaccounts or pools, and the sell leg of a swap. It is evaluated on the market's totals after the action. If the resulting position is a borrow both bounds apply; if the account stays a depositor, only the floor on deposits does.
 
-Both are market-wide rather than per-account. Your action can be refused because of everyone else's activity in the same window, not because of anything about your own position.
+## The two bounds
 
-For the formulas, the parameters, and the exact conditions each check applies, see [Withdrawal Limit Mechanics](/protocol/how-it-works/withdrawal-limit-mechanics).
+Each bound is the stricter of two calculations, a level check against the 24-hour averages and a utilization check.
 
-## Where this shows up for you
+### Level check
 
-* **Withdrawals and borrows**: the most common place you'll see this. See [Withdraw and Close Account](/protocol/getting-started/withdraw-and-close-account).
-* **Subaccount transfers**: moving collateral between your own subaccounts still draws down the source market, so it is checked too.
-* **Token swaps**: the sell leg of a swap is a withdrawal from that market's perspective. See [What is Borrow & Lend?](/protocol/borrow-lend).
-* **Deposits**: checked against the daily deposit cap, when the market has one configured.
+The floor on deposits is the 24-hour deposit average less whatever the circuit breaker allows to leave, which defaults to 2,500 bps, so the default floor is **75% of the deposit average**. The ceiling on borrows depends on whether the market is the main pool or an isolated pool, which tolerates higher utilization. Each figure below is measured against the deposit base, the lesser of current deposits and the 24-hour deposit average:
 
-Opening a borrow is checked more strictly than reducing a deposit. A withdrawal that takes your balance in a market to zero and then keeps going has to clear the market's borrow ceiling as well as its deposit floor.
+| Candidate | Main pool | Isolated pool |
+|---|---|---|
+| Utilization floor | 1/3 of the base | 1/2 of the base |
+| Drift above the borrow average | plus 1/5 of the base | plus 1/3 of the base |
+| Hard ceiling | 92.9% of the base | 95% of the base |
 
-## If your action is refused
+The greater of the first two applies, capped at the hard ceiling.
 
-The limits reset as the market's 24-hour averages roll forward, so the same action often succeeds later without anything else changing. In the meantime:
+### Utilization check
 
-* **Withdraw less.** The check is against the market's resulting balance, so a smaller amount may fit under the limit.
-* **Withdraw a different asset.** Each spot market has its own limits, so a market under pressure does not affect your other collateral.
-* **Repay a borrow first.** Repayments are never blocked by these limits, and reducing the market's borrows loosens the check for everyone.
+Separately, the market decides the highest utilization it will be left at: never below its own optimal utilization, and otherwise halfway between the trailing 24-hour utilization and 100%. A market running quietly at 40% may be pushed to 70%; one already at 90% may reach 95%, so the tolerance narrows as the market gets tighter.
 
-If your whole position in that market is very small, and you have only ever been a net depositor, you can usually still withdraw your principal even while the market is at its limit. There is a narrow exception for exactly this case, though the total it releases per market is capped.
+## Worked example
+
+An illustrative SOL market at \$100 holds 200,000 SOL of deposits against 130,000 SOL of borrows, both equal to their 24-hour averages, at an optimal utilization of 80% and the default breaker.
+
+The breaker puts the level floor at 150,000 SOL and the utilization check puts it at 157,576 SOL, so the market has about \$4,242,400 of withdrawal headroom this window. A \$10,000 retail withdrawal passes without coming near it; a \$5,000,000 desk withdrawal is refused, even though the desk's account is far above its margin requirement.
+
+## The small-depositor exception
+
+So that a drained market does not trap the depositors who did not drain it, an account is let through when it holds a deposit, has never net withdrawn more than it net deposited, and its balance plus the withdrawal stays under one tenth of the withdraw guard threshold. A market-wide budget bounds total exception outflow at roughly \$10,000 per market per window.
+
+## The daily deposit cap
+
+Deposits can be throttled too, by the mirror of the level check: a ceiling of the 24-hour deposit average plus a configured percentage per day. It is a per-market setting, and while no percentage is configured the ceiling does not bind. It is only evaluated when the market's deposit level rose, so withdrawals and repayments are never blocked by it. Read the market's deposit-cap parameters for the live setting.
+
+## The parameters, and who can change them
+
+Three per-market parameters size everything above, and none of them pauses a market; pausing withdrawals is a separate admin operation, covered in [Guard rails](/protocol/risk-and-safety/guard-rails).
+
+**Withdraw guard threshold.** The small-market cutout: deposits below it are never blocked from withdrawal and borrows below it are never blocked from opening. It can never be set above **\$10,000** of notional.
+
+**Withdraw circuit breaker.** The percentage of the deposit average that may leave per window, defaulting to 2,500 bps. The warm admin key may keep or tighten it; raising it requires the cold key.
+
+**Deposit cap.** Sets the daily deposit percentage and its guard threshold together.
+
+## If an action is refused
+
+A refusal expires as the market's 24-hour averages roll forward, so the same action often succeeds later. In the meantime:
+
+- **Withdraw less.** The check is against the market's resulting balance, so a smaller amount may fit.
+- **Withdraw a different asset.** Each spot market carries its own limits.
+- **Repay a borrow first.** Repayments are never blocked, and reducing borrows loosens the check for everyone.
 
 <Callout type="warning">
-If a withdrawal or borrow fails with a "daily withdraw limit" style error, or a deposit fails with a daily deposit limit error, check whether the market itself is near its rolling limit before assuming there is a problem with your account. These are market-wide conditions, not account-specific ones. A separate "market withdraws paused" error means an admin has paused the market; see [Block Conditions](/protocol/risk-and-safety/block-conditions).
+A withdrawal or borrow that breaches a rolling limit fails with a daily withdraw limit error, and a deposit that breaches the cap fails with a daily deposit limit error. Both are market-wide conditions, so the market is worth checking before assuming the problem is the account. A separate market withdraws paused error means an admin has paused the market, which is not this mechanism.
 </Callout>

@@ -1,0 +1,96 @@
+---
+title: "Order types"
+description: "The five order types, the flags that modify them, and why a trigger firing is not the same as a fill."
+---
+
+Velocity has two base order types, market and limit, and three built on top of them: trigger, oracle limit, and scale orders. Flags combine with any of them. Everything here is about perpetual futures; spot order placement is rejected onchain.
+
+Placing and cancelling cost nothing beyond the Solana network fee. The taker fee is charged in USDT, only on the notional that fills. See [Trading fees](/protocol/trading/trading-fees).
+
+## Market orders
+
+A market order buys or sells at whatever the market offers now, bounded by a **slippage tolerance** set on the order. The tolerance is a limit price relative to the current mark price: with SOL-PERP at an illustrative \$100.00 and a tolerance of 0.1%, the worst fill price is \$100.10, and any fill beyond that does not happen.
+
+The order does not simply hit a resting book. It carries a short Dutch auction whose price walks from a start price in the taker's favor toward the limit, and it can fill against a resting maker order, a maker placing an order specifically to fill it, or Velocity's AMM. See [Auctions](/protocol/trading/auction-parameters) and [How fills work](/protocol/trading/how-fills-work). The price shown at submission is an estimate rather than a promise.
+
+## Limit orders
+
+A limit order names the price, and fills at that price or better. Without the post-only flag, a limit order that crosses the market at placement carries its own auction. Once that auction is over the order is **resting**, and can provide liquidity as well as take it.
+
+With the **post-only** flag the order can only ever be a maker. It fills at its limit price and earns the 0.25 bps maker rebate rather than paying the taker fee.
+
+## Trigger orders
+
+A trigger order sits dormant onchain until a price condition is met, at which point it becomes fillable. A **trigger market** order becomes a market order when it fires, which is how stop-loss market and take-profit market orders are built. A **trigger limit** order becomes a limit order, naming the trigger price and the limit price separately, which is how stop-limit and take-profit-limit orders are built.
+
+The **trigger price** decides when the order wakes up; the **limit price** decides the worst price it may fill at once awake. A trigger market order has no limit price, so it is bounded by its auction and slippage tolerance like any other market order.
+
+## Triggering and filling are two separate steps
+
+**The comparison is against a reference price, not the raw oracle.** The reference is a median of three price sources, so none of them can fire a stop alone, clamped to a band around the oracle price: 20 bps for contract tiers A and B, 100 bps for tier C, and 250 bps below that. See [Contract tiers](/protocol/risk-and-safety/contract-tiers).
+
+<Callout type="important">
+The median is behind a feature flag. While the flag is clear the trigger comparison uses the raw oracle price and neither the three legs nor the clamp apply; while it is set, the median and its clamp decide. Read `State.featureBitFlags` for the live setting.
+</Callout>
+
+**Triggering only makes the order eligible.** A keeper still has to submit it, and it then fills like any other order, against a maker or the AMM, never at the reference price itself. Filling is first-come first-served, so a brief touch of the trigger level, network congestion, or a fast reversal can leave an order triggered and unfilled. If the market runs past a trigger limit order's limit before anyone fills it, the order stays open at that limit until price returns or it is cancelled.
+
+**A trigger can also fail to fire when the price looks right**, because triggering is refused when the market's oracle is not valid, when it has diverged too far from its own five-minute TWAP, when fills are paused, or when the market is in settlement.
+
+**And a stop can fire at a level the chart never printed**, because the comparison runs against the reference price rather than the last trade. To reconstruct one, switch the chart from "Candles: Fills" to "Candles: Oracle" in its top right corner.
+
+## Oracle limit orders
+
+A fixed limit price stops working when the oracle moves: a \$99.50 bid with SOL at an illustrative \$100.00 is stranded 2.5% below the market once the oracle reaches \$102.00. An oracle limit order stores a signed **offset** instead of a price, and the effective limit is recomputed from the live oracle on every fill attempt.
+
+| Side | Offset | Effect |
+| -- | -- | -- |
+| Buy | Negative | Bid below the oracle price. |
+| Buy | Positive | Bid above the oracle price, paying a premium to fill sooner. |
+| Sell | Positive | Ask above the oracle price. |
+| Sell | Negative | Ask below the oracle price, accepting a discount to fill sooner. |
+
+The stranded bid becomes a buy at an offset of -\$0.50, and its effective limit tracks the oracle:
+
+| Oracle price at fill attempt | Effective limit price |
+| -- | -- |
+| \$100.00 | \$99.50 |
+| \$102.00 | \$101.50 |
+| \$97.00 | \$96.50 |
+
+That cuts both ways: on the way down the order follows the oracle to \$96.50 rather than filling at \$99.50. The effective price is rounded to the market's tick size in the direction of the order; tick sizes are on [Market specs](/protocol/trading/market-specs).
+
+## Scale orders
+
+A scale order places a ladder of limit orders across a price range in one instruction, to build or unwind a position gradually. All of them rest on the book and nothing fills at placement.
+
+- The count runs from 2 to 32 orders.
+- The range must run away from the market: a long ladder starts above and buys down, a short ladder starts below and sells up.
+- The total base amount must be at least the order step size times the order count.
+- Prices are spaced evenly, and the last order sits on the end price.
+- Reduce-only, post-only and expiry apply to every order in the ladder.
+
+| Size distribution | Sizes across the ladder |
+| -- | -- |
+| Flat | Equal size for every order. |
+| Ascending | Smallest order at the start price, largest at the end price. |
+| Descending | Largest order at the start price, smallest at the end price. |
+
+The 32-rung limit is the same 32 as the total orders a subaccount can hold, so a full ladder only fits an account with no other open orders. See [Scale orders in the SDK](/developers/velocity-sdk/orders) for the exact parameters.
+
+## Order flags
+
+| Flag | What it does |
+| --- | --- |
+| Reduce-only | The order can never increase the position or flip it from long to short. |
+| Post-only | The order can only be a maker. It never takes, and it earns the 0.25 bps maker rebate rather than paying a taker fee. |
+| Immediate-or-cancel | Whatever does not fill immediately is cancelled rather than left resting. |
+| Has builder | Set when the order carries a builder code. See [Builder codes](/developers/builder-codes). |
+
+They combine with any type above and with each other where they are not contradictory.
+
+## What this means in practice
+
+A trigger market order is the closest thing to a certain fill, at the cost of the slippage; a trigger limit order refuses a bad price, at the cost of being left behind.
+
+For a maker, post-only rules out being charged a taker fee by accident, and an oracle offset holds a quote at a fixed distance from fair value without cancelling and replacing on every tick. The only cost of leaving quotes out is the order slots they occupy, of which a subaccount has 32.

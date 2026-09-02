@@ -1,24 +1,20 @@
-# Swift (off-chain signed orders)
+---
+title: "Swift (offchain signed orders)"
+---
 
-Swift is an extension to Velocity that lets users place orders without submitting a transaction to the Solana network. Instead of paying gas and waiting for confirmation, users sign an order message off-chain and submit it to the Swift API. Keepers and market makers then bundle the signed message with their own transaction to fill the order on-chain.
+Swift lets a taker place an order without sending a transaction. The taker signs an order message offchain and posts it to the Swift API; keepers and market makers then bundle that signed message into their own transaction and land the fill onchain. The taker pays no transaction fee and waits on no confirmation, and settlement is still fully onchain.
 
-This enables faster order placement, lower latency, and a gas-free experience for takers, while market makers still settle on-chain.
+This page covers the taker side: building, signing, and submitting the message. For the maker side, receiving and filling signed orders over websocket, see the [Swift API guide](/developers/market-makers/swift-api).
 
-This page covers the taker side: signing and submitting Swift orders. For the maker side (receiving and filling signed orders over WebSocket), see the [SWIFT API guide](/developers/market-makers/swift-api).
+The flow is four steps: build the order params, sign the message offchain, POST it to the Swift API, and let keepers land it. The first three are the taker's.
 
 <Callout type="info">
-The SDK's own defaults are `wss://swift.velocity.exchange/ws` on mainnet and `wss://swift.master.velocity.exchange/ws` on devnet. The HTTP submit endpoint below uses the same mainnet host.
+The SDK's own websocket defaults are `wss://swift.velocity.exchange/ws` on mainnet and `wss://swift.master.velocity.exchange/ws` on devnet. The HTTP submit endpoint below uses the same mainnet host.
 </Callout>
 
-**Order flow:**
-1. Define order parameters
-2. Sign the order message off-chain
-3. Submit to the Swift API (`https://swift.velocity.exchange/orders`)
-4. Keepers/market makers pick up the order and fill it on-chain
+## Step 1: Define order parameters
 
-### Step 1: Define order parameters
-
-Set up a standard Velocity order. For Swift, you typically use a market order with auction parameters that give market makers a window to fill:
+A Swift order is an ordinary Velocity order. In practice it is a market order carrying auction parameters, because the auction window is what gives market makers time to compete for the fill. `auctionDuration` is counted in 400 ms wall-clock units, so `50` is 20 seconds.
 
 <SDKDoc>
   <TypeScript name="Swift order setup" type="example">
@@ -43,20 +39,20 @@ const orderParams = getMarketOrderParams({
   baseAssetAmount: velocityClient.convertToPerpPrecision(0.1), // 0.1 SOL
   auctionStartPrice: isVariant(direction, "long") ? lowPrice : highPrice,
   auctionEndPrice: isVariant(direction, "long") ? highPrice : lowPrice,
-  auctionDuration: 50, // slots for market makers to compete
+  auctionDuration: 50, // 400ms wall-clock units, 20s for market makers to compete
 });
 ```
   </TypeScript>
 </SDKDoc>
 
-### Step 2: Sign the order message
+## Step 2: Sign the order message
 
-Sign the order parameters off-chain using your VelocityClient's wallet. This produces a serialized message and signature that the Swift API will verify:
+Sign the order params offchain with the client's wallet. The result is a borsh-encoded, hex-serialized message plus its signature, both `Buffer`s, which is what the Swift API verifies. `uuid` must be unique per order: it is what prevents a replay.
 
 <SDKDoc>
   <TypeScript name="signSignedMsgOrderParamsMessage" type="method" owner="VelocityClient">
 ```js
-import { generateSignedMsgUuid } from "@velocity-exchange/sdk";
+import { BN, generateSignedMsgUuid } from "@velocity-exchange/sdk";
 
 const slot = await velocityClient.connection.getSlot();
 
@@ -76,12 +72,12 @@ const { orderParams: message, signature } =
 </SDKDoc>
 
 <Callout type="info">
-[Builder Codes](/developers/velocity-sdk/builder-codes) attach the same way here: add `builderIdx` / `builderFeeTenthBps` to `orderMessage` alongside `signedMsgOrderParams`. Builder codes are not exclusive to Swift: the same fields also work on regular on-chain order placement.
+[Builder Codes](/developers/velocity-sdk/builder-codes) attach the same way here: add `builderIdx` / `builderFeeTenthBps` to `orderMessage` alongside `signedMsgOrderParams`. Builder codes are not exclusive to Swift: the same fields also work on regular onchain order placement.
 </Callout>
 
-### Step 3: Submit to the Swift API
+## Step 3: Submit to the Swift API
 
-POST the signed message to the Swift endpoint. The API validates the signature and queues the order for keepers and market makers:
+POST the message and signature to the Swift endpoint. The API validates the signature and queues the order for keepers and market makers. The message is already hex-encoded text, so do not encode it again.
 
 <SDKDoc>
   <TypeScript name="Swift API submit" type="example">
@@ -107,11 +103,13 @@ if (!response.ok) {
   </TypeScript>
 </SDKDoc>
 
-> **Delegate flows:** When signing as a delegate for another account, also pass `signing_authority` (the delegate's public key) and ensure `taker_authority` is the account owner's public key. Initialize the VelocityClient with `authority` set to the owner's key.
+<Callout type="info">
+**Delegate flows.** When signing as a delegate for another account, pass `signing_authority` as the delegate's public key and keep `taker_authority` as the account owner's. Construct the `VelocityClient` with `authority` set to the owner's key, per the delegated-accounts note in [Setup](/developers/velocity-sdk/setup#client-configuration).
+</Callout>
 
-### Signed message accounts (delegate flow)
+## Signed message accounts (delegate flow)
 
-For delegate accounts, you can initialize a `SignedMsgUserOrders` account to allow a delegate to place Swift orders on behalf of the owner:
+For delegate accounts, initializing a `SignedMsgUserOrders` account allows a delegate to place Swift orders on behalf of the owner:
 
 <SDKDoc>
   <TypeScript name="getSignedMsgUserAccountPublicKey" type="function">
@@ -135,7 +133,7 @@ const [txSig, signedMsgUserAccount] =
   </TypeScript>
 </SDKDoc>
 
-### Decode signed messages
+## Decode signed messages
 
 Decode a raw signed message (e.g., received from the Swift API or another source) back into structured order params:
 
@@ -150,16 +148,16 @@ const signedMessage = velocityClient.decodeSignedMsgOrderParamsMessage(
   </TypeScript>
 </SDKDoc>
 
-### Instruction builders (Swift taker + maker)
+## Instruction builders (taker and maker)
 
-For advanced use cases (such as building keeper or market-maker bots), you can construct Swift fill instructions directly instead of using the HTTP API flow.
+For advanced use cases (such as building keeper or market-maker bots), Swift fill instructions can be constructed directly instead of going through the HTTP API flow.
 
-Build the taker-side instructions for placing a Swift order on-chain:
+Build the taker-side instructions for placing a Swift order onchain:
 
 <SDKDoc>
   <TypeScript name="getPlaceSignedMsgTakerPerpOrderIxs" type="method" owner="VelocityClient">
 ```js
-// Used by keeper bots to submit a taker's signed Swift order on-chain
+// Used by keeper bots to submit a taker's signed Swift order onchain
 const ixs = await velocityClient.getPlaceSignedMsgTakerPerpOrderIxs(
   { orderParams: orderMessageHex, signature },
   marketIndex,
@@ -189,7 +187,7 @@ const ixs = await velocityClient.getPlaceAndMakeSignedMsgPerpOrderIxs(
   </TypeScript>
 </SDKDoc>
 
-### Helper functions
+## Helper functions
 
 Generate a unique UUID for a Swift order message. Each order must have a distinct UUID to prevent replay attacks:
 

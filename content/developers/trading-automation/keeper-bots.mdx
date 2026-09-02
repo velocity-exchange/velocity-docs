@@ -1,10 +1,32 @@
-# Keeper Bots
+---
+title: "Keeper Bots"
+---
 
-Keeper bots keep Velocity operational by performing automated actions as off-chain agents: matching orders, triggering conditional orders, and liquidating unhealthy positions. All four reference bots ship from [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the `velocity-v1` monorepo; see [Trading Automation](/developers/trading-automation) for shared setup (wallet, RPC provider, config, and running the app).
+Velocity has no central matching engine. The work that a centralized exchange does inside its own process, crossing two orders, noticing that a stop has been hit, closing an account that fell below maintenance margin, is instead done by offchain agents that watch the chain and send the transaction that performs the action. Anyone can run one, and the protocol pays for each action performed.
+
+The four bots below have a tutorial each. All four ship from `apps/keeper-bots-v2` in the `velocity-v1` monorepo, which is not public yet. The wallet, RPC endpoint, config file, and run commands they share are in [Trading Automation](/developers/trading-automation); each tutorial covers only what is specific to its bot.
 
 <Cards>
-  <Cards.Card title="Order Matching Bot" href="/developers/trading-automation/keeper-bots/order-matching-bot" />
-  <Cards.Card title="Order Trigger Bot" href="/developers/trading-automation/keeper-bots/order-trigger-bot" />
-  <Cards.Card title="Liquidation Bot" href="/developers/trading-automation/keeper-bots/liquidation-bot" />
-  <Cards.Card title="JIT Maker Bot" href="/developers/trading-automation/keeper-bots/jit-maker-bot" />
+  <Card
+    title="Order matching bot"
+    href="/developers/trading-automation/keeper-bots/order-matching-bot"
+    description="Fills crossed orders from the DLOB against a maker or the AMM. No capital needed, paid a filler reward per fill."
+  />
+  <Card
+    title="Order trigger bot"
+    href="/developers/trading-automation/keeper-bots/order-trigger-bot"
+    description="Marks stop and take-profit orders as triggered once their condition is met, so a matching bot can fill them. No capital needed, paid the flat filler fee."
+  />
+  <Card
+    title="Liquidation bot"
+    href="/developers/trading-automation/keeper-bots/liquidation-bot"
+    description="Takes over positions from accounts below maintenance margin at a discount. Needs collateral, because it inherits the liability."
+  />
+  <Card
+    title="JIT maker bot"
+    href="/developers/trading-automation/keeper-bots/jit-maker-bot"
+    description="Competes to fill market orders during the JIT auction, before the AMM can. A strategy, not maintenance: it holds inventory and can lose money."
+  />
 </Cards>
+
+The first three are keeper duties: the protocol needs them done and pays a fixed reward for doing them. The JIT maker is a trading strategy that happens to ship in the same app. [Keeper incentives](/protocol/how-it-works/keepers/keeper-incentives) covers how the rewards are funded, and [Keepers and the decentralized orderbook](/protocol/how-it-works/orderbook-and-keepers) covers how the DLOB that all of them read is built.

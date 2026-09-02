@@ -1,11 +1,15 @@
-# Builder Codes
+---
+title: "Builder Codes"
+---
 
-Builder Codes let integrators earn fees by routing order flow through their application. A builder fee is an extra fee (on top of the taker's normal tiered fee, capped at 1% of notional via `MAX_BUILDER_FEE_TENTH_BPS`) attached to an order via `builderIdx`/`builderFeeTenthBps`, and settled to the builder's revenue-share account when the order fills. The fee is waived (the fill still goes through at zero builder fee) on liquidation fills, and on any fill where the taker does not clear initial margin under the program's strict oracle rules, so builders shouldn't assume every fill pays.
+Builder Codes let integrators earn fees by routing order flow through their application. A builder fee rides on top of the taker's normal tiered fee: it attaches to an order through `builderIdx` and `builderFeeTenthBps`, and it settles to the builder's revenue-share account when the order fills. The program caps it at 1% of notional via `MAX_BUILDER_FEE_TENTH_BPS`.
 
-For the concepts behind this system (the three actors, the escrow model, and the payout paths), see [Velocity Builder Codes](/developers/builder-codes). This page covers the SDK calls that implement it.
+Not every fill pays it. The fee is waived, and the fill still goes through at zero builder fee, on liquidation fills and on any fill where the taker does not clear initial margin under the program's strict oracle rules. Build accounting around fees that arrive, not fees that were expected.
+
+For the concepts behind this system, the three actors, the escrow model, and the payout paths, see [Velocity Builder Codes](/developers/builder-codes). This page covers the SDK calls that implement it.
 
 <Callout type="info">
-Builder codes work on **any** perp order: regular on-chain order placement (`placePerpOrder`, `placeAndTakePerpOrder`, `placeAndMakePerpOrder`, `fillPerpOrder`) as well as [Swift](/developers/velocity-sdk/swift) signed-message orders. `builderIdx`/`builderFeeTenthBps` are plain optional fields on `OrderParams`, not a Swift-only mechanism.
+Builder codes work on **any** perp order: regular onchain order placement (`placePerpOrder`, `placeAndTakePerpOrder`, `placeAndMakePerpOrder`, `fillPerpOrder`) as well as [Swift](/developers/velocity-sdk/swift) signed-message orders. `builderIdx`/`builderFeeTenthBps` are plain optional fields on `OrderParams`, not a Swift-only mechanism.
 </Callout>
 
 The model has three actors and three setup steps:
@@ -23,11 +27,10 @@ Create and subscribe separate `VelocityClient` instances for the builder and use
 <SDKDoc>
   <TypeScript name="Builder codes setup" type="example">
 ```js
-import { VelocityClient, Wallet } from "@velocity-exchange/sdk";
 import { Connection, Keypair } from "@solana/web3.js";
+import { VelocityClient, Wallet } from "@velocity-exchange/sdk";
 
-// Initialize connection
-const connection = new Connection("https://api.mainnet-beta.solana.com");
+const connection = new Connection("<RPC_URL>", "confirmed");
 
 // Builder wallet (revenue share provider)
 const builderKeypair = Keypair.fromSecretKey(/* builder secret key */);
@@ -74,7 +77,7 @@ await builderClient.initializeRevenueShare(builderAuthority);
 
 ### User: Initialize Escrow
 
-Create the user's `RevenueShareEscrow` account used for builder-fee tracking and approvals. `numOrders` sizes the pending-order slot list (it can be grown later with `resizeRevenueShareEscrowOrders`, but never shrunk): size it to at least the number of concurrently open orders you expect across all of this user's subaccounts:
+Create the user's `RevenueShareEscrow` account used for builder-fee tracking and approvals. `numOrders` sizes the pending-order slot list (it can be grown later with `resizeRevenueShareEscrowOrders`, but never shrunk): size it to at least the number of concurrently open orders expected across all of this user's subaccounts:
 
 <SDKDoc>
   <TypeScript name="initializeRevenueShareEscrow" type="method" owner="VelocityClient">
@@ -100,7 +103,7 @@ await userClient.changeApprovedBuilder(builderAuthority, 200, true); // cap: 20 
   </TypeScript>
 </SDKDoc>
 
-Call with `add = false` to revoke a builder: this fails with `CannotRevokeBuilderWithOpenOrders` if that builder has open (unsettled) orders outstanding, which must be cancelled or settled first.
+Call with `add = false` to revoke a builder. That fails with `CannotRevokeBuilderWithOpenOrders` while the builder still has open, unsettled orders outstanding: cancel or settle those first.
 
 ### Order Placement (Builder Fee on a Regular Order)
 
@@ -109,7 +112,7 @@ Include `builderIdx` and `builderFeeTenthBps` directly on `OrderParams` for any 
 <SDKDoc>
   <TypeScript name="Order with a builder fee" type="example">
 ```js
-import { OrderType, MarketType, PositionDirection } from "@velocity-exchange/sdk";
+import { MarketType, OrderType, PositionDirection } from "@velocity-exchange/sdk";
 
 await userClient.placePerpOrder({
   orderType: OrderType.LIMIT,
@@ -127,10 +130,10 @@ await userClient.placePerpOrder({
   </TypeScript>
 </SDKDoc>
 
-The same two fields are set on a Swift signed order message the same way. See [Order Placement (Builder adds fee to Swift order)](/developers/velocity-sdk/swift) in the Swift guide.
+The same two fields go on a Swift signed order message, set on the message alongside `signedMsgOrderParams`. See [Sign the order message](/developers/velocity-sdk/swift#step-2-sign-the-order-message).
 
 <Callout type="warning">
-`builderFeeTenthBps` must be within **both** caps: the user's `maxFeeTenthBps` for that builder, and the protocol-wide `MAX_BUILDER_FEE_TENTH_BPS` of `1000` (1% of notional), an on-chain Rust constant in the velocity program rather than an SDK export. Exceeding either fails the placement.
+`builderFeeTenthBps` must be within **both** caps: the user's `maxFeeTenthBps` for that builder, and the protocol-wide `MAX_BUILDER_FEE_TENTH_BPS` of `1000` (1% of notional), an onchain Rust constant in the velocity program rather than an SDK export. Exceeding either fails the placement.
 </Callout>
 
 ### Changing a Builder-Coded Order
@@ -142,6 +145,8 @@ Cancel and re-place instead. `cancelAndPlaceOrders` does both in one transaction
 <SDKDoc>
   <TypeScript name="cancelAndPlaceOrders" type="method" owner="VelocityClient">
 ```js
+import { MarketType, OrderType, PositionDirection } from "@velocity-exchange/sdk";
+
 // Replace a builder-coded order: cancel, then place with the builder params set again
 await userClient.cancelAndPlaceOrders(
   { marketType: MarketType.PERP, marketIndex: 0, direction: PositionDirection.LONG },
@@ -162,21 +167,21 @@ await userClient.cancelAndPlaceOrders(
   </TypeScript>
 </SDKDoc>
 
-If your client reuses one modify path for all order updates, branch on the builder fields before calling it.
+A client that reuses one modify path for all order updates should branch on the builder fields before calling it.
 
 ## Fill-time enforcement
 
-Perp fills fail on-chain with `UnableToLoadRevenueShareAccount` (error `6324` / `0x18b4`) unless the **taker's** `RevenueShareEscrow` is passed as a remaining account when either:
+Perp fills fail onchain with `UnableToLoadRevenueShareAccount` (error `6324` / `0x18b4`) unless the **taker's** `RevenueShareEscrow` is passed as a remaining account when either:
 
 - the taker's order carries a builder code (`hasBuilderParams(orderParams)` is true), or
 - the taker's `UserStats.referrerStatus` has the `BuilderReferral` bit set and their escrow has a referrer (`escrowHasReferrer(escrow)`).
 
-Liquidation fills and the feature-flag-off state are exempt. Fillers/keepers must attach the escrow for any taker that matches one of the above: the SDK's fill and place-and-make builders accept the taker's decoded escrow directly:
+Liquidation fills are exempt, as is any fill made while the `BuilderCodes` bit of `FeatureBitFlags` is clear on `State.featureBitFlags`; read the state account for that bit's setting. Fillers and keepers must attach the escrow for any taker that matches one of the above, and the SDK's fill and place-and-make builders accept the taker's decoded escrow directly:
 
 <SDKDoc>
   <TypeScript name="takerEscrow on fills" type="example">
 ```js
-import { isBuilderReferral, escrowHasReferrer, hasBuilderParams } from "@velocity-exchange/sdk";
+import { hasBuilderParams, isBuilderReferral } from "@velocity-exchange/sdk";
 
 // Resolve whether this taker's escrow must be attached
 const takerNeedsEscrow =
@@ -201,9 +206,9 @@ await fillerClient.fillPerpOrder(
   </TypeScript>
 </SDKDoc>
 
-`fillPerpOrder`/`getFillPerpOrderIx`, `placeAndTakePerpOrder`/`getPlaceAndTakePerpOrderIx`, `placeAndMakePerpOrder`/`getPlaceAndMakePerpOrderIx`, and `getPlaceAndMakeSignedMsgPerpOrderIxs` all accept this optional trailing `takerEscrow`. The builders validate `takerEscrow.authority` against the taker's authority and throw if they don't match.
+`fillPerpOrder` and `getFillPerpOrderIx`, `placeAndTakePerpOrder` and `getPlaceAndTakePerpOrderIx`, `placeAndMakePerpOrder` and `getPlaceAndMakePerpOrderIx`, and `getPlaceAndMakeSignedMsgPerpOrderIxs` all accept this optional trailing `takerEscrow`. The builders validate `takerEscrow.authority` against the taker's authority and throw if they don't match.
 
-For keepers filling many takers, `RevenueShareEscrowMap` caches escrow accounts by authority so you don't re-fetch per fill:
+For keepers filling many takers, `RevenueShareEscrowMap` caches escrow accounts by authority, which avoids a re-fetch per fill:
 
 <SDKDoc>
   <TypeScript name="RevenueShareEscrowMap" type="class">
@@ -222,9 +227,7 @@ const escrow = revenueShareEscrowMap.get(takerAuthority.toString()); // undefine
 Referral rewards also only accrue (and referral slots are only created) for escrows that have a referrer: an escrow with no referrer set is exempt from the enforcement above even if the taker's `referrerStatus` bit happens to be set.
 </Callout>
 
-### Notes on builder codes for MMs
-
-Market makers filling as `makerInfo` are unaffected by this enforcement: it only gates the **taker's** escrow. Makers do not need to pass their own `RevenueShareEscrow` to fill orders, builder-coded or not.
+Market makers filling as `makerInfo` are unaffected by any of this: the enforcement gates the **taker's** escrow only. A maker never passes its own `RevenueShareEscrow` to fill an order, builder-coded or not.
 
 ## Collecting accrued fees
 
@@ -232,11 +235,11 @@ An accrued row leaves escrow through one of three instructions, all paying out o
 
 | Method | Caller | Behavior |
 | --- | --- | --- |
-| `settlePNL` | Escrow owner | Runs the same sweep, but only when it moves PnL for that market. |
-| `settleRevenueShare` | Anyone | Pays the accrued builder and referrer rows of one escrow on one perp market, without the owner. Rejects a delisted market. |
+| `settleRevenueShare` | Anyone | Pays the accrued builder and referrer rows of one escrow on one perp market, without needing the owner. Rejects a delisted market. |
+| `settlePNL` | Escrow owner | Runs the same sweep as a side effect, but only when it moves PnL for that market. |
 | `forfeitRevenueShareOrder` | Anyone | Writes off one row the program cannot pay. Moves no tokens. |
 
-Do not rely on `settlePNL`. Once the escrow owner closes their position and stops trading, no PnL settle can pay the row, and the market's `pendingRevenueShare` holds PnL-pool value against the claim. `settleRevenueShare` exists so a builder or keeper can collect on its own schedule:
+Do not rely on `settlePNL`. Once the escrow owner closes their position and stops trading, no PnL settle can pay the row, and the market's `pendingRevenueShare` holds PnL-pool value against the claim indefinitely. `settleRevenueShare` exists so a builder or keeper can collect on its own schedule:
 
 <SDKDoc>
   <TypeScript name="settleRevenueShare" type="method" owner="VelocityClient">
@@ -249,13 +252,15 @@ await builderClient.settleRevenueShare(takerAuthority, escrow, 0);
   </TypeScript>
 </SDKDoc>
 
-The SDK builds `remainingAccounts` for you: the oracle and market accounts, then the owner's on-chain sub-accounts read-only (the program needs them to mark rows `Completed` before paying), then the beneficiaries' `User` and `RevenueShare` accounts writable.
+The SDK builds `remainingAccounts`: the oracle and market accounts, then the owner's onchain sub-accounts read-only (the program needs them to mark rows `Completed` before paying), then the beneficiaries' `User` and `RevenueShare` accounts writable.
 
 To find the work list, subscribe a `RevenueShareEscrowMap` and ask which escrows still owe on a market. Call `syncAll()` first, because a partial cache under-reports:
 
 <SDKDoc>
   <TypeScript name="getEscrowsOwingRevenueShare" type="method" owner="RevenueShareEscrowMap">
 ```js
+import { PublicKey } from "@solana/web3.js";
+
 await revenueShareEscrowMap.syncAll();
 
 const owing = revenueShareEscrowMap.getEscrowsOwingRevenueShare(0);
@@ -266,7 +271,7 @@ for (const [authority, escrow] of owing) {
   </TypeScript>
 </SDKDoc>
 
-The sweep pays a row only when its `feesAccrued` fits in the payable part of the PnL pool. Check that before sending, so you do not pay for a transaction that settles nothing:
+The sweep pays a row only when its `feesAccrued` fits in the payable part of the PnL pool. Check that before sending, to avoid paying for a transaction that settles nothing:
 
 <SDKDoc>
   <TypeScript name="calculateRevenueShareSweepAvailable" type="function">
@@ -285,7 +290,7 @@ const available = calculateRevenueShareSweepAvailable(perpMarket, spotMarket, or
 
 ### Writing off an unpayable row
 
-`forfeitRevenueShareOrder` clears a row so `pendingRevenueShare` can reach zero and the delist is not blocked. The market must be in settlement or delisted, and the program requires proof it cannot pay: the beneficiary has no payout `User` account, the closed pool is smaller than the row, or the row names no beneficiary the program can reach. A still-payable row is rejected with `RevenueShareOrderNotForfeitable`.
+`forfeitRevenueShareOrder` clears a row so `pendingRevenueShare` can reach zero and the delist is not blocked. The market must be in settlement or delisted, and the program requires proof it cannot pay: the beneficiary has no payout `User` account, the closed pool is smaller than the row, or the row names no beneficiary the program can reach. A still-payable row is rejected with `RevenueShareOrderNotForfeitable` (error `6373` / `0x18e5`).
 
 <SDKDoc>
   <TypeScript name="forfeitRevenueShareOrder" type="method" owner="VelocityClient">

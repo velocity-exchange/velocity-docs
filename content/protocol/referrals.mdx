@@ -1,0 +1,85 @@
+---
+title: "Referrals"
+description: "What a referral link pays the referrer and the referee, where the reward accrues, and who can be referred."
+---
+
+A referral link pays the referrer a share of the taker fees paid by traders who sign up through it, and gives those traders a discount on their own taker fees. Both sides are paid out of the same fee, so nothing is added to the referee's bill: the reward comes out of the protocol's cut of the fill.
+
+<Callout type="important">
+Referral rewards and the referee discount ride the same rail as builder codes, and that rail sits behind the `BuilderCodes` feature bit on the program's `State` account. While the bit is clear, no reward accrues on a fill, no discount is applied, and a payout request is rejected; while it is set, everything below applies. Setting and clearing it takes a deliberate admin instruction, so read `State.featureBitFlags` rather than assuming either state.
+</Callout>
+
+## The two levels
+
+| Level | The referrer earns | The referee receives | How the rate changes |
+| --- | --- | --- | --- |
+| Standard | 10% of the referee's taker fee | 5% off their taker fee | A fee-tier setting an admin can change |
+| Accelerated | 20% of the referee's taker fee | 5% off their taker fee | Fixed in the program; changing it takes a program upgrade |
+
+Both rates apply at every fee tier, with no volume cap. Because the Standard rate and the referee discount are fee-tier settings, an admin editing the fee tiers moves them without touching the 20% Accelerated rate.
+
+## Both percentages apply to the pre-discount fee
+
+The reward and the discount are computed against the taker fee **before** the discount is applied, not against the fee actually paid.
+
+On a \$2,000 fill at the Regular tier the taker fee is 4 bps, or \$0.80. The referee discount is 5% of that \$0.80, so \$0.04, and the referee is charged \$0.76. A Standard referrer earns 10% of the same \$0.80, so \$0.08; an Accelerated referrer earns 20%, so \$0.16. Neither number is derived from the \$0.76 that was actually paid.
+
+The referrer's reward is taken out of the fee alongside the filler reward and the maker rebate, before the remainder is split between the AMM, the insurance fund and the protocol. It reduces the protocol's residual cut; it is not an extra charge on anybody. See [Trading fees](/protocol/trading/trading-fees) for the full order of deductions.
+
+## The reward accrues in the referee's escrow, not the referrer's
+
+On a qualifying fill the reward is recorded against the referee's own account, per market, rather than landing in the referrer's. The referrer's account is not touched at fill time and holds no accruing balance.
+
+The reward reaches the referrer when a sweep runs for that referee and that market, moving the accrued amount out of the perp market's P&L pool and into the referrer's quote balance. A sweep runs when P&L is settled on that market, and anyone can also trigger it directly, the referrer included, without the referee having to still be trading there.
+
+A sweep pays out of the P&L pool's surplus only. The pool first holds back what it owes traders as positive unsettled P&L, the insurance fund's bankruptcy reserve, and revenue share already accrued to builders and referrers. So a reward is an accrued claim on the market rather than a token balance, from the moment of the fill until the moment it is swept.
+
+A referee with no escrow, or whose escrow carries no referrer, accrues nothing. The fill still succeeds, no discount is applied, and the referee pays the ordinary taker fee for their tier.
+
+## How Accelerated status is granted
+
+Accelerated status is not limited to a beta window and is not handed out at signup. While automatic enrollment is on, any eligible interaction grants it permanently: initializing a user account, a perp fill in either the taker or the maker seat, and a completed swap.
+
+Automatic enrollment is compiled into the program, so closing it takes a program upgrade rather than an admin instruction. An admin can override either way for an individual user, and a revocation also blocks automatic re-enrollment, so the user's next trade cannot immediately re-grant what an admin just removed.
+
+## Who can be referred
+
+A referrer is recorded once, when the wallet creates its very first subaccount, and is never written again. The counter that check reads is never decremented, so deleting every subaccount does not reset it. **A wallet that has ever created a Velocity subaccount cannot be referred**, even after closing all of them.
+
+<Callout type="warning">
+The link applies solely to new Velocity accounts. For it to apply, the trader must click the link, connect a wallet that has never created a Velocity subaccount, and complete the deposit in the same session. "New" means the wallet, not the browser session.
+</Callout>
+
+## What generates a reward
+
+Rewards accrue from taker volume only. A maker fill earns the maker rebate and generates no referral reward, because there is no taker fee to derive one from. Rewards are per market, so a referee trading four markets accrues four separate claims, each swept against its own market's P&L pool.
+
+## Creating a referral link
+
+Links are created at [velocity.exchange/referrals](https://velocity.exchange/referrals), or through **More > Referrals** in the top navigation.
+
+<Steps>
+### Create a link
+Click "Create my referral link".
+
+<img src="/assets/ref-2.png" alt="" width="500" height="auto"></img>
+
+### Customize
+Choose a link under 32 characters and click "Create". The link cannot be changed after it is set.
+
+<img src="/assets/ref-3.png" alt="" width="500" height="auto"></img>
+
+### Approve
+Once the transaction confirms, your rewards appear under "Total Rewards Earned", alongside a control to copy the link.
+
+<img src="/assets/ref-4.png" alt="" width="500" height="auto"></img>
+
+### Share
+Share the link. Rewards begin accruing on the first qualifying taker fill by an account that signed up through it.
+</Steps>
+
+## What this means in practice
+
+**For a referrer**, earnings sit against the referees' accounts until a sweep moves them, so a rewards figure that has not moved is usually a market that has not been settled recently rather than a market that produced no fills. The referrer can trigger the sweep directly.
+
+**For a referee**, the discount is applied by not charging it, so it never appears as a separate credit. It shows up only by comparing the charged fee against the tier rate, not as a rebate line.

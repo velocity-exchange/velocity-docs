@@ -1,0 +1,21 @@
+{
+  "title": "Velocity SDK",
+  "pages": [
+    "index",
+    "setup",
+    "precision-and-types",
+    "deposits-withdrawals",
+    "transfers",
+    "users",
+    "markets",
+    "orders",
+    "pnl-risk",
+    "events",
+    "dlob",
+    "swaps",
+    "swift",
+    "builder-codes",
+    "transactions",
+    "sdk-internals"
+  ]
+}

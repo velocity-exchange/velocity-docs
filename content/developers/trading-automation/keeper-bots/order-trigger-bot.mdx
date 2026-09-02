@@ -1,32 +1,29 @@
-# Tutorial: Order Trigger Bot
+---
+title: "Tutorial: Order Trigger Bot"
+---
 
 ## Introduction
 
 Order Trigger Bots (Trigger Bots) are responsible for marking orders that satisfy the trigger condition, including:
 
--   **Trigger Market Orders -** Stop Market and Take Profit
-
--   **Trigger Limit Orders -** Stop Limit and Take Profit Limit
+-   **Trigger market orders**: stop market and take profit.
+-   **Trigger limit orders**: stop limit and take profit limit.
 
 Trigger Bots receive a small compensation for each successfully marked order.
 
-See [Keepers & Decentralised Orderbook](/protocol/how-it-works/decentralized-orderbook) for a technical explanation of how the decentralised orderbook (DLOB) and matching incentives work.
+See [Keepers and the decentralized orderbook](/protocol/how-it-works/orderbook-and-keepers) for how the decentralized orderbook (DLOB) is built and how matching incentives work.
 
 Trigger Bots are similar to [Tutorial: Order Matching Bot](/developers/trading-automation/keeper-bots/order-matching-bot) in that they:
 
--   also maintain a local copy of the [Keepers & Decentralised Orderbook](/protocol/how-it-works/decentralized-orderbook);
-
--   do not require the operator to manage collateral; and
-
+-   also maintain a local copy of the decentralized orderbook (DLOB)
+-   do not require the operator to manage collateral
 -   receive a small reward for performing their duties.
 
 ## Getting Started
 
-The reference implementation of a Trigger Bot is available [here](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/trigger.ts) in the `velocity-v1` monorepo.
+The reference implementation is `src/bots/trigger.ts` in `apps/keeper-bots-v2`, inside the `velocity-v1` monorepo, which is not public yet.
 
-Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Velocity user account.
-
-Start the Trigger Bot:
+Set the environment variables and initialize a Velocity user account as described in [Trading Automation](/developers/trading-automation#running-a-reference-bot). Then start the trigger bot:
 
 ```shell copy
 bun run dev:trigger
@@ -39,9 +36,9 @@ The trigger bot polls the DLOB for orders whose trigger conditions are now met (
 <Steps>
 ### Get nodes from the DLOB that are ready to be triggered
 
-The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the trigger price has crossed the trigger threshold, these are ready to be marked on-chain.
+The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the trigger price has crossed the trigger threshold, these are ready to be marked onchain.
 
-The trigger price is not always the raw oracle price. When the state account's `MedianTriggerPrice` feature bit is on (it is on mainnet today), the program (and `getTriggerPrice`) triggers off a median of the oracle price, the last fill price, and a funding-basis price instead. Read the bit from the state account rather than assuming either mode. A bot that passes the raw oracle price directly can both miss real triggers and submit triggers that revert.
+The trigger price is not always the raw oracle price. It is gated on the state account's `MedianTriggerPrice` feature bit. While the bit is clear, the program (and `getTriggerPrice`) compares against the raw oracle price; while it is set, it compares against a median of the oracle price, the last fill price, and a funding-basis price instead. Read the bit from the state account rather than assuming either mode. A bot that passes the raw oracle price directly can both miss real triggers and submit triggers that revert.
 
 ```typescript copy
 const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;
@@ -65,7 +62,7 @@ const nodesToTrigger = this.dlob.findNodesToTrigger(
 
 ### Call `getTriggerOrderIx` on `VelocityClient`
 
-Submit the trigger transaction for each eligible node. Once triggered on-chain, the order becomes a regular order available for matching bots to fill. The transaction can still revert, for example if the market's fill operation is paused. Expect competition from other trigger bots, and handle errors gracefully and continue to the next node.
+Submit the trigger transaction for each eligible node. Once triggered onchain, the order becomes a regular order available for matching bots to fill. The transaction can still revert, for example if the market's fill operation is paused. Expect competition from other trigger bots, and handle errors gracefully and continue to the next node.
 
 ```typescript copy
 const user = this.userMap.get(nodeToTrigger.node.userAccount.toString());

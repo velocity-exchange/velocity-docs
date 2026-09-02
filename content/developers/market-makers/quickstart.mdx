@@ -1,15 +1,19 @@
-# Market Maker Quickstart
+---
+title: "Market Maker Quickstart"
+---
 
-Get a simple market maker running in under 10 minutes. This guide shows how to place two-sided quotes that automatically update with oracle prices.
+Get a two-sided market maker running in under 10 minutes. This guide places a bid and an ask, then refreshes them as the oracle price moves.
 
 ## Prerequisites
 
 - Node.js + TypeScript project
 - Velocity SDK installed: `bun add @velocity-exchange/sdk`
-- Funded Solana account with collateral (dUSDT on devnet; USDT on mainnet)
+- Funded Solana account with collateral deposited into a spot market (the accepted collateral mints are configured onchain, per spot market)
 - Basic familiarity with async/await
 
-> **⚠️ RPC choice matters:** The default `https://api.mainnet-beta.solana.com` is rate-limited and unsuitable for production bots. Use a dedicated RPC provider (Helius, Triton, etc.) or you'll hit 429 errors within minutes. For WebSocket subscriptions, you need a provider that supports `accountSubscribe`.
+<Callout type="warning">
+**RPC choice matters.** The default `https://api.mainnet-beta.solana.com` is rate-limited and unsuitable for production bots: a quoting loop hits 429 errors within minutes. Use a dedicated RPC provider, and for WebSocket subscriptions one that supports `accountSubscribe`.
+</Callout>
 
 ## Step 1: Initialize VelocityClient
 
@@ -33,7 +37,7 @@ const velocityClient = new VelocityClient({
 
 await velocityClient.subscribe();
 
-// Initialize your user account (if first time)
+// Initialize the user account (if first time)
 // const [txSig] = await velocityClient.initializeUserAccount(0);
 ```
   </TypeScript>
@@ -41,7 +45,7 @@ await velocityClient.subscribe();
 
 ## Step 2: Get oracle price
 
-Read the current oracle price to calculate your bid/ask spread.
+Read the current oracle price to calculate the bid/ask spread.
 
 <SDKDoc>
   <TypeScript name="getOracleDataForPerpMarket" type="method" owner="VelocityClient">
@@ -59,7 +63,7 @@ console.log(`Oracle price: $${oraclePrice}`);
 
 ## Step 3: Place two-sided quotes
 
-Place a bid (buy) below oracle and an ask (sell) above oracle. Using `PostOnlyParams.MUST_POST_ONLY` ensures your orders never cross and you always earn maker rebates.
+Place a bid (buy) below oracle and an ask (sell) above oracle. `PostOnlyParams.MUST_POST_ONLY` stops either order from crossing, so every fill settles on the maker side.
 
 <SDKDoc>
   <TypeScript name="placeOrders" type="method" owner="VelocityClient">
@@ -182,11 +186,11 @@ setInterval(async () => {
   </TypeScript>
 </SDKDoc>
 
-> **Tip:** This cancel-and-replace approach sends ~2 transactions every 10 seconds. For production, consider [oracle offset orders](/developers/market-makers/dlob-mm#oracle-offset-orders) which float with the oracle automatically and require only ~30 txs/day.
+This cancel-and-replace loop sends two transactions every 10 seconds, roughly 17,000 per day. Production desks quote with [oracle offset orders](/developers/market-makers/dlob-mm#oracle-offset-orders) instead: they float with the oracle on their own, so the transaction count drops to about 30 per day.
 
 ## Next steps
 
-This basic example gets you started, but production market makers need:
+This example is a starting point. Production market makers also need:
 
 - **Oracle offset orders:** orders that automatically track oracle price, drastically reducing transactions ([DLOB MM](/developers/market-makers/dlob-mm#oracle-offset-orders))
 - **Inventory management:** adjust spread based on position size ([DLOB MM](/developers/market-makers/dlob-mm))
@@ -197,12 +201,12 @@ This basic example gets you started, but production market makers need:
 
 ## Common pitfalls
 
-- **Forgetting `PostOnlyParams`:** without it, your "maker" orders can cross the spread and execute as taker, paying fees instead of earning rebates
+- **Forgetting `PostOnlyParams`:** without it, an order meant as a maker quote can cross the spread and execute as taker, paying the taker fee instead of earning the maker rebate
 - **Using `PRICE_PRECISION` wrong:** oracle prices are in `PRICE_PRECISION` (1e6), base amounts in `BASE_PRECISION` (1e9). Mixing them up causes orders at wildly wrong prices
 - **Not initializing user account:** first-time users must call `velocityClient.initializeUserAccount()` before placing orders. The SDK will throw `User account not found` otherwise
 - **32-order limit:** each Velocity subaccount supports a maximum of 32 open orders. Cancel stale orders or use multiple subaccounts for multi-market strategies
 
 For production patterns and best practices, see:
-- [DLOB MM](/developers/market-makers/dlob-mm) - comprehensive quoting strategies including oracle offset orders
-- [Bot Architecture](/developers/market-makers/bot-architecture) - subscription loops, throttling, priority fees
-- [keeper-bots-v2 `FloatingPerpMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) - production reference for oracle offset quoting
+- [DLOB MM](/developers/market-makers/dlob-mm): comprehensive quoting strategies including oracle offset orders
+- [Bot Architecture](/developers/market-makers/bot-architecture): subscription loops, throttling, priority fees
+- `FloatingPerpMaker` in keeper-bots-v2: the production reference for oracle offset quoting. It lives in the `velocity-v1` monorepo, which is not public yet
