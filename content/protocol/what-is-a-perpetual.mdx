@@ -1,0 +1,55 @@
+---
+title: "What a perpetual is"
+---
+
+Velocity's only market is the perpetual future. This page is the starting point for a reader who has never held one, and everything else in these docs assumes it.
+
+## The problem a perpetual solves
+
+A futures contract is an agreement to settle a price on a fixed date, and that date is the problem. Continuous exposure to an asset without holding it means rolling the contract forward again and again: close the expiring one, open the next, and pay the spread and the fees each time. Repeat that every month and the cost of holding the position competes with the reason for taking it.
+
+Removing the expiry fixes that. A contract that never settles never has to be rolled, and the position becomes something that can be held indefinitely.
+
+## What that breaks
+
+Expiry is not decoration. It is the thing that forces a futures price back toward the price of the asset itself, because on settlement day the two have to agree, and every trader knows it. Remove the date and nothing anchors the contract to the asset it is supposed to track. It can drift to whatever price the order flow pushes it to, and the position quietly stops representing the exposure it was opened for.
+
+A perpetual needs a replacement anchor: something that makes it continuously expensive to sit on the wrong side of that gap.
+
+## The mechanism: funding
+
+Every hour, the two sides of the market pay each other. The direction and size of the payment depend on where the contract has been trading relative to the oracle price, which is the price of the underlying asset as reported to the protocol by an external price feed.
+
+If the contract trades above the oracle, longs pay shorts. Holding the expensive side costs money every hour and holding the cheap side earns money every hour, so the flow pushes the contract back down toward the oracle. If the contract trades below the oracle, the payment reverses and shorts pay longs. Nobody enforces the peg directly; the cost of being away from it does the work.
+
+<Callout type="info">
+Funding is a payment between traders, not a fee taken by the protocol. See [Funding Rates](/protocol/trading/funding-rates) for the rate formula, the floor, and the dead zone around small divergences.
+</Callout>
+
+## What the position actually is
+
+A perpetual position is not the asset. There is no delivery and nothing to redeem. A position is a size in the base asset whose value moves with the price, together with a collateral balance that backs it. Three consequences follow:
+
+1. **Collateral is posted, not the full notional.** Notional is the position's full value, its size times the price. A position worth \$10,000 does not require \$10,000 of collateral, only a fraction of it: at an illustrative initial margin ratio of 5%, that is \$500. Holding a position larger than the collateral behind it is what leverage means.
+2. **A position can be closed out.** If it moves far enough against the account that the collateral no longer covers the maintenance requirement, the protocol closes part or all of it without asking. See [Liquidations](/protocol/trading/liquidations).
+3. **Funding accrues whether or not anyone is watching.** A position held through many hours of one-sided funding can lose money even when the price has not moved at all.
+
+## A worked position
+
+Take the illustrative account this documentation uses throughout: **\$10,000 of collateral**, trading SOL-PERP with SOL at an illustrative **\$100**. The account opens a long of 20 SOL, a notional of \$2,000, and at an illustrative 5% initial margin ratio that position ties up \$100 of collateral, leaving the rest free.
+
+SOL at \$110 makes the position worth \$2,200 and the account \$200 up, a 2% return on the account from a 10% move in the asset. SOL at \$90 leaves it \$200 down on the same terms. Funding runs alongside both: at an illustrative 0.00125% an hour against the position, a full day costs 0.03% of \$2,000, or about \$0.60.
+
+That \$0.60 is a rounding error at retail size. Run the same rate against a \$5,000,000 position and it is \$300 a day, at which point funding becomes the trade itself.
+
+Margin ratios are set per market and they change. The live values are on [Margin](/protocol/trading/margin).
+
+## What is different on Velocity
+
+Collateral is cross-margined: one pool backs every position in a subaccount, and deposits keep earning lending yield while they sit there. There is no spot orderbook, so exchanging one asset for another goes through swaps. Orders fill through a short auction rather than against a single resting book, which means a market order has a worst case that is visible before it is sent.
+
+See [Collateral and margin](/protocol/trading/margin), [Borrow and lend](/protocol/borrow-lend), and [Order types](/protocol/trading/order-types).
+
+## Next
+
+[A first trade](/protocol/your-first-trade) follows one account through a complete position, from deposit to withdrawal.

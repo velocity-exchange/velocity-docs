@@ -8,13 +8,12 @@ This design is not live. Implementation is in progress. The interfaces, the
 limits, and the account layouts on this page can change before release.
 </Callout>
 
-# PropAMMs and Velocity
 
-Velocity seeks to have the best on-chain market structure in order to give users the tightest possible spreads.
+Velocity seeks to have the best onchain market structure in order to give users the tightest possible spreads.
 
 In spot markets, we have seen that PropAMMs give makers superior optionality and therefore
 lead to tighter spreads. PropAMMs also have the advantage of being able to react intraslot to price changes
-without waiting for the round-trip latency from an off-chain entity writing quotes. When price
+without waiting for the round-trip latency from an offchain entity writing quotes. When price
 discovery happens fully on chain, a PropAMM acts like a colocated computer at the exchange.
 
 Equally, CLOBs have their use cases, especially for takers. Users need to be able to place resting orders.
@@ -43,10 +42,8 @@ synchronous placement to a user, while avoiding toxic flow.
 
 In both cases makers are able to see the orders before they execute. For more information see [The taker speed bump](#the-taker-speed-bump)
 
-# PropAMM and CLOB Order Flow
-
 Similar to spot PropAMMs, Velocity fills a perp order using a router pass.
-The on-chain router does three things:
+The onchain router does three things:
 
 1. It asks each quoter for its price ladder.
 2. It divides the taker size across the quoters.
@@ -69,17 +66,17 @@ This page gives three things:
 <FillTopologyFlow />
 
 Solana has strict transaction size limits that mean often every quoter can not fit into a single transaction.
-An off-chain router's job is to check every quoter on the market and pick the ones to carry to the blockchain.
-The on-chain router pass inside Velocity checks the quoters that arrived, divides the taker size across them, and holds
+An offchain router's job is to check every quoter on the market and pick the ones to carry to the blockchain.
+The onchain router pass inside Velocity checks the quoters that arrived, divides the taker size across them, and holds
 each one to its own answer. Only the second router moves collateral. The first
 one decides what the second one can reach, because a transaction can carry only
 part of a market. A filler or the taker signs the transaction between the two,
-which [Off-chain routers and fillers](#off-chain-routers-and-fillers) covers.
+which [Offchain routers and fillers](#offchain-routers-and-fillers) covers.
 
 Note that this model is slightly different than spot PropAMMs. Because spot PropAMMs do not
-expose their underlying curve or pricing ladder, on-chain is mostly bound to the percent-wise division
-decided by the external router. With Velocity's quoter interface, this is no longer the case. The on-chain
-router may find a more optimum split than off-chain due to price changes between when the transaction was created
+expose their underlying curve or pricing ladder, onchain is mostly bound to the percent-wise division
+decided by the external router. With Velocity's quoter interface, this is no longer the case. The onchain
+router may find a more optimum split than offchain due to price changes between when the transaction was created
 and when it lands.
 
 The router pass reads four kinds of quoter.
@@ -171,7 +168,7 @@ No response of any type may name the taker, and none may name the protocol
 account. Velocity applies both rules to each balance change, before the type of
 the entry decides anything else.
 
-## Off-chain routers and fillers
+## Offchain routers and fillers
 
 <RoutingLanesFlow />
 
@@ -181,7 +178,7 @@ each maker as an authority and a sub-account rather than as an account key. A
 caller therefore cannot derive the account list from the market address. It must
 read the book.
 
-A router does that read. A router is an off-chain service. It simulates the whole
+A router does that read. A router is an offchain service. It simulates the whole
 fill at a recent slot, and it answers with three things:
 
 - the split across the quoters, and the value that binds each part
@@ -190,7 +187,7 @@ fill at a recent slot, and it answers with three things:
 - the registry entries to carry, and the accounts of each entry
 
 A router will pass extra Quoters if possible in price priority. This allows changes
-between route-time and on-chain execution to be handled appropriately by the on-chain router.
+between route-time and onchain execution to be handled appropriately by the onchain router.
 For example, at route time the split may be 50% to maker A, 50% to maker B. At execution time,
 the optimum split may be 40% A, 40% B, 20% C.
 
@@ -210,8 +207,8 @@ edge cases to be aware of.
 
 A transaction locks at most
 64 accounts, and one maker costs two of them, so no transaction reaches a whole
-market. The off-chain router reads the whole market and chooses the part to
-carry. The router pass on chain then quotes and fills within that section of the market. The off-chain router should do its best to include the best possible makers,
+market. The offchain router reads the whole market and chooses the part to
+carry. The router pass on chain then quotes and fills within that section of the market. The offchain router should do its best to include the best possible makers,
 the fill will give the best price amongst the limited set.
 
 Velocity operates a router. Any person can operate one. A router holds no key and
@@ -360,7 +357,7 @@ sends the transaction.
 The size floor exists because stopping a walk is a right, and a right has a
 price. Without the floor that price is `min_order_size`. A transaction carries at
 most 48 users, so one more order than that, each on a fresh sub-account at the
-top of the book, makes the depth behind them unreachable for every caller — for
+top of the book, makes the depth behind them unreachable for every caller, for
 the cost of rent. The floor prices the right in inventory instead: holding one
 means resting real size at the top of the book, exposed to being filled, which
 is market making.
@@ -674,7 +671,7 @@ range holds the values whose change means that the quoter can quote differently
 now. A midpoint instance names its mid price. A program with its own model names
 its parameter block.
 
-The declaration is a notice to off-chain services. A change inside the range is
+The declaration is a notice to offchain services. A change inside the range is
 the signal to look for a cross against the new quote. A `watch_len` of zero
 declares no range, and a service then finds a cross by a poll. So a range that
 misses a reprice costs the maker latency on a cross. It cannot make a fill
@@ -835,11 +832,11 @@ this step calculates the wrong fill.
 
 ## Related pages
 
-- [Program structure](/developers/concepts/program-structure) — the location of
+- [Program structure](/developers/concepts/program-structure): the location of
   each program
-- [Account model](/developers/concepts/account-model) — the accounts that a fill
+- [Account model](/developers/concepts/account-model): the accounts that a fill
   loads
-- [Orderbook & matching](/developers/market-makers/orderbook-and-matching) — the
+- [Orderbook & matching](/developers/market-makers/orderbook-and-matching): the
   DLOB, which is one of the four kinds of quoter on this page and is to be
   removed
 - [SWIFT API](/developers/market-makers/swift-api) — the signed-order intake

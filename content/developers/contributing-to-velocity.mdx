@@ -1,36 +1,46 @@
-# Contributing to Velocity Protocol
+---
+title: "Contributing to Velocity"
+---
 
-Interested in contributing to Velocity Protocol? There are multiple ways to make valuable contributions, from documentation to code and more. Below are some of the primary avenues you can explore.
+Velocity is not open source yet. This page says exactly what that leaves open to an outside contributor, which is a shorter list than most projects but not an empty one.
 
-## Documentation
-Raise issues or submit Pull Requests at the [Velocity Documentation Repository](https://github.com/velocity-exchange/velocity-docs).
+## What is open now
 
-## Bot Code
+### These docs
 
-Bots and the on-chain JIT program are all part of the [velocity-v1](https://github.com/velocity-exchange/velocity-v1) monorepo.
+The documentation repository is public, and it is the only Velocity codebase open to pull requests. Raise an issue or open a PR at [velocity-docs](https://github.com/velocity-exchange/velocity-docs).
 
-### Keeper Bots
-- Source: [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2)
-- Example: `filler-lite` is a recent effort to make running a keeper bot more accessible for lower-performing RPCs. See `src/bots/fillerLite.ts` in that directory.
+The most valuable report is a disagreement with the program. If a page states a constant, a formula, an error code, or a mechanism, and the deployed program does something else, that is a bug and we want it reported like one: name the page, quote the sentence, and say what was observed. Typos and broken links are welcome too, they are just cheaper to find.
 
-### Trading Bots
-- JIT Proxy Program (TS client, not yet published to npm: build from source): [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy)
-- JIT Maker: source in `apps/keeper-bots-v2/src/bots/jitMaker.ts`
+Before writing anything longer than a line, read [`WRITING.md`](https://github.com/velocity-exchange/velocity-docs/blob/master/WRITING.md) in the repository root. It fixes the register, the vocabulary (which terms are load-bearing and must not be swapped), and the shape a page takes. A pull request that follows it merges much faster than one that does not.
 
-## SDK
-Add new features or improve code quality and maintainability to the SDK.
+### The published SDKs, as a consumer
 
-| SDK | Package | Source |
-|---|---|---|
-| TypeScript (`@velocity-exchange/sdk`) | [npm](https://www.npmjs.com/package/@velocity-exchange/sdk) | [velocity-v1/packages/sdk](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/sdk) |
+`@velocity-exchange/sdk` is on npm at 0.20.0, and `@velocity-exchange/vaults-sdk` is there too, though its published version trails the monorepo. Both are available to build against. The source is not public, so bug reports against SDK behavior go through the docs repository until it is: include the package version, the call, and the program error or wrong value it returned.
 
-Velocity has no Python SDK. The in-repo Rust client (`rust/velocity-rs`) is source-only and unpublished: contributions there build against the workspace in `rust/`.
+## What is not open yet
 
-## Composing Programs on Top of Velocity
-- Example: Velocity Vaults (`programs/vaults`, first-party in the same monorepo, see [Vault Managers](/developers/vault-managers))
-- Feature Requests: Tokenization of the insurance fund stake has been requested.
+The `velocity-v1` monorepo is **not public**. That covers the onchain program, the vaults program, the SDK source, the JIT proxy client, and the reference keeper bots.
 
-## Main Program Contributions
-- Expanding the test suite (both TypeScript and Cargo tests) at the [`programs/velocity`](https://github.com/velocity-exchange/velocity-v1/tree/master/programs/velocity) directory of the main repository.
+It will be published once the post-fork audit report is final. Until then, code contributions to any of those components are not possible from outside the team, and every path these docs quote inside the monorepo (`programs/velocity`, `apps/keeper-bots-v2`, and the rest) names a location that cannot be browsed yet. There is no mirror, no partial release, and no source link to ask for.
 
-Feel free to pick a project or issue that interests you and start contributing!
+For access before publication, whether for an integration or for an independent audit, contact the team directly.
+
+## What we will want when it opens
+
+Listed so the work is visible in advance, not as an invitation to start before publication.
+
+| Area | Location once published |
+| --- | --- |
+| TypeScript SDK | `packages/sdk` |
+| Vaults SDK and CLI | `packages/vaults-sdk` |
+| JIT proxy client | `packages/jit-proxy` |
+| Reference keeper bots | `apps/keeper-bots-v2` |
+| Onchain program and its test suite | `programs/velocity` |
+| Vaults program | `programs/vaults` |
+
+There is no Python SDK. The Rust client (`velocity-rs`, in a separate `rust/` workspace alongside `keep-rs` and `swift`) is source-only and not on crates.io, and `@velocity-exchange/jit-proxy` is vendored in the monorepo rather than released to npm, so it has to be built from source.
+
+## Reporting a vulnerability
+
+Security issues do not go through any of the above, and must not be filed as a public issue. See [Bug Bounty](/protocol/risk-and-safety/bug-bounty) for scope, severity tiers, and how to submit privately.

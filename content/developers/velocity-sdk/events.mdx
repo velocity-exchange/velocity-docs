@@ -1,8 +1,12 @@
-# Events
+---
+title: "Events"
+---
 
-Protocol events are emitted in transaction logs. The SDK provides an `EventSubscriber` that can listen, deserialize, and emit events to your app in real-time.
+The program emits its events into transaction logs. `EventSubscriber` tails those logs, deserializes each event into a typed object, emits it in real time, and keeps a bounded buffer of recent ones that can be read without waiting for the next arrival.
 
-## Event Types
+## Event types
+
+Every name below is a key of `EventMap`, which is what `eventTypes` accepts and what `event.eventType` returns.
 
 | Event Type | Description |
 |---|---|
@@ -22,47 +26,35 @@ Protocol events are emitted in transaction logs. The SDK provides an `EventSubsc
 | `SwapRecord` | A Jupiter or Titan swap executed through a Velocity account |
 | `SpotMarketVaultDepositRecord` | An external deposit landing directly in a spot market vault |
 | `SignedMsgOrderRecord` | A signed ([Swift](/developers/velocity-sdk/swift)) order being placed |
-| `LPMintRedeemRecord` | A user minting or redeeming VLP (Velocity LP) tokens |
-| `LPSettleRecord` | A VLP pool settling PnL against its constituents |
-| `LPSwapRecord` | A swap between constituents inside a VLP pool |
-| `LPBorrowLendDepositRecord` | A VLP pool borrow/lend deposit or withdrawal against a constituent |
+| `LPMintRedeemRecord` | A user minting or redeeming Velocity liquidity pool tokens |
+| `LPSettleRecord` | A Velocity liquidity pool settling PnL against its constituents |
+| `LPSwapRecord` | A swap between constituents inside a Velocity liquidity pool |
+| `LPBorrowLendDepositRecord` | A Velocity liquidity pool borrow/lend deposit or withdrawal against a constituent |
 | `PerpMarketFeeSweepRecord` | A streaming sweep of a perp market's fee ledger into the insurance, protocol, and AMM fee pools |
 | `ProtocolFeeWithdrawRecord` | An admin withdrawal from a perp or spot market's protocol fee pool |
-| `RevenueShareSettleRecord` | A builder/referrer revenue-share settlement for a market |
+| `RevenueShareSettleRecord` | A builder or referrer revenue-share settlement for a market |
 | `TransferFeeAndPnlPoolRecord` | An admin transfer between a perp market's fee pool and PnL pool |
+| `AcceleratedReferralStatusChangedRecord` | An authority's Accelerated referral status changing, by automatic enrollment or an admin grant or revoke |
 
 <Callout type="info">
-`CurveRecord` was renamed to `AmmCurveChanged` (the fields also changed). `LPRecord` (vAMM/BAMM LP shares) no longer exists: passive liquidity now flows through the VLP module, whose activity is split across `LPMintRedeemRecord`, `LPSettleRecord`, `LPSwapRecord`, and `LPBorrowLendDepositRecord`. `PerpMarketFeeSweepRecord`, `ProtocolFeeWithdrawRecord`, `RevenueShareSettleRecord`, and `TransferFeeAndPnlPoolRecord` have long been emitted on-chain but were only recently registered in the SDK's event map: older SDK versions silently dropped them from `EventSubscriber`.
+`CurveRecord` was renamed to `AmmCurveChanged`, and its fields changed with it. `LPRecord` (vAMM and BAMM LP shares) no longer exists: passive liquidity now flows through the Velocity liquidity pool module, whose activity is split across `LPMintRedeemRecord`, `LPSettleRecord`, `LPSwapRecord`, and `LPBorrowLendDepositRecord`.
+
+`PerpMarketFeeSweepRecord`, `ProtocolFeeWithdrawRecord`, `RevenueShareSettleRecord`, and `TransferFeeAndPnlPoolRecord` have long been emitted onchain but were only recently registered in the SDK's event map. Older SDK versions dropped them from `EventSubscriber` silently.
 </Callout>
 
-## Subscribing to Events
+## Subscribing to events
 
-Create an `EventSubscriber` and pass the event types you want to receive. The `newEvent` emitter fires for every incoming event that matches your filter.
+Construct an `EventSubscriber` with the connection, the client's Anchor program, and the options. `newEvent` is the only real-time emitter: it fires once for every incoming event that matches the `eventTypes` filter, and handlers branch on `event.eventType` from there.
 
+<SDKDoc>
+  <TypeScript name="EventSubscriber" type="class">
 ```ts
 import { EventSubscriber, EventSubscriptionOptions } from "@velocity-exchange/sdk";
 
 const options: EventSubscriptionOptions = {
-  eventTypes: [
-    "DepositRecord",
-    "FundingPaymentRecord",
-    "LiquidationRecord",
-    "OrderRecord",
-    "OrderActionRecord",
-    "FundingRateRecord",
-    "NewUserRecord",
-    "SettlePnlRecord",
-    "InsuranceFundRecord",
-    "SpotInterestRecord",
-    "InsuranceFundStakeRecord",
-    "AmmCurveChanged",
-    "PerpMarketFeeSweepRecord",
-    "ProtocolFeeWithdrawRecord",
-    "RevenueShareSettleRecord",
-    "TransferFeeAndPnlPoolRecord",
-  ],
-  maxTx: 4096,
-  maxEventsPerType: 4096,
+  eventTypes: ["OrderActionRecord", "DepositRecord", "LiquidationRecord"],
+  maxTx: 4096,           // transactions retained for getEventsByTx
+  maxEventsPerType: 4096, // per-type buffer size
   orderBy: "blockchain",
   orderDir: "asc",
   commitment: "confirmed",
@@ -72,88 +64,66 @@ const options: EventSubscriptionOptions = {
 const eventSubscriber = new EventSubscriber(connection, velocityClient.program, options);
 await eventSubscriber.subscribe();
 
-// `newEvent` is the only real-time emitter: it fires for every incoming event
 eventSubscriber.eventEmitter.on("newEvent", (event) => {
   console.log(event.eventType, event);
 });
+
+await eventSubscriber.unsubscribe();
 ```
+  </TypeScript>
+</SDKDoc>
 
-Leaving `eventTypes` unset falls back to `DefaultEventSubscriptionOptions`, which includes every event type above plus `SwapRecord`, `SpotMarketVaultDepositRecord`, `SignedMsgOrderRecord`, `DeleteUserRecord`, and the four `LP*` VLP events.
+Options left unset are merged over `DefaultEventSubscriptionOptions`, so omitting `eventTypes` entirely subscribes to every type in the table above. Narrow it deliberately: each extra type costs buffer memory and deserialization work on every matching transaction.
 
-### Filtering Events
+### Filtering events
 
-You can filter events by market index, event type, or action using the `isVariant` helper function. This is useful for focusing on specific markets or event types in your bot.
+Enum-valued fields on an event, such as `marketType` and `action`, are Anchor enums rather than strings, so compare them with `isVariant` instead of `===`. Plain fields like `marketIndex` and `eventType` compare directly.
 
+<SDKDoc>
+  <TypeScript name="isVariant" type="function">
 ```js
 import { isVariant } from "@velocity-exchange/sdk";
 
-// Example: Filter for perp fills on a specific market
 const marketIndex = 0;
 
-const isPerpFill = (event) => {
-  if (event.eventType !== "OrderActionRecord") return false;
-  if (event.marketIndex !== marketIndex) return false;
-  if (!isVariant(event.marketType, "perp")) return false;
-  if (!isVariant(event.action, "fill")) return false;
-  return true;
-};
+// Perp fills on one market: eventType and marketIndex compare directly,
+// marketType and action are enums and need isVariant.
+const isPerpFill = (event) =>
+  event.eventType === "OrderActionRecord" &&
+  event.marketIndex === marketIndex &&
+  isVariant(event.marketType, "perp") &&
+  isVariant(event.action, "fill");
 
 eventSubscriber.eventEmitter.on("newEvent", (event) => {
-  if (isPerpFill(event)) console.log("Perp fill on market", marketIndex, event);
+  if (isPerpFill(event)) console.log("perp fill on market", marketIndex, event);
 });
 ```
+  </TypeScript>
+</SDKDoc>
 
-**Common filter patterns for bots:**
+<Callout type="warning">
+In TypeScript, checking `event.eventType` does not narrow `event`. `WrappedEvent` is generic over `EventType`, so the compiler cannot correlate the discriminant with the rest of the shape. Cast explicitly after the check: `const orderEvent = event as WrappedEvent<"OrderActionRecord">`.
+</Callout>
 
+## Querying stored events
+
+The subscriber keeps a rolling, size-bounded buffer per event type, plus a per-transaction index. Both are readable at any time without waiting for a new event.
+
+<SDKDoc>
+  <TypeScript name="getEventsByTx" type="method" owner="EventSubscriber">
 ```js
-// Filter by market index only
-eventSubscriber.eventEmitter.on("newEvent", (event) => {
-  if (event.marketIndex === 0) {
-    console.log("Event on market 0:", event);
-  }
-});
+// A snapshot copy of every buffered event of one type.
+const events = eventSubscriber.getEventsArray("OrderActionRecord");
 
-// Filter by event type
-eventSubscriber.eventEmitter.on("newEvent", (event) => {
-  if (event.eventType === "DepositRecord") {
-    console.log("Deposit event:", event);
-  }
-});
+// The live, size-bounded EventList the subscriber inserts into.
+// Prefer this when iterating: it does not copy.
+const eventList = eventSubscriber.getEventList("OrderActionRecord");
 
-// Filter for liquidations
-eventSubscriber.eventEmitter.on("newEvent", (event) => {
-  if (event.eventType === "LiquidationRecord") {
-    console.log("Liquidation:", event);
-  }
-});
-
-// Filter for protocol fee-sweep activity on a perp market
-eventSubscriber.eventEmitter.on("newEvent", (event) => {
-  if (event.eventType === "PerpMarketFeeSweepRecord") {
-    console.log("Fee sweep:", event);
-  }
-});
-```
-
-## Querying Stored Events
-
-The `EventSubscriber` keeps a rolling buffer of recent events in memory. You can query these at any time without waiting for a new event to arrive.
-
-Retrieve all stored events of a given type:
-
-```js
-// Returns all events of this type currently in memory (snapshotted into an array)
-const eventType = "OrderActionRecord";
-const events = eventSubscriber.getEventsArray(eventType);
-
-// Prefer getEventList() when iterating without copying: it returns the
-// live, size-bounded EventList the subscriber inserts into directly.
-const eventList = eventSubscriber.getEventList(eventType);
-```
-
-Retrieve all events from a specific transaction:
-
-```js
+// Everything emitted by one transaction, in emission order.
 const txSig = "3dq5PtQ3VnNTkQRrHhQ1nRACWZaFVvSBKs1RLXM8WvCqLHTzTuVGc7XER5awoLFLTdJ4kqZiNmo7e8b3pXaEGaoo";
-const events = eventSubscriber.getEventsByTx(txSig);
+const txEvents = eventSubscriber.getEventsByTx(txSig);
 ```
+  </TypeScript>
+</SDKDoc>
+
+All three return `undefined` or an empty result rather than throwing when nothing matches, and the buffer only holds what arrived since `subscribe()`: it is not a historical backfill.

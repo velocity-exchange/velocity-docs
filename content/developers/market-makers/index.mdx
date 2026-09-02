@@ -1,10 +1,9 @@
 ---
+title: "Market Makers"
 asIndexPage: true
 ---
 
-# Market Makers
-
-Market making on Velocity involves providing liquidity through resting orders, JIT auctions, or both. This section covers strategies, architecture, and trading mechanisms.
+Market making on Velocity means providing liquidity through resting orders, through JIT auctions, or through both. This section covers the mechanisms a maker quotes into, the three strategies built on them, and the production patterns every market making bot needs.
 
 <Callout type="warning">
 The DLOB is to be removed. A resting order will live in one CLOB market account
@@ -13,152 +12,96 @@ describe the DLOB describe it as it works now. A maker starting work should read
 [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow) first.
 </Callout>
 
-## Getting Started
+## Start here
 
-### Quickstart Guide
+Place two-sided quotes that track the oracle, in under 10 minutes, before deciding anything else.
 
-Learn how to place two-sided quotes that automatically update with oracle prices. Perfect for understanding the basics.
+<Cards>
+  <Card
+    title="Market maker quickstart"
+    href="/developers/market-makers/quickstart"
+    description="Initialize the client, read the oracle, place a bid and an ask, and refresh them on a loop."
+  />
+</Cards>
 
-<Cards.Card
-  title="Understand quickstart guide ↗"
-  href="/developers/market-makers/quickstart"
-/>
+## How fills actually happen
 
-## Understanding Velocity's Trading Mechanisms
+Read both of these before choosing a strategy. They decide what a quote competes against.
 
-### Orderbook & Matching
+<Cards>
+  <Card
+    title="Orderbook & Matching"
+    href="/developers/market-makers/orderbook-and-matching"
+    description="The DLOB, the two-step fill plan the program builds against it, and the three ways to read the book."
+  />
+  <Card
+    title="JIT Auctions"
+    href="/developers/market-makers/jit-auctions"
+    description="How a taker order ramps from its best price to its limit, and how makers compete inside that window."
+  />
+</Cards>
 
-**How orders are matched and filled**
+The one thing to take from those pages: there is no fixed JIT, then DLOB, then AMM waterfall. `determine_perp_fulfillment_methods` walks the crossing makers in price order and inserts an AMM step ahead of any maker the AMM out-prices, capped at that maker's price. Better price fills first, whoever is quoting it. Being on the book is not enough.
 
-Learn about the DLOB architecture, liquidity priority (JIT → DLOB → AMM), and how to access orderbook data via HTTP, WebSocket, or SDK.
+## Choosing a strategy
 
-*Essential reading for understanding execution flow*
-
-<Cards.Card
-  title="Understand orderbook & matching ↗"
-  href="/developers/market-makers/orderbook-and-matching"
-/>
-
-### JIT Auctions
-
-**Just-In-Time auction mechanics**
-
-Deep dive into how JIT auctions work, auction pricing, maker participation, and place-and-make patterns.
-
-*Critical for competitive market making*
-
-<Cards.Card
-  title="Understand JIT auctions ↗"
-  href="/developers/market-makers/jit-auctions"
-/>
-
-## Choosing a Strategy
-
-Velocity supports three distinct market making approaches. The right choice depends on your latency infrastructure, capital efficiency goals, and operational complexity tolerance.
+Velocity supports three approaches. All three earn the maker rebate on a fill, so the choice is about latency infrastructure, capital lockup, and how selective the strategy needs to be about flow.
 
 | | DLOB MM | JIT-only | SWIFT |
 |---|---|---|---|
-| **How it works** | Resting limit orders on the DLOB | React to taker auctions in real-time | Receive signed taker orders offchain before auction |
-| **Capital efficiency** | Orders locked onchain | Capital deployed only when filling | Capital deployed only when filling |
-| **Maker rebates** | ✅ Yes | ✅ Yes | ✅ Yes |
+| **How it works** | Resting limit orders on the DLOB | React to taker auctions as they open | Receive signed taker orders offchain, before the auction |
+| **Capital** | Committed onchain while orders rest | Deployed only on the fills taken | Deployed only on the fills taken |
+| **Latency needed** | Low: oracle offset orders reprice themselves | High: the response has to land inside the auction window | Highest: the 100 to 500 ms head start is the whole point |
+| **Flow selection** | None, anything crossing the quote fills | Per auction | Per order, with the most time to decide |
 
+Start with **DLOB MM** using oracle offset orders. They float with the oracle, so a quoting desk sends roughly 30 transactions per day rather than one per oracle tick, and the infrastructure bar is the lowest of the three.
 
-**Recommendation:** Start with **DLOB MM** using oracle offset orders (orders float with the oracle automatically, requiring very few transactions).
+<Cards>
+  <Card
+    title="DLOB MM"
+    href="/developers/market-makers/dlob-mm"
+    description="Resting two-sided quotes, oracle offset orders, atomic cancel-and-replace, and inventory-aware skew."
+  />
+  <Card
+    title="JIT-only MM"
+    href="/developers/market-makers/jit-only"
+    description="No standing book. Subscribe to auctions, filter them, price each one, and fill atomically with place-and-make."
+  />
+  <Card
+    title="SWIFT API"
+    href="/developers/market-makers/swift-api"
+    description="Signed taker orders over WebSocket, 100 to 500 ms before they land onchain, filled with an ed25519-verified place-and-make."
+  />
+</Cards>
 
-## Market Making Strategies
+## Running it in production
 
-### DLOB MM
+<Cards>
+  <Card
+    title="Bot Architecture"
+    href="/developers/market-makers/bot-architecture"
+    description="Resubscription, mutex-guarded loops, priority fees, ALTs, health monitoring, graceful shutdown, and shared risk filters."
+  />
+  <Card
+    title="Indicative Quotes"
+    href="/developers/market-makers/indicative-quotes"
+    description="Signal liquidity offchain for UIs and aggregator routing without committing an onchain order."
+  />
+</Cards>
 
-**Resting orders on the DLOB**
+## Reference implementations
 
-Place limit orders that rest on the orderbook until filled. Use oracle offset orders to automatically track the oracle price with minimal transactions. Earn maker rebates while providing committed liquidity.
-
-**Best for:**
-- Passive market making
-- Earning maker rebates
-- Lower infrastructure requirements
-- Traditional orderbook strategies
-
-<Cards.Card
-  title="Understand DLOB MM ↗"
-  href="/developers/market-makers/dlob-mm"
-/>
-
-### JIT-Only Market Making
-
-**Active market making through auctions**
-
-React to incoming taker orders during JIT auctions without maintaining resting orders. Compete for fills at better prices. Capital is only deployed when you choose to fill.
-
-**Best for:**
-- Active market making
-- Dynamic pricing strategies
-- Avoiding adverse selection
-- Selective flow participation
-
-<Cards.Card
-  title="Understand JIT-only market making ↗"
-  href="/developers/market-makers/jit-only"
-/>
-
-## Production
-
-### Bot Architecture
-
-Production patterns and best practices for building reliable market making bots. Covers subscription loops, priority fees, health monitoring, graceful shutdown, error handling, and operational considerations. Applies to all strategies.
-
-<Cards.Card
-  title="Understand bot architecture ↗"
-  href="/developers/market-makers/bot-architecture"
-/>
-
-## Advanced Features
-
-### SWIFT
-
-**Offchain JIT market making via signed order delivery**
-
-Receive signed taker orders over WebSocket before they hit the onchain auction. SWIFT is essentially an offchain JIT flow: takers sign their order and broadcast it offchain, and makers can fill it before or as the auction opens. Capital is only deployed when you choose to fill.
-
-**Latency advantage:** 100-500ms faster than onchain feeds.
-
-**Best for:**
-- Makers who want earlier visibility into taker flow
-- Competitive auction environments
-- Flow selection with more time to decide
-
-<Cards.Card
-  title="Understand SWIFT market making ↗"
-  href="/developers/market-makers/swift-api"
-/>
-
-### Indicative Quotes
-
-**Offchain liquidity signaling**
-
-Signal intent to provide liquidity at certain prices without committing onchain orders. Helps with price discovery for takers and aggregator routing.
-
-**Use case:** Show liquidity for UI/aggregators
-
-<Cards.Card
-  title="Understand indicative quotes ↗"
-  href="/developers/market-makers/indicative-quotes"
-/>
-
-## Reference Implementations
-
-Velocity maintains open-source reference bots in [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2), part of the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1):
+Velocity maintains reference bots in `apps/keeper-bots-v2`, part of the `velocity-v1` monorepo. That monorepo is not public yet, so these are pointers for readers who already have access rather than something to clone.
 
 | Bot | Source | Strategy |
 |---|---|---|
-| **FloatingPerpMakerBot** | [`src/bots/floatingMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) | Oracle offset resting orders on DLOB |
-| **JitMaker** | [`src/bots/jitMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) | JIT auction fills using `JitterSniper`/`JitterShotgun` |
+| **FloatingPerpMakerBot** | `src/bots/floatingMaker.ts` | Oracle offset resting orders on the DLOB |
+| **JitMaker** | `src/bots/jitMaker.ts` | JIT auction fills using `JitterSniper`/`JitterShotgun` |
 
-> **Tip:** The `FloatingPerpMakerBot` is the best starting point for understanding oracle offset orders in production. The `JitMaker` shows how to use `@velocity-exchange/jit-proxy` for auction participation. That package isn't published to npm yet, build it from `packages/jit-proxy` in the monorepo (see [JIT Auctions](/developers/market-makers/jit-auctions#jit-proxy-library)).
+`FloatingPerpMakerBot` is the better starting point: it shows oracle offset orders under production conditions. `JitMaker` shows auction participation through `@velocity-exchange/jit-proxy`, which is not published to npm yet and has to be built from `packages/jit-proxy` in the same monorepo. See [JIT Auctions](/developers/market-makers/jit-auctions#jit-proxy-library).
 
-## Related Resources
+## Related resources
 
-- [Velocity SDK](/developers/velocity-sdk/setup) - SDK reference for orders and positions
-- [Protocol Concepts](/developers/concepts) - Understanding accounts and onchain data
-- [Keeper Bots](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) - Open source keeper bot infrastructure, part of the velocity-v1 monorepo
-- `@velocity-exchange/jit-proxy` - JIT proxy SDK with `JitterSniper` and `JitterShotgun`; unpublished: build from `packages/jit-proxy` in the monorepo
+- [Velocity SDK](/developers/velocity-sdk/setup): SDK reference for orders and positions
+- [Protocol Concepts](/developers/concepts): accounts and onchain data
+- [Trading fees](/protocol/trading/trading-fees): the fee tiers and maker rebate a strategy earns against

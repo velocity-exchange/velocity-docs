@@ -1,0 +1,187 @@
+---
+title: "Subscriptions and events"
+---
+
+A `VelocityClient` subscription keeps account *state* current. The subscribers on this page deliver *changes*: program events as they land, taker auctions as they open, signed-message orders as they arrive, and the slot, blockhash and priority fee streams a sender needs.
+
+They are separate types with their own lifecycles. Each one has an `unsubscribe`, and dropping one without calling it ends the stream with no error, so the handle needs to stay held for as long as the data is needed.
+
+## Program events
+
+`EventSubscriber` parses program logs into a typed `VelocityEvent` stream. It has three transports, all producing the same `VelocityEventStream`, which implements `futures::Stream`.
+
+| Constructor | Transport | Use |
+|---|---|---|
+| `EventSubscriber::subscribe(ws, sub_account)` | Solana WebSocket logs | Default. Takes an `Arc<PubsubClient>`, available from `client.ws()` |
+| `EventSubscriber::subscribe_grpc(endpoint, x_token, sub_account)` | Yellowstone gRPC | Lower latency, needs a gRPC endpoint |
+| `EventSubscriber::subscribe_polled(provider, account)` | RPC signature polling | Backfill, or a provider with no log subscription |
+
+The `sub_account` argument filters the stream. Pass a subaccount address to see only events involving it. Pass `velocity_rs::constants::PROGRAM_ID` to see every event the program emits, which is what a fill indexer or an analytics service wants.
+
+<SDKDoc>
+  <Rust name="EventSubscriber" type="struct">
+```rust
+use futures_util::StreamExt;
+use velocity_rs::constants::PROGRAM_ID;
+use velocity_rs::event_subscriber::{EventSubscriber, VelocityEvent};
+
+let mut events = EventSubscriber::subscribe_grpc(
+    std::env::var("GRPC_ENDPOINT").expect("GRPC_ENDPOINT set"),
+    std::env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN set"),
+    PROGRAM_ID,
+)
+.await?;
+
+while let Some(event) = events.next().await {
+    if let VelocityEvent::OrderFill { market_index, market_type, base_asset_amount_filled, signature, .. } = event {
+        println!("fill {market_type:?}/{market_index} size {base_asset_amount_filled} tx {signature}");
+    }
+}
+
+events.unsubscribe();
+```
+  </Rust>
+</SDKDoc>
+
+`VelocityEvent` is a non-exhaustive-in-practice enum with struct variants, so match the fields that matter and let `..` absorb the rest. Every variant that comes from a transaction carries the `signature` and a `tx_idx`, which is the event's index within that transaction and is the field to order by when several events land together.
+
+<SDKDoc>
+  <Rust name="VelocityEvent" type="enum">
+```rust
+match event {
+    VelocityEvent::OrderFill { maker, maker_order_id, taker, taker_order_id, .. } => {}
+    VelocityEvent::OrderCreate { order, user, .. } => {}
+    VelocityEvent::OrderCancel { maker_order_id, .. } => {}
+    VelocityEvent::OrderExpire { order_id, fee, .. } => {}
+    VelocityEvent::OrderTrigger { user, order_id, oracle_price, amount } => {}
+    VelocityEvent::FundingPayment { amount, market_index, user, .. } => {}
+    VelocityEvent::Swap { user, amount_in, amount_out, market_in, market_out, fee, .. } => {}
+    _ => {}
+}
+```
+  </Rust>
+</SDKDoc>
+
+`OrderFill` is the variant most bots care about, and it carries both sides: `maker`, `maker_fee`, `maker_order_id`, `maker_side`, and the same four for the taker, plus `base_asset_amount_filled`, `quote_asset_amount_filled`, the market, the `oracle_price` at fill, and `bit_flags`. The maker fields are `Option`, because a fill against the AMM has no maker.
+
+`OrderCancelMissing` is the odd one out. The program logged a cancel for an order id or user order id that no longer exists, and the log carries no account, so the subscriber cannot tell whose it was. It is delivered on every stream regardless of the subaccount filter, and it carries only the id and the signature.
+
+## Taker auctions
+
+`AuctionSubscriber` watches every `User` account that currently has an order in its auction window, across all markets, over a WebSocket program subscription with the auction memcmp filter applied. It is the trigger for a JIT maker: an account appearing here means someone has an auction open that a maker can compete to fill.
+
+<SDKDoc>
+  <Rust name="AuctionSubscriber" type="struct">
+```rust
+use velocity_rs::auction_subscriber::{AuctionSubscriber, AuctionSubscriberConfig};
+use velocity_rs::types::CommitmentConfig;
+use velocity_rs::utils::get_ws_url;
+
+let subscriber = AuctionSubscriber::new(AuctionSubscriberConfig {
+    commitment: CommitmentConfig::confirmed(),
+    resub_timeout_ms: None,
+    url: get_ws_url(&rpc_url).expect("valid RPC url"),
+});
+
+subscriber.subscribe(move |update| {
+    // update.data_and_slot.data is the whole User account
+});
+```
+  </Rust>
+</SDKDoc>
+
+The callback receives the entire `User` account, not a diff. Working out which order is new is the caller's job: keep the previous copy of the account and compare, which is what the `jitter` example does before deciding whether to bid.
+
+The account it yields is `velocity_rs::velocity_idl::accounts::User`, the IDL-derived type, not the program type `velocity_rs::types::accounts::User` that `JitProxyClient` and `TransactionBuilder` expect. They are the same account with two Rust types over it. Take the key from the update and read the program-typed account from the cache rather than trying to convert.
+
+Two operational notes. The subscriber must not be dropped while updates are still needed, because dropping it tears down the stream. And `unsubscribe` consumes `self`, so a long-lived subscriber usually lives behind an `Arc` with the handle held by the task that owns shutdown.
+
+## Swift orders
+
+Signed-message orders never touch the chain until a maker fills them, so they arrive over a WebSocket feed from the Swift server rather than from Solana. `client.subscribe_swift_orders` authenticates with the wallet authority, subscribes to the named markets, and returns a `SwiftOrderStream`, which is a `ReceiverStream<SignedOrderInfo>`.
+
+<SDKDoc>
+  <Rust name="subscribe_swift_orders" type="method" owner="VelocityClient">
+```rust
+use futures_util::StreamExt;
+use velocity_rs::types::MarketId;
+
+let market_ids: Vec<MarketId> = ["sol-perp"]
+    .iter()
+    .map(|m| client.market_lookup(m).expect("market found"))
+    .collect();
+
+let mut stream = client
+    .subscribe_swift_orders(
+        &market_ids,
+        Some(true),  // accept sanitized orders
+        Some(false), // accept deposit and trade orders
+        None,        // override the Swift websocket URL
+    )
+    .await?;
+
+while let Some(order) = stream.next().await {
+    tokio::spawn(try_fill(client.clone(), filler_subaccount, order));
+}
+```
+  </Rust>
+</SDKDoc>
+
+The two `Option<bool>` arguments are opt-ins, and both default to false when passed `None`.
+
+**Sanitized orders**: the program may improve a taker's auction parameters when the order is placed onchain. Accepting sanitized flow means accepting that the time and price bounds seen in the message can move before the fill lands, so it is worth accepting only when the maker's pricing tolerates that.
+
+**Deposit and trade orders**: the taker has not posted collateral yet. Filling one requires sending the taker's signed deposit transaction first, then the swift order, which is a different and slower flow than a plain fill.
+
+The connect and authentication handshake share a 20 second deadline, so a Swift server that accepts the TCP connection and then stalls fails the call instead of hanging the caller's event loop. The default endpoints are `wss://swift.velocity.exchange` on mainnet and `wss://swift.master.velocity.exchange` on devnet, exposed as `SWIFT_MAINNET_WS_URL` and `SWIFT_DEVNET_WS_URL`.
+
+<SDKDoc>
+  <Rust name="SignedOrderInfo" type="struct">
+```rust
+let params = order.order_params();          // OrderParams the taker signed
+let taker = order.taker_subaccount();       // Pubkey of the taker's subaccount
+let signed_slot = order.slot();             // slot the taker signed at
+let uuid = order.order_uuid_str();          // Swift order uuid
+
+let authority = order.taker_authority;      // pub field
+let sanitize_likely = order.will_sanitize;  // pub field
+let deposit = order.isolated_position_deposit();
+```
+  </Rust>
+</SDKDoc>
+
+`using_delegate_signing()` reports whether the signer was the authority or a subaccount delegate, `has_builder()` whether the order carries a builder code, and `to_ix_data()` produces the instruction payload the placement instruction needs. Filling one is covered in [Building and sending orders](/developers/velocity-rs/orders#filling-swift-orders).
+
+## Slots, blockhashes and priority fees
+
+Three small subscribers cover the transaction-sending side. The client wraps the blockhash one already through `subscribe_blockhashes`, and gRPC delivers slots through `GrpcSubscribeOpts::on_slot`, so constructing these directly only makes sense when they need to run independent of a client.
+
+**`SlotSubscriber`** takes an `Arc<PubsubClient>` and calls back with a `SlotUpdate` on every new slot. `current_slot()` reads the latest without a callback. Note that `subscribe` takes `&mut self`.
+
+**`BlockhashSubscriber`** polls at a configurable refresh interval and keeps the last twenty hashes. `get_latest_blockhash()` returns the newest, `get_valid_blockhash()` returns the oldest of the twenty, which is more likely to be finalized and is the one to use on a transaction that may be retried.
+
+**`PriorityFeeSubscriber`** polls `getRecentPrioritizationFees` for the accounts a transaction will lock and keeps the distribution.
+
+<SDKDoc>
+  <Rust name="PriorityFeeSubscriber" type="struct">
+```rust
+use velocity_rs::priority_fee_subscriber::PriorityFeeSubscriber;
+
+// writeable accounts the tx will lock, e.g. the perp market account
+let fees = PriorityFeeSubscriber::new(rpc_url.clone(), &[market_account]).subscribe();
+
+let median = fees.priority_fee();          // micro-lamports per CU
+let p90 = fees.priority_fee_nth(0.9);      // 90th percentile
+```
+  </Rust>
+</SDKDoc>
+
+`new` defaults to a 2,000 ms refresh (five slots at the 400 ms baseline) over a 30 slot window; `with_config` takes a `PriorityFeeSubscriberConfig` to change either, up to the RPC maximum of 150 slots. During warmup, before the first poll lands, `priority_fee()` returns 0 rather than panicking, so a bot that starts sending immediately pays no priority fee for the first cycle. `priority_fee_safe()` returns `None` instead of 0 when the subscriber is not running, which is the call to use when the two cases need to be distinguished.
+
+`client.get_recent_priority_fees(&writable_markets, window)` is the one-shot equivalent when a background task is not warranted.
+
+## Callback discipline
+
+Every callback in this crate runs on the task that owns the connection. That is true of the gRPC callbacks, of the `_with_callback` subscription variants, of the auction subscriber's handler, and of the slot subscriber's. Blocking one stalls the stream behind it, and on a gRPC subscription that stream is also feeding the account cache.
+
+Keep callbacks to arithmetic and a channel send. Put anything that awaits, locks under contention, or does I/O behind that channel in a task of its own.

@@ -7,8 +7,8 @@ import type { SankeySpec } from "../layout/sankey";
 export const borrowApySpec: SankeySpec = {
   nodes: [
     { id: "interest", label: "Borrow interest paid", column: 0 },
-    { id: "if_cut", label: "Insurance Fund", note: "ifFeeFactor", column: 1 },
-    { id: "protocol_cut", label: "Protocol fee pool", note: "protocolFeeFactor", column: 1 },
+    { id: "if_cut", label: "Insurance Fund", note: "market-set share", column: 1 },
+    { id: "protocol_cut", label: "Protocol fee pool", note: "market-set share", column: 1 },
     { id: "lenders", label: "Lenders", note: "via Supply APY", column: 1, tone: "signal" },
   ],
   links: [
@@ -16,13 +16,13 @@ export const borrowApySpec: SankeySpec = {
       from: "interest",
       to: "if_cut",
       value: 10,
-      label: "ifFeeFactor carveout, goes to that market's Insurance Fund",
+      label: "The insurance fund's carveout, admin-set per market, goes to that market's Insurance Fund",
     },
     {
       from: "interest",
       to: "protocol_cut",
       value: 10,
-      label: "protocolFeeFactor carveout, goes to a protocol-owned withdrawable fee pool",
+      label: "The protocol's carveout, admin-set per market, goes to a protocol-owned withdrawable fee pool",
     },
     {
       from: "interest",

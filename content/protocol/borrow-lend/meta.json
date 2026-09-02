@@ -1,0 +1,9 @@
+{
+  "title": "Borrow & Lend",
+  "pages": [
+    "index",
+    "interest-rates",
+    "withdrawal-limits",
+    "isolated-pools"
+  ]
+}

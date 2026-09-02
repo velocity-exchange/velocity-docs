@@ -1,0 +1,169 @@
+---
+title: "Guard rails"
+---
+
+Velocity refuses actions in a lot of places, and most of those refusals are the protocol working correctly rather than a bug. This page lists the ones a trader or an integrator will actually hit, and names the error each one raises, so that a guard rail can be told apart from a failure.
+
+## Order and execution limits
+
+**32 open orders per subaccount.** A structural limit, not a parameter an admin can raise.
+
+**A market order carries a default time in force.** Unless an expiry is set explicitly, a market or oracle order stays live for at least 30 seconds and always outlives its own auction. Every other order type defaults to no expiry.
+
+**A single fill can only take so much of the AMM.** The cap is the smaller of 1% of the AMM's base reserves, the value markets are created with and worth a price move of roughly 2%, and half the liquidity available on the side being traded. Larger orders fill across several transactions.
+
+**A market may cap its own open interest.** The cap is a per-market admin setting: while it is unset the check does not bind, and where a cap is set, an order that would push that side beyond it is rejected at placement and re-checked after the fill, both with `MaxOpenInterest`. Read the market account for the live value.
+
+**Resting orders can be cancelled by a keeper.** A post-only or maker order is cancelled when its limit price crosses the oracle by more than the market's initial margin ratio; a taker order is cancelled when the fill would take the account's free collateral below zero. The keeper is paid \$0.01 out of that account.
+
+### Force cancel
+
+Any keeper may permissionlessly cancel the open orders of an account that does not meet its initial margin requirement, and is paid \$0.01 per cancelled order out of that account. Orders that would reduce an existing position are skipped, and an account already being liquidated, bankrupt, or meeting initial margin is refused.
+
+So quotes on an under-margined subaccount can be removed entirely by a third party. At 32 orders the fee is \$0.32; the loss of the quotes is the real cost.
+
+## Oracle circuit breakers
+
+Two divergence checks run against the 5-minute oracle TWAP. They have different thresholds and different consequences, and they are frequently confused for one another.
+
+### The 10% band: mark or oracle against the TWAP
+
+This check measures how far the AMM's price sits from the 5-minute oracle TWAP and how far the live oracle sits from it, then tests **whichever of the two diverges further**, against a 10% threshold. A breach reverts with `PriceBandsBreached` and blocks P&L settlement, perp P&L deficit resolution, and the P&L pool's fee sweep.
+
+### The 50% band: live oracle against the TWAP
+
+This check compares the live oracle price against the 5-minute oracle TWAP, at a 50% threshold. **Most of what it gates reverts. Only the fill path skips.**
+
+| Where | On breach |
+| --- | --- |
+| Filling an order, before matching | Returns without filling. No error, the order simply waits. |
+| Filling an order, after the fill | Reverts with `PriceBandsBreached` |
+| Triggering a stop or take-profit | Reverts with `OrderBreachesOraclePriceLimits` |
+| All four liquidation paths, perp and spot | Reverts with `PriceBandsBreached` |
+| Settling a swap | Reverts with `PriceBandsBreached` |
+
+During a genuine oracle dislocation a position can be neither closed by its owner nor liquidated by anyone else until the price comes back inside the band.
+
+### There is no directional divergence check
+
+Older documentation describes a mechanism that blocks trades which *worsen* an oracle-to-mark divergence and permits trades that improve it. **No such mechanism exists in the program.** Both bands are directionless: either the spread is inside the threshold or the action is refused.
+
+### What feeds the bands
+
+A single new oracle sample cannot move a market's running TWAP by more than its [contract tier](/protocol/risk-and-safety/contract-tiers) sanitization band: 10% for tier A, 20% for B, 50% for C, and roughly 33% for Speculative, Highly Speculative and Isolated. A large genuine price move therefore takes several intervals to work through the TWAP, and during those intervals the bands stay tight. See [Oracles](/protocol/how-it-works/oracles).
+
+## When an action is blocked
+
+### Deposits
+
+Refused if it would reach the spot asset's total deposit cap, if the market is reduce-only and the deposit does not pay off a borrow, if deposits are paused for that market, if the market is not yet open, if the account's pool does not match the market's, or if it would exceed the market's daily deposit cap.
+
+### Withdrawals and borrows
+
+Refused if the account holds liabilities and any oracle on an asset or liability it holds is invalid for the margin calculation, if it would leave the account holding more than one liability while one of them carries the isolated asset tier, if it would put weighted collateral below the initial margin requirement, or if it would push that market's liquidity past its rolling limits. Those limits differ depending on whether the withdrawal opens a borrow; see [Withdrawal and borrow limits](/protocol/borrow-lend/withdrawal-limits).
+
+### Placing an order
+
+An order is rejected when it is risk-increasing and would put the account's initial margin requirement above its total collateral, when it would take the account above one liability while one of them carries the isolated asset tier, or when it would breach the market's open-interest cap.
+
+<Callout type="info">
+Order placement applies to **perpetual** markets only. Spot order placement is removed on Velocity; there is no spot orderbook. Borrows are opened through withdrawals and swaps, which are governed by the withdrawal conditions above.
+</Callout>
+
+### Filling an order
+
+A fill does not go through if it would put either side under its margin requirement plus buffer, which surfaces as `InsufficientCollateral`. Either side hitting that condition stops the whole match, so a maker whose account has drifted below its requirement takes the taker's fill down with it.
+
+### Settling perp P&L
+
+Refused if the market's oracle is invalid, if the account has negative unrealized P&L and its account value is below maintenance margin, if the market breaches the 10% price band, if a third party that is neither the account's authority nor its delegate tries to settle negative P&L against a margin-invalid oracle, if settlement is paused for the market, or if the market status does not permit it. An account with an open base position requires `Active`; a flat account may settle while the market is `Active` **or** `ReduceOnly`.
+
+## The four pause layers
+
+Pauses are switches an admin flips, and they block an action for everyone in scope. There are **four** independent layers, and an action must clear all four.
+
+### Layer 1: the exchange-wide breaker
+
+The exchange status is a bitmask. Zero means fully active, and each bit halts one class of action across every market.
+
+| Bit | Value | What it blocks | Error |
+|---|---|---|---|
+| `DepositPaused` | `0b0000_0001` | all deposits | `ExchangePaused` |
+| `WithdrawPaused` | `0b0000_0010` | all withdrawals, borrows, and pool transfers | `ExchangePaused` |
+| `AmmPaused` | `0b0000_0100` | the AMM as a counterparty | `ExchangePaused` |
+| `FillPaused` | `0b0000_1000` | order fills and order triggering | `ExchangePaused` |
+| `LiqPaused` | `0b0001_0000` | liquidations | `ExchangePaused` |
+| `FundingPaused` | `0b0010_0000` | funding-rate updates and spot interest accrual | `ExchangePaused` |
+| `SettlePnlPaused` | `0b0100_0000` | P&L settlement | `ExchangePaused` |
+| `AmmImmediateFillPaused` | `0b1000_0000` | auction-skipping immediate AMM fills | no error, the auction runs its full duration |
+
+`FillPaused` also blocks triggering, so a stop or take-profit will not fire while fills are paused. Some instructions, including signed-message taker order placement and several keeper cranks, fail only when **every** bit is set, so they keep working during a partial pause.
+
+### Layer 2: per-market pause bits
+
+Each market carries its own bitmask, so one market can be frozen while the rest of the exchange trades normally.
+
+Perp markets:
+
+| Bit | Value | What it blocks | Error |
+|---|---|---|---|
+| `UpdateFunding` | `0b0000_0001` | funding-rate updates for this market | no error, the crank returns without updating |
+| `AmmFill` | `0b0000_0010` | the AMM filling orders in this market | no error, the AMM is skipped as a counterparty |
+| `Fill` | `0b0000_0100` | fills **and** triggering in this market | `MarketFillOrderPaused` |
+| `SettlePnl` | `0b0000_1000` | settling P&L, including expired-position settlement | `InvalidMarketStatusToSettlePnl` |
+| `SettlePnlWithPosition` | `0b0001_0000` | settling P&L while an open base position remains | `InvalidMarketStatusToSettlePnl` |
+| `Liquidation` | `0b0010_0000` | liquidating this perp position | `InvalidLiquidation` |
+| `AmmImmediateFill` | `0b0100_0000` | auction-skipping immediate AMM fills in this market | no error, the auction runs its full duration |
+| `SettleRevPool` | `0b1000_0000` | sweeping this market's revenue share to the revenue pool | no error, the sweep returns early |
+
+Spot markets:
+
+| Bit | Value | What it blocks | Error |
+|---|---|---|---|
+| `UpdateCumulativeInterest` | `0b0000_0001` | interest accrual for this market | no error, accrual is skipped |
+| `Fill` | `0b0000_0010` | fills against this spot market | `MarketFillOrderPaused` |
+| `Deposit` | `0b0000_0100` | deposits, including the deposit leg of a pool transfer and any credit into the revenue pool | `MarketActionPaused` |
+| `Withdraw` | `0b0000_1000` | withdrawals and borrows | `MarketWithdrawPaused` |
+| `Liquidation` | `0b0001_0000` | liquidating a position in this market | `InvalidLiquidation` |
+
+Insurance funds carry a fourth mask, whose bits each gate one staking action and reject with `InsuranceFundOperationPaused`.
+
+<Callout type="info">
+A warm admin may only flip the funding-update and revenue-sweep bits on a perp market. Every other bit is reserved for the cold or pause admin. See [Admin keys](/protocol/risk-and-safety/admin-keys).
+</Callout>
+
+### Layer 3: market status
+
+A market is in exactly one of `Initialized`, `Active`, `ReduceOnly`, `Settlement` or `Delisted`, and the status gates actions regardless of the two masks above. It is the layer that moves during a [delisting](/protocol/risk-and-safety/delisting-process).
+
+| Action | Statuses that allow it | Error otherwise |
+|---|---|---|
+| Place a perp order | not `Settlement`; an order placed while `ReduceOnly` is forced reduce-only | `MarketPlaceOrderPaused` |
+| Fill a perp order | `Active` or `ReduceOnly`, and not in settlement | `MarketFillOrderPaused` |
+| Spot deposit | not `Initialized`; must be `Active` if the resulting position is a positive deposit balance | `MarketBeingInitialized`, `MarketActionPaused` |
+| Spot withdraw or borrow | `Active`, `ReduceOnly`, or `Settlement` | `MarketWithdrawPaused` |
+| Settle perp P&L | `Active` with an open position; `Active` or `ReduceOnly` with none | `InvalidMarketStatusToSettlePnl` |
+
+<Callout type="warning">
+**A `ReduceOnly` perp market forces every fill to be risk-reducing, including fills of orders placed earlier.** The fill path re-derives reduce-only from the live market status for the **taker and every maker** in the match, so a resting quote that would increase exposure is size-clamped or cancelled. Expect quotes on a delisting market to stop adding exposure the moment the status changes, not the moment they are replaced.
+</Callout>
+
+### Layer 4: per-authority pause bits
+
+The layer most often missed. This mask sits on the authority, so it scopes to one trader across every subaccount they own.
+
+| Bit | Value | Effect |
+|---|---|---|
+| `UpdateBidAskTwap` | `0b0000_0001` | this authority's accounts cannot be used to sample the bid/ask TWAP |
+| `AmmAtomicFill` | `0b0000_0010` | this authority's orders never skip the auction |
+| `AmmAtomicRiskIncreasingFill` | `0b0000_0100` | the same, but only for orders that are not reduce-only |
+
+All three are silent. Nothing errors: an order simply runs its full auction instead of filling immediately, and a TWAP crank returns without sampling.
+
+## Telling a pause apart from a bug
+
+- `ExchangePaused` (error `6024`) is always exchange-wide. Read the exchange status to see which bit is set.
+- `MarketActionPaused` (`6146`), `MarketPlaceOrderPaused` (`6147`), `MarketFillOrderPaused` (`6148`) and `MarketWithdrawPaused` (`6149`) are always scoped to one market. Read that market's status and paused operations.
+- `PriceBandsBreached` means one of the two divergence bands, not a pause. Compare the market's 5-minute oracle TWAP against both the live oracle and the AMM price.
+- **Do not look for a `"<Operation> is paused"` log line in a rejected transaction.** That line appears in the transaction that *sets* the pause, never in the one refused by it. Read the account state instead.
+- A silent no-op is the expected shape for the funding, interest-accrual, AMM-fill, revenue-sweep and per-authority bits. Do not treat an unchanged funding rate or a skipped AMM fill as a failure.

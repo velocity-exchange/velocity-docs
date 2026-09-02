@@ -20,19 +20,16 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version-file: .tool-versions
-          cache: pnpm
+          bun-version-file: .tool-versions
 
-      - name: Install dependencies (fails if pnpm-lock.yaml is out of sync)
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: bun ci
 
       - name: Fail on a stray lockfile
         run: |
-          if git ls-files | grep -E '(^|/)(package-lock\.json|yarn\.lock)$'; then
-            echo "::error::pnpm-lock.yaml must be the only committed lockfile (see #73)"
+          if git ls-files | grep -E '(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb)$'; then
+            echo "::error::bun.lock must be the only committed lockfile (see #73)"
             exit 1
           fi

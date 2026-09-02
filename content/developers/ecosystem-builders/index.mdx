@@ -1,16 +1,33 @@
 ---
+title: "Ecosystem Builders"
 asIndexPage: true
 ---
 
-# Ecosystem Builders
+This section is for teams building on top of Velocity rather than inside it: trading front ends, wallets, portfolio and analytics dashboards, indexers, and aggregator integrations. It assumes an application reading and writing Velocity state, not a keeper and not a market-making operation. For either of those, [Trading Automation](/developers/trading-automation) and [Market Makers](/developers/market-makers) are the sections to read.
 
-This section is for teams building apps, analytics, or integrations on top of Velocity. Beyond the core `@velocity-exchange/sdk` (`VelocityClient`, `User`, and `DLOB` classes), Velocity publishes `@velocity-exchange/common` for shared order/auction math and swift-order construction, and `@velocity-exchange/react` for React hooks/providers/wallet glue. Ecosystem apps can build directly against the SDK, or pull in these packages for the same building blocks the Velocity UI uses.
+Everything here runs through `@velocity-exchange/sdk`, which carries the `VelocityClient`, `User`, and `DLOB` classes along with the order and auction math and signed-message order construction. Three read and write paths cover almost every integration, and the pages below take one each.
+
+<Cards>
+  <Card
+    title="Reading data"
+    href="/developers/ecosystem-builders/reading-data"
+    description="Positions, orders, balances, and collateral from the subscribed client; stateless VelocityCore decoding; and the Data API REST endpoints."
+  />
+  <Card
+    title="Orderbook + DLOB websocket"
+    href="/developers/ecosystem-builders/orderbook-and-ws"
+    description="Every hosted DLOB endpoint: L2/L3 snapshots, batch reads, top makers, priority fees, auction params, and the realtime websocket channels."
+  />
+  <Card
+    title="Sending actions"
+    href="/developers/ecosystem-builders/sending-actions"
+    description="VelocityClient methods for orders, cancels, settlement, deposits, and withdrawals, plus the VelocityCore instruction builders for full transaction control."
+  />
+</Cards>
 
 ## Setup
 
-Every app starts by creating a `VelocityClient`, subscribing to on-chain data, and reading from its caches.
-
-### Initialize and subscribe
+Every app starts the same way: construct a `VelocityClient`, subscribe it to onchain data, then read from its caches.
 
 ```ts
 import { Connection } from "@solana/web3.js";
@@ -28,11 +45,7 @@ const velocityClient = new VelocityClient({
 await velocityClient.subscribe();
 ```
 
-See [SDK Setup](/developers/velocity-sdk/setup) for the full `VelocityClientConfig` reference, including polling vs. websocket subscription modes and market/oracle subsets.
-
-### Read account and market caches
-
-Once subscribed, `VelocityClient` exposes account and market data synchronously from its subscriber caches: no additional RPC round-trip per read:
+Once subscribed, account and market data are available synchronously from the subscriber caches, with no RPC round trip per read:
 
 ```ts
 const state = velocityClient.getStateAccount();
@@ -44,21 +57,14 @@ const totalCollateral = user.getTotalCollateral();
 const perpPosition = user.getPerpPosition(0);
 ```
 
-See [Reading Data](/developers/ecosystem-builders/reading-data) for the full set of account/market/orderbook read paths, and [PnL & Risk](/developers/velocity-sdk/pnl-risk) for margin/health calculations.
+[SDK Setup](/developers/velocity-sdk/setup) has the full `VelocityClientConfig` reference, including polling versus websocket subscription modes and how to subscribe to a subset of markets and oracles. [Reading Data](/developers/ecosystem-builders/reading-data) covers the read paths, and [PnL & Risk](/developers/velocity-sdk/pnl-risk) the margin and health calculations.
 
-### React apps
+## React apps
 
-`@velocity-exchange/react` provides hooks, providers, and Zustand stores for wallet and client lifecycle. If you'd rather not depend on it, wrap `VelocityClient` construction and subscription lifecycle in your own hook/provider (e.g. a `useEffect` that constructs the client on wallet connect and calls `subscribe()`/`unsubscribe()`), and store the derived state (positions, orders, margin) in your own state manager (Zustand, Redux, React context, etc). See [Reading Data](/developers/ecosystem-builders/reading-data) for the read APIs to wire up.
+There is no Velocity React package. Wrap `VelocityClient` construction and its subscription lifecycle in a hook or provider, typically a `useEffect` that builds the client on wallet connect and calls `subscribe()` and `unsubscribe()` around it. Keep the derived state, positions, orders, and margin, in whatever state manager the app already uses.
 
-## Next steps
+## Staying current
 
-- [Reading data](/developers/ecosystem-builders/reading-data): Account data (positions, orders, balances, collateral), market data (oracle/mark prices, orderbook, candles), and Data API REST endpoints
-- [Sending actions](/developers/ecosystem-builders/sending-actions): `VelocityClient` methods (orders, cancel, settle PnL, deposit, withdraw) and stateless `VelocityCore` instruction builders
-- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws): L2/L3 REST snapshots and real-time DLOB websocket streaming
-- [SDK Setup](/developers/velocity-sdk/setup): Full `VelocityClient` initialization reference
-
-## Staying up to date
-
-- [GitHub: velocity-v1](https://github.com/velocity-exchange/velocity-v1): the monorepo containing the program, SDK, vaults, and keeper bots; watch releases for SDK breaking changes
-- [Migration guide](/developers/migrate-from-drift): full list of behavioral and SDK differences to check when porting an existing integration
-- [Data API playground](/developers/data-api)
+- The SDK ships from `velocity-v1`, the monorepo holding the program, SDK, vaults, and keeper bots. It is not public yet, so track SDK breaking changes through the published `@velocity-exchange/sdk` releases.
+- [Migration guide](/developers/migrate-from-drift): the behavioral and SDK differences to check when porting an existing integration.
+- [Data API playground](/developers/data-api): try the REST endpoints against live data before writing a client.

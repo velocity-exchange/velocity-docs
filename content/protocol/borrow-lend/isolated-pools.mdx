@@ -1,0 +1,65 @@
+---
+title: "Isolated pools"
+description: "A separate collateral pool for a single group of tokens, so a volatile listing can be borrowed against without putting every other account on the exchange behind it."
+---
+
+An isolated pool is a group of spot markets that a subaccount can hold positions in, and nothing else. A subaccount belongs to one pool, its deposits and borrows must all be in that pool's markets, and a loss inside the pool cannot reach anything the account holds outside it.
+
+Isolated pools are a capability the program supports rather than an arrangement in use: no isolated pool has been deployed on the exchange yet. What follows describes how a pool behaves once one exists.
+
+<Callout type="important">
+The word **isolated** does four different jobs in these docs and they are unrelated to one another. This page covers only the first.
+
+- An **isolated pool** is a group of spot markets with its own subaccount, described here
+- The **Isolated contract tier** is the riskiest tier a perpetual market can carry, which controls its insurance cap and oracle tolerances. See [Contract tiers](/protocol/risk-and-safety/contract-tiers)
+- The **isolated asset tier** is a spot market classification meaning the asset is not usable as collateral and may be a borrower's only borrow. See [Market specs](/protocol/trading/market-specs)
+- An **isolated insurance fund** is a market's own insurance vault, held separately from other markets'. See [Insurance fund](/protocol/insurance-fund)
+
+A market can carry the isolated asset tier without belonging to an isolated pool, and vice versa. Neither implies the other.
+</Callout>
+
+## The problem cross collateral creates
+
+The default account on Velocity is cross-collateralized: every deposit backs every position, and the account is liquidated as one unit. That is what makes listing a thin asset dangerous. Borrows backed by a volatile token rest on a price that can gap, and bad debt from them is socialized across that market's depositors.
+
+The answer is to wall the asset into its own pool. Every account and every spot market carries a pool id, and the two must match on almost every path that touches a balance. Pool 0 is the main cross-collateralized pool every account starts in; every other id is an isolated pool. The check runs inside the margin calculation, so an account cannot hold positions across two pools by any route.
+
+## What a pool subaccount can and cannot do
+
+| Action | Pool 0 | Isolated pool |
+| --- | --- | --- |
+| Deposit, withdraw, borrow, repay | Yes | Yes, in that pool's markets only |
+| Swap between the pool's tokens | Yes | Yes |
+| Place a perpetual order | Yes | No, rejected with `InvalidPoolId` |
+| Settle perpetual P&L | Yes | No |
+| Act as a filler or a liquidator | Yes | No |
+| Register a referrer name | Yes | No |
+| Be liquidated | Yes | Yes |
+
+An isolated-pool account cannot act as a liquidator, but it can absolutely be liquidated, by a pool 0 liquidator, on the ordinary [liquidation](/protocol/trading/liquidations) path. Isolation limits what the account's losses reach, not whether it can be closed out. The largest restriction is perpetual trading: an isolated pool is for swaps and leveraged borrow and lend only.
+
+## Worked example
+
+A **\$10,000 account** moves \$2,000 into an isolated-pool subaccount, deposits it as the pool's collateral asset, and borrows the pool's quote token against it, leaving \$8,000 in pool 0.
+
+If the collateral asset drops far enough, that subaccount is liquidated and, in the worst case, goes bankrupt, writing its debt off against the market's revenue pool, insurance fund and finally its own depositors. The \$8,000 in pool 0 is never part of that estate. The cost is capital efficiency: neither balance can help the other.
+
+## Moving between pools
+
+Neither action that changes a pool completes if the result would be an account holding positions in two pools at once. Reassigning a subaccount works only on an empty one, or one whose holdings already sit in the destination pool. A deposit and a borrow can also be transferred together between subaccounts in different pools, which is how a leveraged position migrates without being unwound.
+
+<Callout type="info">
+One boundary case: a subaccount in pool 1 is permitted to hold a non-borrow position in spot market 0, the main quote market, even though that market belongs to pool 0. The margin calculation zeroes its value, so it contributes nothing to the subaccount's collateral.
+</Callout>
+
+## Which pools exist
+
+The set of pools and the markets inside each one is admin-set onchain state rather than something fixed in the program, so the live list is the one the borrow and lend page shows. Depositing into a pool from that page creates the pool subaccount as part of the same action.
+
+## What this means in practice
+
+**For a borrow against a volatile token**, the isolated pool is what makes listing such a token possible at all. Collateral inside the pool does one job, and a main account cannot rescue it.
+
+**For a deposit lent inside an isolated pool**, the exposure is to that pool's borrowers and no others, their bad debt is socialized across that pool's depositors, and the rate reflects that pool's utilization. See [Interest rates](/protocol/borrow-lend/interest-rates).
+
+**For risk on a main account**, isolated-pool losses do not arrive there. Both accounts still share one wallet and one authority, so operational risk is not isolated even where market risk is.

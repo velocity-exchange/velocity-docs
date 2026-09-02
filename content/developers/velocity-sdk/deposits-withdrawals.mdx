@@ -1,34 +1,38 @@
-# Deposits & Withdrawals
+---
+title: "Deposits & Withdrawals"
+---
 
 ## How it works
 
-Velocity uses a **cross-margin** system where all your deposits serve as collateral for all your positions across perp and spot markets. When you deposit tokens (like the quote asset, SOL, or other supported assets), they're added to your user account's spot balances. These deposits can be used to back perp positions, and you can borrow against them to increase leverage.
+A deposit lands in the user account's spot balances, and every balance in one subaccount backs every position in that same subaccount. That is what cross-margin means here: deposits collateralize perp positions, and an account can borrow against them to take on leverage.
 
-Each deposit in a spot market earns **interest** from borrowers, while borrows accrue interest charges. Spot balances are tracked with precision (typically 1e6 for the quote asset, 1e9 for SOL) and can be positive (deposits) or negative (borrows). Your total collateral value is calculated by summing all deposits (weighted by asset weights) and subtracting borrows and unrealized perp losses.
+Balances carry interest in both directions. A deposit earns from borrowers; a borrow accrues a charge. Each balance is stored at the token mint's own decimals, so 1e6 for the quote asset and 1e9 for SOL, and is signed: positive is a deposit, negative is a borrow. Total collateral is the sum of deposits after asset weighting, minus borrows and unrealized perp losses.
 
-Withdrawals require sufficient free collateral, you can't withdraw funds that are backing open positions or would put your account below minimum margin requirements. Beyond margin, a withdrawal can also fail if the exchange or the market has withdrawals paused, or if the spot market's daily withdraw circuit breaker has been tripped (a market-level guard capping how far deposits can drop below their 24-hour TWAP, 25% by default). Handle these as separate error cases rather than assuming free collateral alone determines success. The SDK handles token account derivation and precision conversion automatically.
+Withdrawals need free collateral. Collateral backing an open position is not available to withdraw, and a withdrawal cannot take the account below its margin requirement. Margin is not the only gate, though.
 
-Spot markets on Velocity are collateral/borrow-lend only: they no longer support order-book trading (see [Orders](/developers/velocity-sdk/orders)). Deposits, withdrawals, and internal transfers are unaffected by that change.
+A withdrawal also fails if the exchange or the market has withdrawals paused, or if the spot market's daily withdraw circuit breaker has tripped. That breaker caps how far a market's deposits can fall below their 24-hour TWAP; the cap is a per-market setting, so read it off the spot market account. Treat all three as separate error cases: free collateral alone does not predict success.
+
+Spot markets on Velocity are collateral and borrow-lend only, with no order-book trading (see [Orders](/developers/velocity-sdk/orders)). Deposits, withdrawals, and internal transfers are unaffected by that change. The SDK derives the token accounts and does the precision conversion.
 
 ## SDK Usage
 
-Deposits/withdrawals move tokens between your wallet token accounts and your Velocity subaccount's spot position.
+Deposits and withdrawals move tokens between the wallet's token accounts and the Velocity subaccount's spot position. Both take an amount in the market's own precision and the wallet's associated token account for that mint, so every flow starts with the same two calls.
 
 ### Converting amounts and deriving the token account
 
-Convert a human-readable token amount into the onchain precision units required for spot instructions.
+`convertToSpotPrecision` scales a human-readable amount by the market's token decimals. It is per market, not a fixed constant: see [Precision and Types](/developers/velocity-sdk/precision-and-types#precision-constants).
 
 <SDKDoc>
   <TypeScript name="convertToSpotPrecision" type="method" owner="VelocityClient">
 ```js
-// marketIndex 0 is the protocol's quote asset (dUSDT on devnet, USDT on mainnet-beta)
+// Spot market 0 is the quote asset: dUSDT on devnet, USDT on mainnet-beta.
 const marketIndex = 0;
-const amount = velocityClient.convertToSpotPrecision(marketIndex, 100); // 100 units (example)
+const amount = velocityClient.convertToSpotPrecision(marketIndex, 100); // 100 tokens
 ```
   </TypeScript>
 </SDKDoc>
 
-Get your wallet's associated token account for a given spot market mint.
+Get the wallet's associated token account for a given spot market mint.
 
 <SDKDoc>
   <TypeScript name="getAssociatedTokenAccount" type="method" owner="VelocityClient">
@@ -42,7 +46,7 @@ console.log(ata.toBase58());
 
 ### Deposit
 
-Deposit tokens from your wallet ATA into your Velocity subaccount's spot balance.
+Deposit tokens from the wallet ATA into the Velocity subaccount's spot balance.
 
 <SDKDoc>
   <TypeScript name="deposit" type="method" owner="VelocityClient">
@@ -58,7 +62,7 @@ await velocityClient.deposit(amount, marketIndex, associatedTokenAccount);
 
 ### Withdraw
 
-Withdraw tokens from your Velocity spot balance back to your wallet ATA (subject to free collateral checks).
+Withdraw tokens from the subaccount's Velocity spot balance back to the wallet ATA (subject to free collateral checks).
 
 <SDKDoc>
   <TypeScript name="withdraw" type="method" owner="VelocityClient">
@@ -72,9 +76,11 @@ await velocityClient.withdraw(amount, marketIndex, associatedTokenAccount);
   </TypeScript>
 </SDKDoc>
 
-### Spot rates (borrow / lend)
+### Spot rates (borrow and lend)
 
-Calculate the current lending APY-style rate paid to depositors for a spot market.
+Both rates read off the spot market account and return an **annualized** rate as a `BN` in `SPOT_MARKET_RATE_PRECISION` (1e6), so `109500` is 10.95% annualized. `calculateDepositRate` is what depositors receive; `calculateBorrowRate` is what borrowers pay. The deposit rate is the borrow rate net of the insurance-fund and protocol fee carveouts, scaled down by utilization, since only the borrowed share of deposits earns anything.
+
+Both also take an optional `delta`, a hypothetical change in token amount, so a deposit or borrow can be priced against the rate before it is sent.
 
 <SDKDoc>
   <TypeScript name="calculateDepositRate" type="function">
@@ -83,12 +89,11 @@ import { SPOT_MARKET_RATE_PRECISION, calculateDepositRate, convertToNumber } fro
 
 const spotMarket = velocityClient.getSpotMarketAccount(0);
 const rate = calculateDepositRate(spotMarket);
+// 0.1095 means 10.95% annualized
 console.log(convertToNumber(rate, SPOT_MARKET_RATE_PRECISION));
 ```
   </TypeScript>
 </SDKDoc>
-
-Calculate the current borrow rate charged to borrowers for a spot market.
 
 <SDKDoc>
   <TypeScript name="calculateBorrowRate" type="function">
@@ -97,6 +102,7 @@ import { SPOT_MARKET_RATE_PRECISION, calculateBorrowRate, convertToNumber } from
 
 const spotMarket = velocityClient.getSpotMarketAccount(0);
 const rate = calculateBorrowRate(spotMarket);
+// 0.1420 means 14.20% annualized
 console.log(convertToNumber(rate, SPOT_MARKET_RATE_PRECISION));
 ```
   </TypeScript>

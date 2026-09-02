@@ -1,0 +1,75 @@
+---
+title: "Interest rates"
+description: "How a spot market prices borrowing: one straight line to the optimal utilization point, then six progressively steeper segments up to 100%."
+---
+
+The borrow rate of a spot market is a function of one input, its utilization, and it is the same function that sets what lenders receive. This page is the curve: where it bends, what each segment is worth, and which parameters a market sets for itself.
+
+## Why not one straight line
+
+A single slope from zero to full utilization cannot both price ordinary credit and price the emergency. Calibrate it to charge 50% annualized at 100% utilization, where no lender can withdraw and the rate has to force repayment, and it charges 40% annualized at a healthy 80% utilization, so borrowers leave. Calibrate it to a sane 10% annualized at 80% instead and it arrives at only 12.5% annualized at 100%, where the market is full, no depositor can withdraw, and nothing in the price is telling anyone to repay.
+
+A **kinked** curve solves it by using different slopes over different ranges. Each kink is a point at which the protocol has decided that utilization has become more dangerous than it was.
+
+## The shape
+
+Every spot market defines four numbers, all set by the admin:
+
+| Symbol | Parameter | What it is |
+| --- | --- | --- |
+| `U*` | Optimal utilization | The target utilization, where the first kink sits |
+| `R_opt` | Optimal borrow rate | The borrow rate at `U*`, annualized |
+| `R_max` | Maximum borrow rate | The borrow rate at 100% utilization, annualized |
+| `R_min` | Minimum borrow rate | A floor applied to the result, annualized. Every market is created with this at zero |
+
+Below `U*` the curve is a single straight line from the origin, so the rate is `R_opt` scaled by how far along that leg utilization sits. Above `U*` the remaining rate budget, `R_max` less `R_opt`, is divided across six fixed segments:
+
+| Segment | Share of the budget |
+| --- | --- |
+| `U*` to 85% | 5% |
+| 85% to 90% | 10% |
+| 90% to 95% | 15% |
+| 95% to 99% | 20% |
+| 99% to 99.5% | 25% |
+| 99.5% to 100% | 25% |
+
+Segments accumulate: a utilization inside a segment collects every earlier segment in full plus its own share pro rata, and the result is floored at `R_min`.
+
+Half of the whole budget is spent in the last one and a half points of utilization. The curve stays gentle where the market is healthy, so the rate is not volatile around the target, and turns nearly vertical exactly where a lender's ability to withdraw is disappearing. The segment boundaries and their weights are protocol-wide constants that no market can change, so `U*` always sits below 85%.
+
+## Worked example
+
+The parameters here are illustrative. Read the live ones off the market page in the app.
+
+Take `U*` at 80%, `R_opt` at 10% annualized, and `R_max` at 50% annualized, so the budget above the kink is 40 points of rate.
+
+| Utilization | Borrow rate, annualized | Cost of the next point of utilization |
+| --- | --- | --- |
+| 0% | 0.00% | 0.125 points |
+| 80% | 10.00% | 0.4 points |
+| 85% | 12.00% | 0.8 points |
+| 90% | 16.00% | 1.2 points |
+| 95% | 22.00% | 2.0 points |
+| 99% | 30.00% | 20 points |
+| 99.5% | 40.00% | 20 points |
+| 100% | 50.00% | |
+
+Between 80% and 85% a borrower pays 0.4 points more for each point of utilization they add. Between 99% and 100% they pay 20 points more, fifty times as much, and the last half point of the pool costs as much rate as the first ninety-nine.
+
+{/* FIGURE: the dark-only raster at /assets/sol_interest_curve.png should be replaced.
+    The function is piecewise linear, so the existing PriceRamp component draws it
+    exactly from a segments list. Not built here. */}
+
+<img src="/assets/sol_interest_curve.png" alt="Borrow interest rate curve for the SOL market" />
+
+## Boundaries
+
+- **At zero utilization no interest accrues at all**, on either side, so a minimum rate does not charge an idle market.
+- **Borrows with no deposits price at 100% utilization**, which puts the market at its maximum borrow rate.
+- **The floor applies after the curve**, so a market with a minimum rate charges it across the whole lower leg until the linear ramp overtakes it.
+
+## Who sets these
+
+Changing the curve requires the warm or cold admin key, and the four numbers are set together. An update is rejected unless utilization is at or below 100% and the three rates are ordered `R_min` at or below `R_opt` at or below `R_max`.
+
+The same curve prices both sides of the market. Lenders receive this borrow rate scaled by utilization and net of the two carve-outs, which is why the lending rate is always below the borrow rate and why it collapses toward zero as utilization does. See [Borrow and lend](/protocol/borrow-lend) for that arithmetic and for a worked example that starts from a deposit.

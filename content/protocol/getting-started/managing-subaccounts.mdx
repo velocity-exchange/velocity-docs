@@ -1,27 +1,28 @@
-# Creating and Managing Subaccounts
+---
+title: "Managing subaccounts"
+description: "The fixed slot counts every subaccount has, what occupies one, and how to add, fund, switch and delete them."
+---
 
-Velocity features a powerful subaccount tool for users to clearly separate positions within a single address.  
+A subaccount is one onchain account of a fixed size. It carries 8 perpetual position slots, 8 spot position slots, and 32 order slots, and those are hard limits rather than policy limits that grow with an account's balance. The 32 orders are the total across every market the subaccount trades, not 32 per market, so a maker quoting both sides of four markets with four levels each is already at the ceiling.
 
-Each subaccount's margin and positions are isolated from other subaccounts, meaning that users can trade on isolated margin via different subaccounts.  
+What occupies a slot matters more than the counts do, because a slot is not released just because the position reads as flat on screen. A perp slot is free only when the position is flat, has no open orders, bids or asks against it, carries no unsettled P&L, and is not being liquidated. A position that has been closed but whose profit was never settled therefore still holds its slot. A spot slot frees when the balance reaches zero and no open order references that market.
 
-Each subaccount has independent positions, balances and margins, and can trade independently. Balances or liquidations from each subaccount will not affect other subaccounts. By default, every position and deposit within a single subaccount is cross-margined.
+Hitting any of the three cannot be configured around, and the answer is a second subaccount. Ring-fencing a strategy is the other reason to open one.
 
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
-<Callout type="info">
-Don't confuse subaccount-level isolation with **[isolated positions](/protocol/trading/margin)**: a newer feature that lets you segregate a *single perp position's* collateral and liquidation risk from the rest of one subaccount, without needing a separate subaccount for it.
-</Callout>
-*/}
+## Margin does not cross subaccounts
 
-<Callout type="important">
-A subaccount can hold up to 8 perpetual and 8 spot positions and 32 open orders total. A perpetual position with 0 base, but only unsettled P&L counts as an open position. 
-</Callout>
+Inside one subaccount, every deposit and every position is cross-margined. All of the collateral in it backs all of its positions, an unrealized gain on one offsets an unrealized loss on another, and [account health](/protocol/trading/margin/account-health) is computed over the whole account rather than per position.
 
-## Adding a Subaccount
+Between subaccounts, nothing is shared. Collateral in one does not back a position in another, health is computed separately for each, and a liquidation in one leaves the others untouched. It cuts both ways: an idle balance in one subaccount will not save a position in another from being liquidated, so collateral meant to defend a position has to sit in that position's subaccount.
 
-Here's how you can add a subaccount:
+## Subaccount ids are not reused
+
+Each subaccount is created at the next id in sequence, and the counter that hands them out only ever increments. Deleting subaccount 3 does not put the id 3 back into circulation, so the next subaccount created is 4. This matters for a script that addresses subaccounts by id: the set of live ids can have gaps in it, and a retired id is retired permanently.
+
+## Adding a subaccount
 
 <Steps>
-### Go to the account dropdown in the top right of the app.
+### Open the account dropdown at the top right of the app
 
 <img src="/assets/managing-subaccounts-1.png" alt="" width="800" height="auto"></img>
 
@@ -29,45 +30,45 @@ Here's how you can add a subaccount:
 
 <img src="/assets/managing-subaccounts-2.png" alt="" width="800" height="auto"></img>
 
-### Confirm
-You'll be asked to name your new subaccount and deposit collateral from your wallet to fund that account. You can also transfer collateral to your new subaccount from an existing one to fund it.
+### Name it and fund it
+
+Name the new subaccount and give it collateral, either from your wallet as a fresh deposit or from an existing subaccount as an internal transfer. Creating the account allocates onchain storage, so it costs a rent deposit in SOL, which comes back when the account is deleted.
 
 <img src="/assets/managing-subaccounts-3.png" alt="" width="800" height="auto"></img>
 </Steps>
 
-## Editing and Deleting a Subaccount
+## Switching between subaccounts
 
-You can edit and delete subaccounts from the [accounts screen](https://velocity.exchange/portfolio/accounts)
-
-<Steps>
-### Settle balances
-Make sure your account has zero balances. Withdraw all your deposits and settle your positions. This includes open borrows and any unsettled pnl's. 
-<img src="/assets/managing-subaccounts-4.png" alt="" width="800" height="auto"></img>
-
-### Delete
-Click the trash bin icon on the interface.
-<img src="/assets/managing-subaccounts-5.png" alt="" width="800" height="auto"></img>
-</Steps>
-
-### Switching Subaccounts
-
-Once you've created a new account, you can use the same account switcher to move between them.
+The same account switcher moves between them, and the app shows one subaccount's positions, balances and health at a time. Any order placed while a subaccount is selected belongs to that subaccount, and the app gives no warning when the selected subaccount is not the intended one, so it is worth checking before sending an order.
 
 <img src="/assets/managing-subaccounts-6.png" alt="" width="800" height="auto"></img>
 
+## Moving assets
 
-## Managing Subaccount Assets
+Assets are managed from the Accounts button in the account dropdown, or from the [accounts screen](https://velocity.exchange/portfolio/accounts). Three operations are available there:
 
-You can easily manage your assets via the Accounts button in the [Accounts Dropdown](https://velocity.exchange) or via 
+- Deposit from the connected wallet into the selected subaccount
+- Withdraw from the selected subaccount back to the connected wallet
+- Transfer between two subaccounts under the same authority, without the funds leaving the protocol
 
-
--   Deposit additional assets
-
--   Withdraw to your wallet
-
--   Transfer assets between accounts
-
-To see the assets of a single subaccount, use the account switcher in the left navigation to switch to that account.
+To see one subaccount's holdings, switch to it with the account switcher in the left navigation first. The balances screen always shows the selected subaccount, never the total across all of them.
 
 <img src="/assets/managing-subaccounts-7.png" alt="" width="800" height="auto"></img>
 
+## Deleting a subaccount
+
+A subaccount can only be deleted once it is completely empty, which is stricter than being able to withdraw from it. Every position has to be closed, every borrow repaid, all P&L settled, and every balance withdrawn. Deleting releases the rent to the wallet that paid it; see [Withdraw and close an account](/protocol/getting-started/withdraw-and-close-account) for the full set of conditions, including the one case where a main account cannot be deleted at all.
+
+<Steps>
+### Empty the account
+
+Withdraw every deposit, close every position, repay any open borrow, and settle any unsettled P&L. The delete control stays unavailable until all four hold.
+
+<img src="/assets/managing-subaccounts-4.png" alt="" width="800" height="auto"></img>
+
+### Delete
+
+Click the trash icon on the account row and sign the transaction. The rent lands back in your wallet in the same transaction.
+
+<img src="/assets/managing-subaccounts-5.png" alt="" width="800" height="auto"></img>
+</Steps>

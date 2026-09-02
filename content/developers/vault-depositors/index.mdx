@@ -1,12 +1,17 @@
 ---
+title: "Vault Depositors"
 asIndexPage: true
 ---
 
-# Vault Depositors
+A vault is a delegated trading pool: depositors provide capital, and a manager trades it under fixed withdrawal rules. This section covers the depositor side of that relationship, which is what a vault front end, an allocator dashboard, or a wallet integration builds against. For the manager side, see [Vault Managers](/developers/vault-managers).
 
-A vault is a delegated trading pool: depositors provide capital, and a manager trades it under fixed withdrawal rules. This section covers the depositor side of that relationship, which is what you build against when you are writing a vault front end, an allocator dashboard, or a wallet integration. For the manager side, see [Vault Managers](/developers/vault-managers).
+Everything here runs through `VaultClient` from `@velocity-exchange/vaults-sdk`, the TypeScript client for the `vaults` program (`vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR`).
 
-Everything here runs through `VaultClient` from [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk), the TypeScript client for the `vaults` program (`vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR`).
+<Callout type="warn">
+The vaults program is not live yet, and neither is the vaults SDK. Both go live soon, and these pages describe them ahead of that. These pages can be built against now, but nothing here is callable on mainnet-beta yet.
+
+The published `@velocity-exchange/vaults-sdk` on npm is 0.1.3, from June 2026, and it is well behind what these pages describe. Read it as a preview of the release rather than a description of the package `npm install` returns.
+</Callout>
 
 ## The VaultDepositor account
 
@@ -24,7 +29,7 @@ const vaultDepositor = getVaultDepositorAddressSync(
 
 The account tracks the depositor's share balance, its share base (used for rebases), lifetime deposits and withdrawals, the cost basis profit share is measured against, and one pending withdraw request. It does not hold tokens. Tokens sit in the vault's own Velocity user account, pooled with every other depositor's.
 
-`initializeVaultDepositor(vault, authority?, payer?)` creates the account. In a **permissioned** vault only the manager may create depositor accounts, and any other payer fails with `PermissionedVault`. In an open vault anyone can create one, and `deposit` creates it for you when you pass `initVaultDepositor`.
+`initializeVaultDepositor(vault, authority?, payer?)` creates the account. In a **permissioned** vault only the manager may create depositor accounts, and any other payer fails with `PermissionedVault`. In an open vault anyone can create one, and `deposit` creates it when `initVaultDepositor` is passed.
 
 ## Share accounting
 
@@ -50,16 +55,16 @@ const equity = await vaultClient.calculateWithdrawableVaultDepositorEquity({
 `calculateWithdrawableVaultDepositorEquity` returns the value in the vault's spot market (usually USDC or USDT). `calculateWithdrawableVaultDepositorEquityInDepositAsset` returns it in the deposit asset's own units, which differ when the deposit asset is not the quote asset. Both subtract the profit share the manager would take, so they answer "what do I get" rather than "what is my gross claim".
 
 <Callout type="info">
-Share balances can be **rebased**. If vault equity falls far enough relative to the share count, the program divides every share balance by a common divisor and increments the vault's `shares_base`. Your share count changes; your fraction of the vault does not. Depositor accounts resync on their next action, or on demand via the manager's `applyRebase`.
+Share balances can be **rebased**. If vault equity falls far enough relative to the share count, the program divides every share balance by a common divisor and increments the vault's `shares_base`. The share count changes; the depositor's fraction of the vault does not. Depositor accounts resync on their next action, or on demand via the manager's `applyRebase`.
 </Callout>
 
 ## Lifecycle
 
-The depositor lifecycle is **deposit, then request withdraw, then wait the redeem period, then withdraw**. There is no direct withdrawal. A pending request blocks deposits, share transfers, tokenization, and further requests on the same account, so it is a state your integration has to render.
+The depositor lifecycle is **deposit, then request withdraw, then wait the redeem period, then withdraw**. There is no direct withdrawal. A pending request blocks deposits, share transfers, tokenization, and further requests on the same account, so it is a state an integration has to render.
 
 <Cards>
-  <Cards.Card title="Deposit and withdraw" href="/developers/vault-depositors/deposit-and-withdraw" />
-  <Cards.Card title="Tokenized shares" href="/developers/vault-depositors/tokenized-shares" />
+  <Card title="Deposit and withdraw" href="/developers/vault-depositors/deposit-and-withdraw" />
+  <Card title="Tokenized shares" href="/developers/vault-depositors/tokenized-shares" />
 </Cards>
 
 ## What to check before depositing
@@ -68,10 +73,10 @@ Read these off the vault account and surface them, because the program will reje
 
 | Field | Why it matters |
 | --- | --- |
-| `redeemPeriod` | Seconds you must wait between requesting and completing a withdrawal. |
+| `redeemPeriod` | Seconds between requesting a withdrawal and being able to complete it. |
 | `maxTokens` | Capacity cap. A deposit that would push vault equity above it fails with `VaultIsAtCapacity`. `0` means uncapped. |
 | `minDepositAmount` | Minimum deposit size. Below it, `InvalidVaultDeposit`. `0` means no minimum. |
-| `permissioned` | If true, only the manager can create your depositor account. |
+| `permissioned` | If true, only the manager can create a depositor account. |
 | `managementFee`, `profitShare`, `hurdleRate` | The fee policy, in percentage precision (1e6 = 100%). |
 | `feeUpdateStatus` | Non-zero means a fee change is queued behind a timelock. |
 | `vaultClass` | Trusted vaults let the manager move assets out of the vault. |
@@ -81,7 +86,7 @@ Fees can rise. `update_vault` only lowers fees, but a manager can queue a raise 
 </Callout>
 
 <Callout type="warning">
-Vaults are not trustless. The manager trades pooled capital and depositors have no on-chain recourse against bad trading. In a Trusted-class vault the manager can also move assets out of the vault entirely, tracked only as a borrowed value. See [Trusted vaults](/developers/vault-managers/trusted-vaults).
+Vaults are not trustless. The manager trades pooled capital and depositors have no onchain recourse against bad trading. In a Trusted-class vault the manager can also move assets out of the vault entirely, tracked only as a borrowed value. See [Trusted vaults](/developers/vault-managers/trusted-vaults).
 </Callout>
 
 ## Related resources

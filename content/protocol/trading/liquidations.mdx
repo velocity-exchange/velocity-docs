@@ -1,85 +1,92 @@
-# Liquidations
+---
+title: "Liquidation"
+description: "When a position becomes liquidatable, how much is closed, and what it costs."
+---
 
-<Callout type="warning">
-  Trading on leverage can be risky. Make sure you are aware of the liquidation rules outlined below
-  before applying margin.
+Liquidation closes part of a position once the collateral behind it stops being enough, and hands that part to whoever will take it on, at a discount that pays them for doing so. Every account is cross-margined, so eligibility is judged on the whole subaccount rather than on any single position. Worked numbers use a **\$10,000** account with SOL at **\$100**, on illustrative market parameters.
+
+## When an account becomes liquidatable
+
+An account is liquidatable when its total collateral falls below its maintenance margin requirement. Total collateral is the weighted value of the account's deposits plus its perpetual P&L; the requirement is the weighted value of its borrows and perpetual positions. **The entry test is unbuffered**: it compares against the maintenance requirement itself, with no cushion added.
+
+The account health figure on the position page is the same comparison expressed as a percentage:
+
+```
+Health = 100% - maintenance_margin / total_collateral
+```
+
+At 0 health the account is liquidatable. Initial margin is a separate, higher bar governing opening and withdrawing, and it never decides liquidation eligibility. Both ratios are per-market and admin-set; see [Market specs](/protocol/trading/market-specs) and [Account health](/protocol/trading/margin/account-health).
+
+## What happens first: orders, not positions
+
+Liquidation begins by cancelling the account's open orders. Orders reserve margin, so cancelling them frees some without touching any exposure, and it is common for that alone to be enough: the margin calculation is re-run immediately, and if the account is back above the exit threshold the liquidation stops there with no position transferred.
+
+<Callout type="important">
+A fill that would leave the taker below its requirement does **not** cancel that account's orders. The fill itself reverts with `InsufficientCollateral`, leaving the orders in place. Cancellation on low collateral happens at liquidation entry, and through a permissionless keeper action that requires the account to be failing its **initial** margin requirement, skips any order that would reduce a position, and charges a flat fee per order cancelled.
 </Callout>
 
-## What is Liquidation?
+## How much gets closed
 
-Liquidations are a part of leveraged trading. Traders that elect to use leverage are using the collateral they deposited as margin to borrow money from the protocol. Traders may choose to do this in order to open a larger position and have more exposure to a particular asset, i.e. _leveraged exposure_.
+The target is not the maintenance requirement. Bringing an account back to exactly the line it just crossed leaves it liquidatable again on the next tick, so the engine works toward the requirement **plus a buffer** of **2% of notional**. At a 3% maintenance ratio that makes the exit target 5% of notional against a 3% entry test.
 
-When this occurs, the protocol must protect itself by ensuring that there is enough margin for the position to settle any losses that occur. There is a prescribed minimum ratio between a position's value and its margin for each asset (**Minimum Maintenance Margin**).
+The amount of base transferred is whatever closes the shortage between collateral and that buffered requirement. Each unit transferred frees the buffered margin ratio less the liquidator's fee and less the insurance-side fee, since those fees come out of the same collateral.
 
-If a position drops below its Minimum Maintenance Margin, liquidators are incentivized by the protocol to take over positions so a user's remaining collateral may settle the losses that have occurred. Read [Insurance Fund](/protocol/insurance-fund) for what happens when prices move rapidly and/or liquidations don't happen in time.
+## The throttle
 
-## How do Liquidations work?
+Sizing decides how much needs to move. A second cap decides how much may move right now: a ramp that starts at a configured percentage of the shortage when the account enters liquidation and climbs to 100% over a configured duration. Two shortcuts bypass it entirely. A margin shortage below **\$50** is fully freeable at once, and a position whose base asset value is **\$50 or less** may be taken in full.
 
-By default, all positions within a subaccount (deposits, borrows, and perpetuals positions) are **cross-margined**: liquidations are calculated based on your account level leverage rather than isolated to the leverage present in your perpetuals and/or borrow account.
+Both the duration and the initial percentage are admin fields on the market, changeable without a program upgrade. At a duration of zero the throttle is inert and the whole computed amount is available on the first fill; above zero, the freeable fraction starts at the initial percentage and climbs to 100% across the duration. Read the live values rather than assuming either state.
 
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
-Velocity also supports **[isolated positions](/protocol/trading/margin)**: a perp position funded and margined independently of the rest of the subaccount. Isolated positions are liquidated on their own, without touching the account's cross-margin collateral or other positions, and (unlike cross-margin) close **100% in a single liquidation** rather than unwinding gradually. See [below](#isolated-position-liquidations).
-*/}
+## Price: oracle, and only when the oracle is believable
 
-You can be liquidated when your `totalCollateral` becomes less than your `maintenanceMarginRequirement`. Your total collateral is the weighted value of your deposits and perp pnl. Your margin requirement is the weighted value of your borrows and perp positions.
+The transfer price is the oracle price, not the mark price, so a liquidation cannot be triggered or priced by pushing the book around. Before any position moves, the live oracle is compared against the market's five-minute oracle TWAP, and if they diverge by 50% or more the liquidation is rejected with `PriceBandsBreached`.
 
-Once your total collateral value falls below your margin requirement, liquidations will first cancel any open orders. After this, until your account's total collateral is above the `maintenanceMarginRequirement + liqBufferRatio` liquidators can iteratively liquidate any portion of assets and liabilities over a throttled time window (to avoid single price instance from a heavily deleveraging account). The `liqBufferRatio` is set on the Velocity State Account and is meant to sufficiently bring an account away from the liquidation boundary but not heavily punish users.
+That 50% is a floor rather than a setting: an admin can tighten the guard, but the program will not liquidate through a wider divergence in any configuration. The block is temporary, and normal liquidation resumes once the deviation narrows. See [Oracles](/protocol/how-it-works/oracles) and [Guard rails](/protocol/risk-and-safety/guard-rails).
 
-The `Health` measure on the user page can help visualise how close a user is to liquidation territory. At 0 Health, a user can get liquidated.
+## What it costs
 
-`Health = 100% - maint. margin / total collateral`
+Three per-market rates come off a perpetual liquidation, all against the transferred notional.
 
-The user's trade price at liquidation for a perpetual position will be based on the oracle price. Both the liquidator fee and the insurance-fund fee are per-market parameters set by protocol admins, and the liquidator fee is what gives the liquidator a rebate for taking over the position.
+- **The liquidator fee** is the discount that makes taking on the position worth doing.
+- **The insurance fund fee** is credited to the liability market's revenue pool.
+- **The protocol liquidation fee** goes to the withdrawable protocol fee pool, and takes nothing while it is zero.
 
-<Callout type="error">
-  **In the case of an extreme oracle error: the market will pause most fills, liquidations, and
-  funding rate updates.**
-</Callout>
+All three are admin-set per market and all three initialize to zero, so read them off the live market account.
 
-<Callout type="info">
-Example:
+The insurance-side budget is split **insurance fund first**, so a protocol cut can never push a liquidation into a bankruptcy that would not otherwise have happened; it only reduces the excess margin the liquidatee keeps.
 
-You deposit 500 USDT and you long 200 SOL-PERP at \$25.
+**The liquidator fee ages.** After a grace period of **600 seconds** from the moment the account entered liquidation, the effective liquidator fee rises by 0.01 bps per 400 ms of further elapsed time, capped at the lesser of three times the base fee and the market's maintenance margin ratio. At a 0.75% base fee and a 3% maintenance ratio that cap is 2.25%, and reaching it takes roughly 100 minutes past the grace window.
 
-- Your position value is \$5000 USDT and your margin/collateral is \$500 USDT, you have 10x leverage.
-- Note that the Minimum Maintenance Margin for a SOL-PERP is 3% (see Minimum Maintenance Margin for assets here: [Margin](/protocol/trading/margin)).
+## Worked example
 
-Calculations:
+Illustrative market parameters: a 3% maintenance margin ratio, a 0.75% liquidator fee, a 0.75% insurance fund fee, and a protocol liquidation fee of zero.
 
-- Total collateral = `500 * 1.00 = 500`
-- Margin requirement = `5000 * .03 = 150`
+The **\$10,000 account** deposits \$10,000 of USDT and goes long 1,000 SOL-PERP at \$100, a notional of \$100,000 and 10x leverage.
 
-You are liquidated if the price of SOL decreases by ~7.22% to ~\$23.20. This is because:
+**Where it becomes liquidatable.** Collateral is \$10,000 plus P&L; the maintenance requirement is 3% of the live notional. They meet at **\$92.78**, a drop of 7.22%, where collateral is \$2,780 against a requirement of \$2,783.
 
-- Perp PnL = `200 * $25 * -0.0722 = -361`
-- New total collateral = `500 - 361 = 139`
-- New margin requirement = `23.20 * 200 * .03 = 139.2`
+**What the engine targets.** Not \$2,783. With the 2% buffer the exit target is 5% of notional, \$4,639, so the shortage to close is **\$1,859**.
 
-At that point your total collateral is less than your margin requirement and liquidation is triggered.
+**How much position that takes.** Each SOL transferred frees the 5% buffered ratio less the 0.75% liquidator fee and less the 0.75% insurance fee, so 3.5% of \$92.78, or \$3.25 per SOL. Closing a \$1,859 shortage takes **572.5 SOL**, rounded up to the market's 0.01 SOL step size. That is 57% of the position, a transferred notional of \$53,116.
 
-</Callout>
+**What it costs.** The liquidator pays oracle less 0.75%, earning **\$398**. The insurance fund takes another **\$398**. At a protocol fee of zero the protocol takes nothing.
 
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
+**Where it stops.** The account keeps 427.5 SOL, a notional of \$39,663, and collateral of \$2,780 less \$797 of fees, or **\$1,983**. The buffered requirement on what remains is also \$1,983, so the account clears the exit test, the flag is cleared, and it can place orders again. It kept 43% of its exposure.
 
-## Isolated Position Liquidations
+**Where the throttle would bite.** The \$1,859 shortage is well above the \$50 shortcut, so at a throttle duration of zero all 572.5 SOL clears on the first fill. At a duration of 60 seconds with an initial percentage of 10%, the first fill would be capped at roughly 57 SOL, climbing to the full amount over the following minute.
 
-Cross-margin liquidations unwind gradually: a throttled percentage per slot window that accelerates or slows based on how the price moves after liquidation begins (see [Liquidation Engine](/protocol/how-it-works/liquidation-engine)). **Isolated positions skip this ramp entirely: once an isolated position is under-margined, it is liquidated 100% in one shot**, since its collateral and risk can't spill over into the rest of the account the way a cross-margined position's can.
-*/}
+## Being a liquidator
 
-## Liquidation Fees
+Liquidation is permissionless, and it is a position transfer between accounts, so a liquidator has to be collateralized well enough to satisfy the initial margin requirement of the position it takes on. The reward is credited to its Velocity account rather than paid out separately. See [Liquidation bot](/developers/trading-automation/keeper-bots/liquidation-bot).
 
-Per-market liquidation fee rates are split three ways when a position is liquidated:
+## When liquidation is not enough
 
-- **`liquidator_fee`**: paid to the liquidator, unchanged from a standard liquidation reward.
-- **`if_liquidation_fee`**: the insurance fund's cut.
-- **`protocol_liquidation_fee`**: a protocol cut, introduced alongside the [fee redesign](/protocol/trading/trading-fees/fee-mechanics#fee-redesign). The combined insurance-side budget (`if_liquidation_fee + protocol_liquidation_fee`) is computed once against the user's margin shortfall, then split **IF-first**: the insurance fund receives exactly what it would have received without the protocol fee, and the protocol only captures margin headroom _beyond_ that. This means adding a protocol cut can never push a liquidation into bankruptcy that wouldn't otherwise have happened. It only reduces the excess margin the liquidatee would have kept.
+If a liquidation leaves an account with an outstanding liability and no remaining assets, it is bankrupt, and the shortfall is absorbed by a defined sequence of sources before anything is socialized. See [Liquidation and bankruptcy](/protocol/risk-and-safety/liquidation-and-bankruptcy) for the tranche order and [Insurance fund](/protocol/insurance-fund).
 
-Perp liquidations accrue the IF and protocol cuts as pending fee-ledger counters (materialized by the fee sweep); spot liquidations credit the liability market's `revenue_pool` and `protocol_fee_pool` directly.
+## What this means in practice
 
-## Bankruptcy and Solvency Status
+**For a leveraged account**, the number that matters is the maintenance ratio, not the initial one, and the distance between them is the entire margin of safety. Opening at the initial limit means the first adverse tick is also the liquidation.
 
-If a liquidation leaves a user with an outstanding liability and no further assets, the account becomes bankrupt and is resolved via `resolve_perp_bankruptcy` / `resolve_spot_bankruptcy` (or `resolve_perp_pnl_deficit` for a market-wide PnL deficit short of full bankruptcy). See [Insurance Fund](/protocol/insurance-fund) for the backstop waterfall itself.
+**A liquidated account usually keeps part of the position.** The engine closes what it needs to reach the buffered requirement and stops, and open orders are cancelled before any position moves.
 
-## Being a Liquidator
-
-Read [Liquidation Engine](/protocol/how-it-works/liquidation-engine#liquidators) if you want to learn more about being a liquidator on the platform. Liquidators earn a fee for their services.
+**For a liquidator**, the throttle duration and initial percentage come from program state rather than from an assumption, and the liquidator fee only begins aging 10 minutes after entry.

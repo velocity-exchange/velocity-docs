@@ -1,25 +1,29 @@
-# Precision and Types
+---
+title: "Precision and Types"
+---
 
-The Velocity SDK uses integer big numbers (BN) for most values. Always convert using the SDK's precision constants and helpers.
+Nothing in the SDK is a JavaScript number where money is involved. Prices, sizes, and balances are all `BN` integers scaled by a fixed power of 10, because a float cannot represent them exactly and the program will not accept one. Convert with the constants and helpers on this page rather than multiplying by hand.
 
-## Precision Constants
+## Precision constants
 
-Each constant is a `BN` representing a power of 10. Divide a raw value by its precision constant to get the human-readable number.
+Each constant is a `BN` holding a power of 10. Divide a raw value by its constant to get the human-readable number; multiply to go the other way.
 
-| Constant | Value | Used For |
+| Constant | Value | Used for |
 |---|---|---|
-| `PRICE_PRECISION` | 1e6 | Oracle prices, order prices |
-| `BASE_PRECISION` | 1e9 | Perp position sizes |
-| `QUOTE_PRECISION` | 1e6 | USD amounts, collateral |
+| `PRICE_PRECISION` | 1e6 | Oracle prices, order prices, oracle price offsets |
+| `BASE_PRECISION` | 1e9 | Perp position and order base sizes |
+| `QUOTE_PRECISION` | 1e6 | USD amounts: collateral, PnL, fees |
 
-## Converting Between Raw and Human-Readable Values
+Spot token amounts are the exception: they carry the mint's own decimals rather than a protocol-wide constant, which is why `convertToSpotPrecision` takes a market index. Do not assume 1e6 for a spot balance.
 
-### BN → Human Number
+## Converting between raw and human-readable values
+
+### BN to human number
 
 <SDKDoc>
   <TypeScript name="convertToNumber" type="function">
 ```js
-import { BN, PRICE_PRECISION, BASE_PRECISION, QUOTE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
+import { BASE_PRECISION, BN, PRICE_PRECISION, QUOTE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 // Oracle price: raw 150_500_000 → 150.5 USD
 const rawPrice = new BN(150_500_000);
@@ -39,12 +43,12 @@ console.log(usd); // 10
   </TypeScript>
 </SDKDoc>
 
-### Human Number → BN
+### Human number to BN
 
 <SDKDoc>
   <TypeScript name="Human Number to BN" type="example">
 ```js
-import { BN, BASE_PRECISION, PRICE_PRECISION } from "@velocity-exchange/sdk";
+import { BASE_PRECISION, BN, PRICE_PRECISION } from "@velocity-exchange/sdk";
 
 // 1 SOL in base precision
 const oneSol = new BN(1).mul(BASE_PRECISION); // BN(1_000_000_000)
@@ -52,17 +56,18 @@ const oneSol = new BN(1).mul(BASE_PRECISION); // BN(1_000_000_000)
 // $21.23 in price precision
 const price = new BN(21_230_000); // 21.23 * 1e6
 
-// Or use VelocityClient convenience helpers (available after setup):
-const size = velocityClient.convertToPerpPrecision(1);     // 1 base unit as BN
-const px = velocityClient.convertToPricePrecision(21.23);   // price as BN
-const spot = velocityClient.convertToSpotPrecision(0, 100); // 100 quote-asset units as BN
+// Or use the VelocityClient helpers, available once the client exists.
+// Prefer these: they are what the rest of these docs use.
+const size = velocityClient.convertToPerpPrecision(1);      // 1 base unit, BN at 1e9
+const px = velocityClient.convertToPricePrecision(21.23);   // price, BN at 1e6
+const spot = velocityClient.convertToSpotPrecision(0, 100); // 100 units at market 0's decimals
 ```
   </TypeScript>
 </SDKDoc>
 
 ## BigNum: a value that carries its own precision
 
-`BigNum` wraps a `BN` together with the number of decimal places that `BN` is scaled by, so a value and its precision travel as one object. Use it when you would otherwise hand-roll conversion and formatting: it prints, parses, and does arithmetic without you tracking the exponent by hand.
+`BigNum` wraps a `BN` together with the number of decimal places that `BN` is scaled by, so a value and its precision travel as one object. Use it in place of hand-rolled conversion and formatting: it prints, parses, and does arithmetic while carrying the exponent itself.
 
 The second constructor argument is the **exponent**, not the precision constant. Pass `PRICE_PRECISION_EXP` (6), `BASE_PRECISION_EXP` (9), `QUOTE_PRECISION_EXP` (6), and so on, not `PRICE_PRECISION` (1e6).
 
@@ -101,17 +106,17 @@ Useful methods, grouped by what they do:
 | Print | `print`, `printShort`, `prettyPrint`, `toFixed`, `toPrecision`, `toRounded`, `toNotional`, `toMillified`, `toPercentage` |
 | Escape hatches | `toString` (raw BN string), `toNum` (JS number), `toJSON` |
 
-Three behaviors worth knowing before you rely on it:
+Three behaviors worth knowing before relying on it:
 
 - `add` and `sub` assert that both operands have the same exponent. Call `shiftTo` first if they do not.
-- `mul` returns a value whose exponent is the **sum** of the two exponents. `scalarMul` shifts the result back down so it stays in the original precision space, which is usually what you want when multiplying a price by a ratio.
+- `mul` returns a value whose exponent is the **sum** of the two exponents. `scalarMul` shifts the result back down so it stays in the original precision space, which is usually the right choice when multiplying a price by a ratio.
 - `toNum` goes through `parseFloat`, so it loses accuracy on very large values. Keep money math in `BigNum` or `BN` and convert only for display.
 
 `BigNum.setLocale(locale)` sets the decimal delimiter and thousands separator used by every printing method, globally for the class.
 
-## Slots Versus Wall Clock
+## Slots versus wall clock
 
-Solana's slot time is moving from 400ms down to 200ms through a feature-gate schedule (400, 350, 300, 250, 200). Because of that, a slot count is **not** a fixed amount of time. The protocol stores durations in milliseconds and converts them to slots using the live slot length, and `math/time.ts` gives you the same conversions off-chain.
+Solana's slot time is moving from 400ms down to 200ms through a feature-gate schedule (400, 350, 300, 250, 200). Because of that, a slot count is **not** a fixed amount of time. The protocol stores durations in milliseconds and converts them to slots using the live slot length, and `math/time.ts` provides the same conversions offchain.
 
 The live slot length comes from the state account. Three fields drive it:
 
@@ -124,7 +129,7 @@ The live slot length comes from the state account. Three fields drive it:
 Read it with `activeSlotDurationFromState(state, currentSlot)`, which applies the staged switch once `currentSlot` reaches the effective slot. `slotDurationFromState(raw)` only resolves the `0` sentinel on the base field, so it keeps returning the pre-switch value across a gate flip.
 
 <SDKDoc>
-  <TypeScript name="activeSlotDurationFromState" type="function">
+  <TypeScript name="activeSlotDurationFromState" type="example">
 ```js
 import {
   BN,
@@ -176,16 +181,16 @@ Two more things to keep straight:
 - `Millis` and `SlotDurationMs` are branded types. A duration in milliseconds cannot be compared against a slot count without converting through the live slot length, and the type system enforces that. Build durations with `millis(ms)` or `millisFromSecs(secs)`.
 - `STORED_UNIT_MS` (400) is a **storage codec** for older admin-set fields that were encoded in units of the historical 400ms slot. Decode those with `millisFromStoredUnits`. Do not use it as a general slots-to-seconds conversion factor.
 
-## Token Math Helpers
+## Token math helpers
 
-Spot balances are stored as interest-bearing scaled values. These helpers convert them to actual token amounts.
+A spot balance is not stored as a token amount. It is stored as a scaled value that grows against the market's cumulative interest index, so converting it back to tokens takes the market account as well as the balance.
 
 `getTokenAmount` converts a raw scaled spot balance into a token amount, accounting for accumulated interest since the last update. Pass the user's `scaledBalance`, the spot market account (which contains the cumulative interest index), and the balance type (deposit or borrow).
 
 <SDKDoc>
   <TypeScript name="getTokenAmount" type="function">
 ```js
-import { getTokenAmount, SpotBalanceType, convertToNumber } from "@velocity-exchange/sdk";
+import { SpotBalanceType, convertToNumber, getTokenAmount } from "@velocity-exchange/sdk";
 
 const spotMarket = velocityClient.getSpotMarketAccount(0); // e.g. dUSDT on devnet, USDT on mainnet
 const user = velocityClient.getUser();
@@ -201,12 +206,12 @@ console.log("Token amount:", tokenAmount.toString());
   </TypeScript>
 </SDKDoc>
 
-`getSignedTokenAmount` wraps `getTokenAmount` to return a signed value: positive for deposits, negative for borrows. Use this when you need to distinguish between the two in a single number.
+`getSignedTokenAmount` wraps `getTokenAmount` to return a signed value: positive for deposits, negative for borrows. Use this to distinguish between the two in a single number.
 
 <SDKDoc>
   <TypeScript name="getSignedTokenAmount" type="function">
 ```js
-import { getTokenAmount, getSignedTokenAmount } from "@velocity-exchange/sdk";
+import { getSignedTokenAmount, getTokenAmount } from "@velocity-exchange/sdk";
 
 const spotMarket = velocityClient.getSpotMarketAccount(0);
 const spotPosition = velocityClient.getUser().getUserAccount().spotPositions[0];

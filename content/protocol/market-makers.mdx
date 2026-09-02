@@ -1,0 +1,56 @@
+---
+title: "Market makers"
+description: "The two ways to quote on Velocity, what each one costs and earns, and where to go next."
+---
+
+Every taker order on Velocity is a Dutch auction whose price starts favorable to the taker and walks toward their limit. With nobody competing for it, the only counterparty is the AMM, whose spread is wide enough to survive being the sole liquidity in the market. A maker willing to price that flow tighter takes the fill earlier and the taker pays less. That is what the rebate is paying for.
+
+The mechanics of matching live on [How fills work](/protocol/trading/how-fills-work) and the fee schedule on [Trading fees](/protocol/trading/trading-fees).
+
+<Callout type="info">
+This applies to **perpetual** markets. Spot markets exist on Velocity for collateral and borrow/lend, but spot orderbook trading, and therefore spot maker quoting, is not enabled.
+</Callout>
+
+## The two routes
+
+**Just-in-Time liquidity** means reacting to individual taker auctions as they open. A maker watches for new taker orders and, when one is worth filling, submits a single transaction that places a post-only immediate-or-cancel order, fills the taker with it, and cancels the rest. Because the placement and the fill are one transaction, a JIT order never rests on the orderbook. Capital is committed only at the moment of the fill.
+
+**Resting post-only orders** mean quoting the decentralized orderbook (DLOB) and letting fillers come to the quote. A limit order carrying the post-only flag, priced either as an absolute number or as an offset from the oracle, sits until a taker crosses it. An oracle-offset order can track price for hours without another transaction.
+
+The trade between them is latency against attention. JIT sees flow that never reaches the book, but it needs fast infrastructure and a partially filled JIT order cannot be pulled. Resting orders need almost none, but they are visible and can be picked off in a fast move.
+
+## The JIT window is wall-clock time, not slots
+
+The window for responding to a taker's auction is that order's auction duration, which is wall-clock time rather than a slot count. As Solana's slot time falls, what changes is how many slots fit in the window, not how long it is.
+
+Wide auctions come with long windows and narrow ones do not: per 1% of auction price spread, a tier A or B market grants 40 seconds and every tier below grants 24 seconds, with an exchange-wide minimum of 4 seconds. See [Auctions](/protocol/trading/auction-parameters).
+
+## What each route costs and earns
+
+Both routes earn the same thing. **The maker rebate is 0.25 bps of the fill's notional, flat at every volume tier**, paid out of the taker's fee to whoever was the maker on the fill. Volume tiers move the taker fee and nothing else, so a maker's revenue per unit of notional does not improve with size. The only thing that scales the rebate is the market's own fee adjustment, which scales it in both directions. See [Trading fees](/protocol/trading/trading-fees).
+
+What decides whether the rebate is paid is the post-only flag, not the maker's intent. A resting order without that flag can still be matched as the taker, in which case it pays the taker fee and earns nothing. That is the most common way a quoting strategy loses its rebate. JIT orders cannot make this mistake: the JIT path accepts only post-only orders.
+
+The other costs are operational. Both routes pay Solana transaction fees and, in practice, priority fees, which fall entirely on the maker. Resting orders occupy order slots on the subaccount, of which there are 32, so one subaccount can hold at most 32 distinct quotes.
+
+<Callout type="info">
+Whether the AMM competes with JIT makers is governed by the market's just-in-time intensity, an admin-set per-market dial. At zero the match step is the orderbook maker alone; above zero the AMM is added as a second quoter beside that maker. Read the live market parameters for the value.
+</Callout>
+
+### A worked example
+
+A desk that fills \$5,000,000 of notional as maker over a day earns \$125 in rebates at 0.25 bps, before inventory P&L and transaction costs. The number to model is the spread captured net of the moves the quote is picked off in, with the rebate on top.
+
+## Quoting from the app
+
+A post-only limit order placed in the Velocity app is a maker order: it sits in the orderbook until a taker at that price arrives, rather than executing against the AMM or going through a JIT auction. The flag is a toggle on the order form.
+
+![The 'POST' flag is toggled on here.](/assets/S3njjazK500hoUw5o2v6z_image.png)
+
+That is the whole of the manual route, and it is enough to earn the rebate.
+
+## Where the developer material lives
+
+Everything a maker needs to build against is in [the developer market-maker section](/developers/market-makers): the quickstart for two-sided oracle-offset quoting, the DLOB and JIT strategy pages, signed-message order delivery, indicative quotes, and the production concerns of running a bot.
+
+Velocity also runs reference bots: a floating maker bot that quotes bids and asks around the oracle price and updates them as the oracle moves, and a JIT maker bot that participates in auctions. Velocity runs its own version of the floating maker with additional risk parameters. **These bots are not open source today.** They live in a monorepo that is not public, and their source will be published alongside the rest of it; the [JIT maker bot tutorial](/developers/trading-automation/keeper-bots/jit-maker-bot) describes the strategy in the meantime.

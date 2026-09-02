@@ -1,13 +1,70 @@
-# What is Borrow & Lend?
+---
+title: "Borrow and lend"
+description: "Every deposit on Velocity is lendable, every withdrawal past zero is a borrow, and one utilization number sets the price of both."
+---
 
-Velocity Protocol is also a decentralised money markets protocol that supports the borrowing and lending of assets.  
+Velocity is a perpetual futures exchange and a money market running on the same balances. A deposit is collateral for the account's positions and lendable inventory at the same time, so it earns interest while it is backing a trade.
 
-As a decentralised money markets protocol, you can:
+## Why a deposit does not just sit there
 
--   deposit assets into Velocity Protocol and earn yield; or
+Deposits are lent out, and that is where the yield comes from. It also means the vault does not hold every token it owes at once, and that the price of borrowing has to move with how much of it is still free. The number that governs all of that is **utilization**, the fraction of a spot market's deposits that are out on loan:
 
--   borrow assets deposited by other Lenders at a variable interest rate.
+```
+utilization = total borrows / total deposits
+```
 
-Lenders provide liquidity to the market to earn yield on their assets, while borrowers are able to borrow from available liquidity pools in an over-collateralised fashion. Any interest earned from lending is credited immediately and automatically compounds. You can view current lend and borrow interest rates in the Velocity app at [https://velocity.exchange/earn](https://velocity.exchange/earn).
+Utilization is computed per spot market, not per account. It sets the borrow rate, sets the lending rate through the borrow rate, and is what the market's withdrawal guard rails watch. Everything below is downstream of it.
 
-Withdrawals and new borrows are capped by market-level liquidity guard rails, on top of (not instead of) your account's own margin requirements. See [Withdrawal & Borrow Limits](/protocol/borrow-lend/withdrawal-limits) for details.
+## There is no borrow button
+
+There is depositing and there is withdrawing, and a borrow is what a withdrawal becomes once it passes the account's balance in that market. Borrowing \$5,000 of USDT against SOL collateral means withdrawing \$5,000 of USDT from an account whose USDT balance is zero. That withdrawal has to clear the account's initial margin requirement and the market's liquidity limits, and only then does the position exist.
+
+An asset being deposited cannot also be borrowed: the withdrawal reduces the deposit first and only becomes a borrow once that balance reaches zero.
+
+<Callout type="info">
+Withdrawing past zero is checked more strictly than withdrawing a deposit, because it has to clear the market's borrow ceiling as well as its deposit floor. See [Withdrawal and borrow limits](/protocol/borrow-lend/withdrawal-limits).
+</Callout>
+
+## Following one dollar
+
+The parameters below are illustrative; every spot market sets its own onchain, and the live values are on the market page at [velocity.exchange/earn](https://velocity.exchange/earn).
+
+Take a USDT market with an optimal utilization of 80%, an optimal borrow rate of 10% annualized there, and a maximum of 50% annualized at full utilization. It holds \$10,000,000 of deposits against \$8,000,000 of borrows, so utilization is 80% and the borrow rate is 10% annualized.
+
+**A \$10,000 deposit arrives and borrowers take another \$500,000.** Utilization rises to 84.92%, past the optimal point, and the borrow rate is now 11.97% annualized: utilization rose five points and the rate rose two, because above the kink the curve is steeper. See [Interest rates](/protocol/borrow-lend/interest-rates).
+
+**The rate reaches lenders scaled by utilization.** Borrowers pay on \$8,500,000 while lenders are credited on \$10,010,000, so the deposit side earns 11.97% times 0.8492, or 10.16% annualized before any carve-out. The idle 15% of the vault earns nothing, because nobody is paying for it.
+
+**Two carve-outs come out of that gain.** With an illustrative insurance fund factor of 10% and protocol fee factor of 5%, lenders keep 85% of the 10.16%, which is 8.64% annualized. Held for a year, that \$10,000 earns about \$864, but the rate moves with every deposit, borrow and repayment in the market.
+
+Size dilutes its own yield: a \$5,000,000 deposit into the same market drops utilization to 56.6% and the net lending rate to 3.40% annualized. A desk has to price the utilization it is about to destroy, not the utilization it can see.
+
+## Where the interest goes
+
+Each accrual splits the deposit-side gain three ways before any of it reaches a balance: lenders first, then the remainder divided between the Insurance Fund and the protocol.
+
+<BorrowApySankey />
+
+The insurance fund factor stages through the spot market's revenue pool on its way to the [Insurance Fund](/protocol/insurance-fund) vault; the protocol factor lands in the market's own fee pool. Both are admin-set and their sum stays below 100%, so a lender share always survives.
+
+<Callout type="important">
+The carve-outs come out of the deposit-side gain, not out of the borrower's rate. A borrower pays the market's borrow rate whether the factors are zero or at their maximum. What the factors change is how much of that payment reaches lenders.
+</Callout>
+
+## How interest actually lands
+
+There is no interest ledger, no payment event and nothing to claim. Each spot market carries a deposit index and a borrow index, and a balance is stored scaled against the relevant one, so interest compounds: a balance is a share of a growing index, not a fixed token count. Every action that moves balances accrues first, so no interval is skipped. At zero utilization nothing accrues on either side, because there are no borrows paying anything.
+
+## What lending is exposed to
+
+Lending is not risk free. If a borrower's collateral falls faster than liquidation can close the position, the shortfall goes to the Insurance Fund first, and only what the fund cannot cover is socialized across that market's remaining depositors. See [Insurance Fund](/protocol/insurance-fund) and [Liquidation and bankruptcy](/protocol/risk-and-safety/liquidation-and-bankruptcy).
+
+The second exposure is liquidity rather than credit. Deposited tokens are out on loan, so a market cannot always return every deposit on demand, and a rolling limit throttles how far its deposit base can drain in a window. That limit is market-wide, so a withdrawal can be refused because of everyone else's activity.
+
+## What this means in practice
+
+**For a depositor.** The yield is the borrow rate times utilization, less the two carve-outs, and it changes every time anyone in the market deposits, borrows or repays. A large deposit moves utilization itself, so the posted rate is not the rate it will earn.
+
+**For a borrower.** There is no loan term and no repayment deadline. Interest accrues into the debt continuously, in the borrowed asset, and repayment is a deposit of that asset back. What forces the timing is account health, not a maturity date. See [Account health](/protocol/trading/margin/account-health).
+
+**For collateral backing a perpetual position.** It is still lent out and still earning while the position is open. See [Collateral and weights](/protocol/trading/margin).

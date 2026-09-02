@@ -1,0 +1,13 @@
+{
+  "title": "Risk & Safety",
+  "pages": [
+    "risks",
+    "liquidation-and-bankruptcy",
+    "guard-rails",
+    "contract-tiers",
+    "admin-keys",
+    "delisting-process",
+    "audits",
+    "bug-bounty"
+  ]
+}

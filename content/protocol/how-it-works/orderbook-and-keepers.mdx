@@ -1,0 +1,80 @@
+---
+title: "Orderbook and keepers"
+description: "Orders rest in onchain account slots, the book that sorts them is built offchain by anyone who wants to, and a permissionless instruction turns a match into a fill."
+---
+
+Velocity has no matching engine. There is no server that receives an order, holds it in a queue, and pairs it with somebody else's. An order is written into the placing account's own onchain state, and a separate set of participants reads those accounts, works out which orders can trade, and submits the transaction that makes them trade.
+
+## Why the book is not on chain
+
+A fully onchain book means one account per market holding a sorted list of every resting order. Every insertion and cancellation is then a write to one account that every participant contends for, and the sort is compute the program pays for on every touch. Under load, which is exactly when a book matters, that is a single hot account and a compute budget spent on bookkeeping rather than on the fill.
+
+So the two halves are separated. **Orders are onchain state**, in the placing account's own user account, which has 32 order slots, so placing and cancelling touch only that account. **Sorting is offchain work** done by anyone who wants the fee for doing it.
+
+## The decentralized orderbook
+
+The **decentralized orderbook** (DLOB) is the sorted view of those onchain orders, assembled offchain. It is not an account and no copy is authoritative. Each participant that wants to fill orders subscribes to the accounts, builds its own copy sorted by price with ties broken by age, and works from that.
+
+<Callout type="important">
+The DLOB is offchain. The orders in it are onchain, and the fills that result are onchain, but the book itself is a private data structure inside each operator's process.
+</Callout>
+
+No two copies are identical at any instant, and the protocol does not require them to be. What it requires is that the fill an operator proposes is valid when the program checks it: prices are re-derived, the cross and both accounts' margin are re-checked, and anything that does not hold is rejected. A stale or malicious local book costs its owner a failed transaction and nothing else.
+
+## Keeper, filler, liquidator
+
+These three words are not synonyms.
+
+- A **keeper** is an operator: the process someone runs to watch accounts, build a book, and submit transactions. This is a job description, not a permission, and there is no keeper registry, whitelist, or role on chain.
+- A **filler** is a role in a single fill. Whoever submits the fill is the filler on it and is paid the filler reward.
+- A **liquidator** is a role in a single liquidation. It takes over part of the liquidated position rather than earning a fee out of somebody's trade.
+
+Every liquidator is a keeper. Not every keeper is a liquidator.
+
+## What keepers actually do
+
+Filling is the visible job, but a permissionless program needs someone to call every instruction that nobody's own trade will call.
+
+| Job | Who may call it |
+| --- | --- |
+| Fill a perpetual order | Anyone |
+| Fire a trigger order whose condition is met | Anyone |
+| Liquidate an account below maintenance margin | Anyone, and the liquidator takes on the position |
+| Settle a user's realized P&L | Anyone |
+| Advance a market's funding rate | Anyone |
+| Refresh a market's AMM against the oracle | Anyone |
+| Advance a spot market's interest indexes | Anyone |
+| Move a spot market's revenue toward the Insurance Fund | Anyone |
+| Advance a market's mark TWAP from the book | Requires an insurance fund stake, see below |
+
+What keepers are paid is on [Keeper incentives](/protocol/how-it-works/keepers/keeper-incentives). In short, the filler reward is the lesser of a share of the taker's fee and a reward that grows with the order's age, which makes a keeper prefer the oldest fillable order rather than the largest.
+
+## The mark TWAP crank has a capital requirement
+
+The mark TWAP crank is how a market's mark TWAP learns about the book. The caller passes maker accounts, the program estimates a best bid and best ask from them, discards any quote diverging from the oracle by more than 15% or not rested for at least 9.6 seconds, and folds the result into the market's mark TWAP.
+
+That input is caller-supplied, and the TWAP it moves is read by other users' orders when their auction price bands are derived. So the caller has to have something at stake: at least **\$1,000 of insurance fund stake**, and the crank must not be paused for that specific operator. It also stops early while the market's funding is paused, and an update that leaves both TWAPs unchanged is rejected unless at least 60 seconds have passed.
+
+Nothing else on the list carries a stake requirement.
+
+## What a keeper can and cannot promise
+
+Execution is best effort. No operator is obliged to fill an order, no queue position is held, and no particular keeper is guaranteed to be running. What exists instead is an incentive structure: pay more for filling the older order, pay more for improving the taker's price against the oracle, and cap the reward so filling one enormous order is not more profitable than filling several ordinary ones.
+
+Three rules govern which fills are possible, and the program enforces them rather than any operator's book:
+
+- **A post-only order can never be the taker**, so two post-only orders cannot be crossed against each other.
+- **A resting maker order is filled at the maker's price**, and a maker order that fills against the AMM is still the maker and still receives the maker rebate.
+- **The AMM is inserted ahead of any maker it out-prices**, so a keeper cannot route around a better AMM quote by omitting it. See [How fills work](/protocol/trading/how-fills-work).
+
+## Perpetual markets only
+
+Keeper fills and the DLOB apply to perpetual markets. Velocity has no spot orderbook: spot orders are rejected outright. Spot markets exist for collateral and for [borrow and lend](/protocol/borrow-lend), and the only spot execution path is the swap instruction.
+
+## What this means in practice
+
+**For a trader placing orders.** Placing and cancelling are cheap and do not contend with anyone else. An order fills when some keeper decides filling it is worth the transaction, so a resting order sitting unfilled while the price is through it usually means no keeper found it profitable, not that anything is broken.
+
+**For a keeper operator.** Reference implementations for filler and trigger keepers are in [Trading automation](/developers/trading-automation), and the reward mechanics are on [Keeper incentives](/protocol/how-it-works/keepers/keeper-incentives). Only the mark TWAP crank needs the \$1,000 insurance fund stake; every other job needs an account and a fee payer.
+
+**For assessing the design.** No operator is trusted, and the one place caller-supplied data reaches durable state is the mark TWAP crank, which is why that one has a stake behind it.

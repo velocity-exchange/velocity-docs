@@ -1,62 +1,57 @@
-# Tutorial: Liquidation Bot
+---
+title: "Tutorial: Liquidation Bot"
+---
 
-## Introduction
+A liquidation on Velocity is not a forced sale into the book. It is a **liability transfer**: the liquidator takes the failing account's position onto its own books and is paid for doing so with the liquidatee's collateral at a discount. That single fact is what makes this bot different from the matching and trigger bots. Those two are paid a flat fee for pressing a button. This one is paid in risk it has to carry and then unwind.
 
-Liquidation Bots improve the overall health of the protocol by deleveraging users approaching bankruptcy.
+Two consequences follow, and both shape how the bot is written. A liquidator needs collateral, because the inherited position has to fit inside the liquidator's own initial margin requirement. It also needs an exit, because the discount is only profit once the position is closed at a price near the one it was inherited at. A liquidator without a derisk path is a directional trader that did not choose its direction.
 
-The liquidation in the protocol is a liability transfer mechanism from the selected liquidatee (user in liquidation territory) to the liquidator (the user running the Liquidation Bot).
+The mechanism, the discount, the fee split, and the bankruptcy path that follows a failed liquidation are in [Liquidations](/protocol/trading/liquidations). This page covers running the reference bot.
 
-Liquidators inherit the liabilities they liquidate and receive an asset at a discount for doing so. In order to participate, liquidators must have even collateral in their account in order to satisfy the initial margin requirements for the transferred positions.
+## The instruction set
 
-For more information on our liquidation system, please read [Liquidations](/protocol/trading/liquidations).
+Velocity does not have one liquidation instruction. Which one applies depends on what the failing account holds:
 
-## Getting Started
+| Instruction | When it applies |
+| --- | --- |
+| `liquidate_perp` | The account is short of maintenance margin and holds a perp position. The liquidator inherits the position. |
+| `liquidate_perp_with_fill` | Same case, but routed through a fill rather than a transfer to the liquidator. Blocked when the exchange's `FillPaused` bit is set. |
+| `liquidate_spot` | A spot borrow against a spot deposit. The liquidator takes on the borrow and receives the deposit. |
+| `liquidate_spot_with_swap_begin` and `_end` | A spot liquidation that routes through an external swap inside one transaction, so the liquidator does not have to hold the asset. |
+| `liquidate_borrow_for_perp_pnl` | The account has a spot borrow and positive unsettled perp P&L. The liquidator takes on the borrow and receives the P&L. |
+| `liquidate_perp_pnl_for_deposit` | The account has negative unsettled perp P&L and a spot deposit. The liquidator takes on the negative P&L and receives the deposit. |
 
-<Steps>
-### Understand liquidation mechanics
+All of them are permissionless: anyone who can fund the resulting position can call them. All of them are also gated on the exchange's `LiqPaused` bit being clear, and `liquidate_perp_with_fill` additionally on `FillPaused`. See [Guard rails](/protocol/risk-and-safety/guard-rails#the-four-pause-layers) for the pause matrix.
 
-Liquidations transfer liability from the liquidated account to the liquidator. The liquidator receives the liquidatee's position at a discount in exchange for taking on the risk. Because you inherit real positions, you need sufficient collateral to cover initial margin requirements.
+`liquidate_perp_with_fill` runs the fill in liquidation mode, and that suppresses the post-fill margin check on the liquidatee entirely. An ordinary fill re-checks the taker after the fill, against the maintenance requirement when the order reduces their position and the fill-weight requirement when it does not. A liquidation fill runs neither, so it does not revert because the account it is unwinding is still short of margin. Do not size the fill against a margin check that will not run.
 
-### Choose a reference implementation
+## Running the reference bot
 
-The canonical implementations live in [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the `velocity-v1` monorepo:
+The implementations are `src/bots/liquidator.ts` and `src/bots/liquidatorDerisk.ts` in `apps/keeper-bots-v2`, inside the `velocity-v1` monorepo, which is not public yet. Between them they handle scanning accounts, checking margin, choosing an instruction, and unwinding what the liquidation left behind.
 
-- [`src/bots/liquidator.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/liquidator.ts)
-- [`src/bots/liquidatorDerisk.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/liquidatorDerisk.ts) (derisk helper)
+Follow the base setup in [Trading Automation](/developers/trading-automation#running-a-reference-bot) first. On top of it, this bot needs the quote asset deposited as collateral before it starts, not merely held in the wallet. `--force-deposit` moves it.
 
-The full source is the best reference for implementation details: it handles user scanning, margin checks, and derisk logic.
+Start it with `bun run dev:liquidator`, or by adding `liquidator` to `enabledBots` in the config file.
 
-### Prepare the environment
+## Configuration that matters
 
-Follow the base keeper setup first:
+The `botConfigs.liquidator` block is where the risk decisions live. The ones worth setting deliberately:
 
-- [Keeper Bots](/developers/trading-automation/keeper-bots)
+**`perpSubAccountConfig` and `spotSubAccountConfig`** map each market index to the subaccount that is willing to inherit risk in it. This is how an unwanted market's position stays off the subaccount holding working capital. Leaving them null watches every market on `global.subaccounts[0]`.
 
-Liquidator bots require collateral. Make sure the wallet is funded and has the spot market's quote asset deposited before starting (USDT on mainnet-beta; dUSDT on devnet).
+**`maxPositionTakeoverPctOfCollateral`** caps how much of the bot's collateral a single liquidation may commit, as a fraction (`0.5` is 50%). It is the difference between missing an opportunity and being unable to take the next one.
 
-### Run and tune
+**`maxSlippageBps`** sets the worst price the derisk leg will accept, and is used both to compute the auction end price on the unwind order and as the slippage limit on swaps. `deriskAuctionDurationMs` sets how long that unwind auction runs, in wall-clock milliseconds.
 
-Run the liquidator bot via your `apps/keeper-bots-v2` config and monitor:
+**`minDepositToLiq`**, per spot market in lamports, skips positions too small to be worth the transaction fee. **`spotDustValueThreshold`** does the matching job on the other side, sweeping inherited spot balances below a dollar value back to the authority wallet instead of leaving them scattered across subaccounts.
 
-- RPC latency / timeouts
-- Competing liquidators
-- Position risk and exposure
+**`disableAutoDerisking`** turns off the unwind entirely, leaving every inherited position open. Set it only if something else in the stack is managing that exposure.
 
-### Iterate and harden
+## Where to spend effort
 
-Common improvements include:
+The reference bot rechecks accounts on a polling loop and evaluates them in no particular order. Two changes close most of the gap between it and a liquidator that wins races:
 
-- Filtering markets or subaccounts
-- Using derisk strategies
-- Adding guardrails for exposure and max size
-</Steps>
+- **Sort by distance to liquidation.** Keep accounts in a structure ordered by the price at which each becomes liquidatable, so the next candidate is the head of the list rather than the result of a full scan.
+- **Wake on price, not on a timer.** Watch the oracle and run the margin check when the price moves through a level that matters, instead of every interval regardless.
 
-## Advanced
-
-If you're interested to make the liquidator bot run better, you can make edits to the above to improve its efficiency. In particular, you can:
-
-1.  Sort users in an efficient data structure based on their liquidation price;
-
-2.  Monitor the market's price to determine when to run liquidation checks / RPC checks.
-
-We encourage the community to build out stronger liquidations engines and bots to secure our Insurance Fund and user collateral. If interested to chat or have any questions, please reach out to us on [Discord](https://discord.com/invite/95kByNnDy5)!
+Come talk about better implementations in [#research-and-dev-chat](https://discord.com/invite/95kByNnDy5) on Discord. Stronger liquidation engines protect the insurance fund and every depositor behind it.

@@ -1,4 +1,6 @@
-# Deposit and Withdraw
+---
+title: "Deposit and Withdraw"
+---
 
 Withdrawing from a vault is a two-step flow with a mandatory wait in between. Depositing is one step. This page covers both, the states in between, and the errors each step can return.
 
@@ -19,7 +21,7 @@ await vaultClient.deposit(
 );
 ```
 
-Passing `initVaultDepositor` prepends the account-creation instruction, so a first-time deposit is a single transaction. If you need the transaction rather than a signature, `createDepositTx` returns a `VersionedTransaction` and `prepDepositTx` returns the resolved accounts and pre/post instructions to compose yourself.
+Passing `initVaultDepositor` prepends the account-creation instruction, so a first-time deposit is a single transaction. For callers that need the transaction rather than a signature, `createDepositTx` returns a `VersionedTransaction` and `prepDepositTx` returns the resolved accounts and pre/post instructions to compose manually.
 
 The program checks, in this order:
 
@@ -79,10 +81,10 @@ await vaultClient.withdraw(vaultDepositor);
 
 Calling earlier fails with `CannotWithdrawBeforeRedeemPeriodEnd`. Calling with no pending request fails with `InvalidVaultWithdraw`.
 
-The payout is `min(current value of the requested shares, the frozen request value)`. That asymmetry is the point of the freeze: losses during the redeem period reach you, gains during it do not. The requested shares are burned and the depositor's share balance drops by exactly the share count recorded at request time.
+The payout is `min(current value of the requested shares, the frozen request value)`. That asymmetry is the point of the freeze: losses during the redeem period reach the depositor, gains during it do not. The requested shares are burned and the depositor's share balance drops by exactly the share count recorded at request time.
 
 <Callout type="info">
-`withdraw` is CU-heavy because it prices every market that contributes to vault equity. The SDK defaults its compute-unit limit to 850,000. Override it through `txParams` if you are composing a larger transaction.
+`withdraw` is CU-heavy because it prices every market that contributes to vault equity. The SDK defaults its compute-unit limit to 850,000. Override it through `txParams` when composing a larger transaction.
 </Callout>
 
 The vault's manager or delegate can push a matured withdrawal through on a depositor's behalf with `forceWithdraw(vaultDepositor)`. Any other signer is rejected. The CLI exposes this as `force-withdraw` and `force-withdraw-all`.

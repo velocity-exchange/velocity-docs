@@ -3,6 +3,14 @@
 import { useMemo } from "react";
 import { useOnChainData } from "../../hooks/useOnChainData";
 import modStyles from "../../content/protocol/getting-started/getting-started.module.css";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
 
 export function AssetWeightsTable({ poolId }: { poolId: number }) {
   const headings = [
@@ -22,29 +30,29 @@ export function AssetWeightsTable({ poolId }: { poolId: number }) {
   );
 
   return (
-    <table>
-      <thead>
-        <tr>
+    <Table className="min-w-[760px]">
+      <TableHeader>
+        <TableRow>
           {headings.map((heading) => (
-            <th key={heading}>{heading}</th>
+            <TableHead key={heading}>{heading}</TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {poolWeightData && poolWeightData.length > 0 ? (
           poolWeightData.map((row, i) => (
-            <tr key={i}>
-              <td>{row.asset}</td>
-              <td>{row.initialAssetWeight}</td>
-              <td>{row.maintenanceAssetWeight}</td>
-              <td>{row.initialLiabilityWeight}</td>
-              <td>{row.maintenanceLiabilityWeight}</td>
-              <td>{row.imfFactor}</td>
-            </tr>
+            <TableRow key={i}>
+              <TableCell>{row.asset}</TableCell>
+              <TableCell>{row.initialAssetWeight}</TableCell>
+              <TableCell>{row.maintenanceAssetWeight}</TableCell>
+              <TableCell>{row.initialLiabilityWeight}</TableCell>
+              <TableCell>{row.maintenanceLiabilityWeight}</TableCell>
+              <TableCell>{row.imfFactor}</TableCell>
+            </TableRow>
           ))
         ) : (
-          <tr>
-            <td colSpan={headings.length}>
+          <TableRow>
+            <TableCell colSpan={headings.length}>
               <div className={modStyles.loading}>
                 {isError
                   ? "Failed to load on-chain data."
@@ -52,11 +60,11 @@ export function AssetWeightsTable({ poolId }: { poolId: number }) {
                     ? "Loading..."
                     : "No data available."}
               </div>
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         )}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -70,26 +78,26 @@ export function LTVTable({ poolId }: { poolId: number }) {
   );
 
   return (
-    <table>
-      <thead>
-        <tr>
+    <Table>
+      <TableHeader>
+        <TableRow>
           {headings.map((heading) => (
-            <th key={heading}>{heading}</th>
+            <TableHead key={heading}>{heading}</TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {poolLTVData && poolLTVData.length > 0 ? (
           poolLTVData.map((row, i) => (
-            <tr key={i}>
-              <td>{row.asset}</td>
-              <td>{row.initialLTV}</td>
-              <td>{row.maxLTV}</td>
-            </tr>
+            <TableRow key={i}>
+              <TableCell>{row.asset}</TableCell>
+              <TableCell>{row.initialLTV}</TableCell>
+              <TableCell>{row.maxLTV}</TableCell>
+            </TableRow>
           ))
         ) : (
-          <tr>
-            <td colSpan={headings.length}>
+          <TableRow>
+            <TableCell colSpan={headings.length}>
               <div className={modStyles.loading}>
                 {isError
                   ? "Failed to load on-chain data."
@@ -97,10 +105,10 @@ export function LTVTable({ poolId }: { poolId: number }) {
                     ? "Loading..."
                     : "No data available."}
               </div>
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         )}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

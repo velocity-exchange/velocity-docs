@@ -1,0 +1,9 @@
+{
+  "title": "Keeper Bots",
+  "pages": [
+    "order-matching-bot",
+    "order-trigger-bot",
+    "liquidation-bot",
+    "jit-maker-bot"
+  ]
+}

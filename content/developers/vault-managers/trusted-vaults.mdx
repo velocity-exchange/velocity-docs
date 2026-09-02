@@ -1,16 +1,36 @@
-# Trusted Vaults
+---
+title: "Trusted Vaults"
+---
 
-Trusted vaults extend the base vault (see [Vault Managers](/developers/vault-managers)) with **manager borrowing** and (when enabled) margin trading. They are created like a normal vault (see [Quickstart](/developers/vault-managers/quickstart)), and an admin must then update the vault class to Trusted. Once upgraded, the manager can borrow assets from the vault and repay or mark-to-market the borrow.
+A normal vault is a box the manager can trade inside but cannot take assets out of. Deposits go into the vault's own Velocity account, the manager holds delegate authority to place orders with them, and the only paths out are the depositor withdrawal flow and the manager's own shares. That is what makes the redeem period and the share accounting meaningful: they are the whole of the manager's exit.
+
+A **Trusted** vault removes that box. The manager can move assets out of the vault to an address it controls, and the program tracks the amount as a number on the vault account rather than as a position it can see. Some strategies need this, for example running part of the book on a venue Velocity has no CPI into. It is a different security model, not a feature toggle, and both the manager and the depositors should treat it that way.
 
 <Callout type="warning" title="Approval required">
-Trusted vaults must be approved by the Velocity team before they can be used in production.
+Trusted vaults must be approved by the Velocity team before they can be used in production. Promotion is an admin instruction; a manager cannot self-promote.
 </Callout>
 
-<Callout type="warning" title="Trust and risk">
-Vault depositors in Trusted vaults place significant trust in the manager. Borrowing and margin increase the manager's ability to move or risk vault capital. Depositors should only use Trusted vaults when they accept this additional trust assumption.
+## What the class actually gates
+
+`Vault.vault_class` is a single byte: `0` for Normal, `1` for Trusted. It gates exactly three instructions, `manager_borrow`, `manager_repay`, and `manager_update_borrow`. Calling any of them on a Normal vault fails with `InvalidVaultClass`. Nothing else in the vaults program reads the class.
+
+<Callout type="info">
+Margin trading is **not** part of the Trusted class, despite often being enabled alongside it. `update_margin_trading_enabled` works on a Normal vault too, and is gated only on the vault not being in liquidation (`OngoingLiquidation`). See [Quickstart](/developers/vault-managers/quickstart) for the command.
 </Callout>
 
-**Borrow:** Move vault assets out (e.g. USDT) up to the vault's capacity. Vault equity for share accounting includes the manager's borrowed value so depositor share price reflects the full claim on the vault.
+An admin promotes a vault after it is created; there is no way to initialize one as Trusted:
+
+```bash
+bun run cli -- admin-update-vault-class \
+  --vault-address <VAULT_ADDRESS> \
+  --vault-class trusted
+```
+
+The instruction rejects a class equal to the current one with `InvalidVaultUpdate`, so re-running it is an error rather than a no-op.
+
+## Borrowing
+
+`manager_borrow` withdraws from the vault's Velocity account and forwards the tokens to a token account owned by the manager. The amount must be greater than zero (`InvalidBorrowAmount`), and the destination account is constrained to `token::authority = manager`, so it has to belong to whoever `vault.manager` is. If the manager is a multisig, pass `--manager-token-account` explicitly: see [Multisig manager](/developers/vault-managers/multisig-ops).
 
 ```bash
 bun run cli -- manager-borrow \
@@ -19,7 +39,19 @@ bun run cli -- manager-borrow \
   --borrow-amount <AMOUNT>
 ```
 
-**Repay:** Send tokens back into the vault and reduce the outstanding borrow. You can repay in the same asset or another spot market and specify the value to deduct from `manager_borrowed_value`; omit amount to repay the full borrow.
+The vaults program sets no ceiling of its own. The bound is the Velocity withdrawal underneath it: the CPI runs with `reduce_only` false, so the vault's account has to end the instruction within its own margin requirement, and if margin trading is enabled the borrow can carry the account into a spot borrow rather than stopping at its deposits. A borrow that would leave the vault under-margined fails inside the Velocity program, not the vaults program.
+
+The borrowed asset does not have to be the one the vault takes deposits in. The borrowed amount is priced into the deposit asset through both oracles at the moment of the borrow, and it is that value, not the token amount, that is recorded.
+
+## How the borrow shows up in share price
+
+Vault equity is the value of the vault's Velocity account **plus** `manager_borrowed_value`. Share price is equity divided by total shares, so a borrow does not move it: value leaves the account and an equal claim appears in its place. Depositors see a flat share price at the moment of the borrow, and a moving one afterwards only through whatever the manager reports.
+
+That is the whole of the accounting, and it is worth being precise about what it does not do. The program never verifies that `manager_borrowed_value` corresponds to anything. It cannot: the assets are outside its view.
+
+## Repaying and marking
+
+**Repay** sends tokens back into the vault and reduces the recorded claim:
 
 ```bash
 bun run cli -- manager-repay \
@@ -29,7 +61,9 @@ bun run cli -- manager-repay \
   --repay-value <VALUE_IN_DEPOSIT_ASSET>
 ```
 
-**Update borrow value:** If borrowed funds have been used elsewhere and their mark-to-deposit-asset value has changed, you can set the tracked borrow value to the current mark:
+`--repay-amount` is the token transfer and must be greater than zero (`InvalidRepayAmount`). `--repay-value` is how much to subtract from `manager_borrowed_value`, in the deposit asset. The two are independent: the program does not check that the value claimed matches the tokens sent. Omitting `--repay-value` zeroes the entire outstanding claim no matter how small the transfer was.
+
+**Update borrow** moves the recorded claim without moving any tokens, which is how a manager marks an outside position to market:
 
 ```bash
 bun run cli -- manager-update-borrow \
@@ -37,12 +71,14 @@ bun run cli -- manager-update-borrow \
   --new-borrow-value <VALUE>
 ```
 
-Update the vault's class to Trusted with the admin command:
+It sets `manager_borrowed_value` to whatever the manager passes, up or down, with no reference to anything the program can check.
 
-```bash
-bun run cli -- admin-update-vault-class \
-  --vault-address <VAULT_ADDRESS> \
-  --vault-class trusted
-```
+Both emit a `ManagerUpdateBorrowRecord` carrying the previous and new values and the vault equity on each side, so the full history of what the manager declared is onchain and auditable after the fact. Publishing it is a reasonable thing to promise depositors.
 
-Trusted vaults typically use margin trading; enable it with `manager-update-margin-trading-enabled` as described in [Quickstart](/developers/vault-managers/quickstart).
+## What a depositor is trusting
+
+<Callout type="warning" title="Trust and risk">
+In a Trusted vault the manager can withdraw depositor capital to an address of its own and then set the value of the outstanding claim to any number, including zero, with a single instruction and no proof. The redeem period and share accounting that constrain a Normal vault's manager do not constrain this path. Depositors have no onchain recourse. A Trusted vault is appropriate only where a depositor would accept an unsecured loan to the manager.
+</Callout>
+
+The mitigations are all offchain: who the manager is, whether the manager role sits behind a multisig, what they publish, and whether the declared borrow value can be reconciled against a venue anyone can check. See [Multisig manager](/developers/vault-managers/multisig-ops) for the first of those, and [Vault Managers](/developers/vault-managers) for the guardrails that do apply to every vault regardless of class.

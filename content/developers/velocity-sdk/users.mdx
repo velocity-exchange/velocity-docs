@@ -1,131 +1,79 @@
-# Users
+---
+title: "Users"
+---
 
 ## How it works
 
-A **user account** is the onchain account that holds your positions, orders, and collateral on Velocity. Each wallet can create multiple user accounts (called **subaccounts**), identified by a numeric ID (0, 1, 2, etc.). Each subaccount is its own separate account with its own independent margin calculation: collateral and positions in subaccount 0 do not back or affect subaccount 1. Cross-margin applies only *within* one subaccount, where its positions and balances are netted together.
+A user account is the onchain account that holds positions, orders, and collateral. Each wallet can create several of them, called subaccounts, identified by a numeric ID starting at 0. Every subaccount is a separate account with its own margin calculation: collateral and positions in subaccount 0 neither back nor endanger subaccount 1. Cross-margin applies only *within* one subaccount, where its positions and balances net against each other.
 
-User accounts store your perp positions (long/short), spot balances (deposits/borrows), open orders, and leverage settings. When you interact with Velocity (place orders, deposit, trade), you're modifying data in your user account. The account is a Solana PDA (Program Derived Address) owned by the Velocity program.
+The account is a Solana PDA owned by the Velocity program, and it stores perp positions, spot balances (deposits and borrows), open orders, and leverage settings. Every write, placing an order, depositing, trading, is a mutation of that account. Subaccounts share only the wallet authority and one `UserStats` account, which carries volume, fee tier, and delegate permissions for all of them.
 
-Subaccounts are useful for separating strategies, isolating risk between different trading styles, or delegating specific accounts to bots while keeping others manual. You can switch between subaccounts using the SDK, and each one maintains its own independent positions, orders, and collateral. Subaccounts share only the wallet authority and the `UserStats` account (volume, fee tier, delegate permissions).
+That isolation is what makes subaccounts worth using: separating strategies, keeping a risky book away from a conservative one, or handing a bot one subaccount while the owner trades another by hand.
 
 ## SDK Usage
 
-Most write actions in Velocity are done through `VelocityClient`. For account-level reads (positions, orders, health), you'll typically use a `User`.
+Most write actions go through `VelocityClient`. Account-level reads (positions, orders, health) go through a `User`, obtained from the client.
 
-### Initialize a User Account
+### Initialize a user account
 
-Create a new Velocity user subaccount (PDA) for your wallet and return the transaction signature + user account address.
+Creating a subaccount returns both the transaction signature and the new account's address. `getNextSubAccountId()` returns the next free ID for this client, so the caller does not have to track it.
 
 <SDKDoc>
   <TypeScript name="initializeUserAccount" type="method" owner="VelocityClient">
 ```js
-// Assumes you already constructed and subscribed `velocityClient`.
-const [txSig, userAccountPublicKey] = await velocityClient.initializeUserAccount(0, "my-account");
+// Assumes `velocityClient` is constructed and subscribed.
+const subAccountId = await velocityClient.getNextSubAccountId();
+
+const [txSig, userAccountPublicKey] = await velocityClient.initializeUserAccount(
+  subAccountId,
+  "my-account"
+);
 console.log(txSig, userAccountPublicKey.toBase58());
 ```
   </TypeScript>
 </SDKDoc>
 
-#### Get the Next Subaccount ID
+Two rules bind when a referrer is involved, and both reject rather than recording nothing.
+Passing a referrer at initialization requires that referrer's **subaccount 0**, and that
+account's authority must match the authority on its own `UserStats`, or the instruction
+fails with `InvalidReferrer`. Claiming a referrer name through `initialize_referrer_name`
+has the same subaccount 0 requirement and additionally requires `pool_id == 0`.
 
-Return the next available subaccount ID for this client instance.
+A referrer is also recorded once and never rewritten, so a user who was referred cannot be
+re-referred by deleting and recreating their accounts.
 
-<SDKDoc>
-  <TypeScript name="getNextSubAccountId" type="method" owner="VelocityClient">
-```js
-const nextId = await velocityClient.getNextSubAccountId();
-console.log(nextId);
-```
-  </TypeScript>
-</SDKDoc>
+### Get a User and subscribe
 
-### Get a User and Subscribe
-
-Import the `User` class and subscribe to account updates for a specific user instance.
+`velocityClient.getUser()` returns the `User` for the active subaccount; pass a subaccount ID to get a specific one. Call `subscribe()` on it before reading, and `fetchAccounts()` to force a refresh from RPC rather than waiting for the next subscription update.
 
 <SDKDoc>
-  <TypeScript name="User" type="class">
+  <TypeScript name="getUser" type="method" owner="VelocityClient">
 ```js
-import { User } from "@velocity-exchange/sdk";
+const user = velocityClient.getUser();      // active subaccount
+const otherUser = velocityClient.getUser(1); // subaccount 1
 
-const user = velocityClient.getUser();
 await user.subscribe();
+await user.fetchAccounts(); // force-refresh from RPC
 ```
   </TypeScript>
 </SDKDoc>
 
-#### Get active subaccount user
-
-Get the `User` object for the currently active subaccount.
-
-<SDKDoc>
-  <TypeScript name="getUser" type="method" owner="VelocityClient">
-```js
-const user = velocityClient.getUser();
-```
-  </TypeScript>
-</SDKDoc>
-
-#### Get a specific subaccount user
-
-Get the `User` object for a specific subaccount ID.
-
-<SDKDoc>
-  <TypeScript name="getUser" type="method" owner="VelocityClient">
-```js
-const user = velocityClient.getUser(1);
-```
-  </TypeScript>
-</SDKDoc>
-
-#### Read account via `User`
-
-Read raw onchain `UserAccount` data from a `User` instance.
+The raw onchain `UserAccount` is readable from either side. `user.getUserAccount()` reads it off a `User`; `velocityClient.getUserAccount()` is a shortcut for the active subaccount.
 
 <SDKDoc>
   <TypeScript name="getUserAccount" type="method" owner="User">
 ```js
 const account = velocityClient.getUser().getUserAccount();
-console.log(account);
+const sameAccount = velocityClient.getUserAccount(); // active subaccount
+
+console.log(account.orders.length, account.perpPositions.length);
 ```
   </TypeScript>
 </SDKDoc>
 
-#### Read account via `VelocityClient`
+### Derive the account address
 
-Read raw onchain `UserAccount` data directly from `VelocityClient` for the active subaccount.
-
-<SDKDoc>
-  <TypeScript name="getUserAccount" type="method" owner="VelocityClient">
-```js
-const account = velocityClient.getUserAccount();
-console.log(account);
-```
-  </TypeScript>
-</SDKDoc>
-
-#### Refresh user accounts
-
-Force-refresh subscribed user-related accounts from RPC.
-
-<SDKDoc>
-  <TypeScript name="fetchAccounts" type="method" owner="User">
-```js
-const user = velocityClient.getUser(0);
-await user.fetchAccounts();
-```
-  </TypeScript>
-</SDKDoc>
-
-### Derived Addresses (User Account)
-
-User accounts are **Program Derived Addresses (PDAs)** - deterministic addresses generated from seeds (the program ID, wallet authority, and subaccount ID). PDAs are a Solana concept that lets you calculate an account's address without making an RPC call.
-
-This is useful when you need to reference a user account address before fetching it, such as when constructing transactions or querying multiple accounts in parallel.
-
-For a deeper understanding of PDAs and program structure, see [Program Structure](/developers/concepts/program-structure).
-
-Derive the user account PDA for a given subaccount without an RPC fetch.
+User accounts are Program Derived Addresses: deterministic addresses generated from the program ID, the wallet authority, and the subaccount ID. Deriving one takes no RPC call, which matters when the address is needed before the account exists, such as when building a transaction or fanning out parallel queries. See [Program Structure](/developers/concepts/program-structure) for the seeds and the rest of the account layout.
 
 <SDKDoc>
   <TypeScript name="getUserAccountPublicKey" type="method" owner="VelocityClient">
@@ -136,11 +84,9 @@ console.log(userAccountPublicKey.toBase58());
   </TypeScript>
 </SDKDoc>
 
-### Query User State (Orders / Positions)
+### Query orders and positions
 
-#### Get token amount (deposit vs borrow)
-
-Return your token balance for a spot market as a signed value (`+` deposit, `-` borrow).
+These accessors all read the cached account, so they cost nothing and return `undefined` rather than throwing when the thing does not exist. `getTokenAmount` returns a signed value: positive for a deposit, negative for a borrow.
 
 <SDKDoc>
   <TypeScript name="getTokenAmount" type="method" owner="User">
@@ -148,7 +94,7 @@ Return your token balance for a spot market as a signed value (`+` deposit, `-` 
 import { BN } from "@velocity-exchange/sdk";
 
 const user = velocityClient.getUser();
-const tokenAmount = user.getTokenAmount(0);
+const tokenAmount = user.getTokenAmount(0); // spot market 0
 
 const isDeposit = tokenAmount.gte(new BN(0));
 const isBorrow = tokenAmount.lt(new BN(0));
@@ -157,109 +103,68 @@ console.log({ tokenAmount: tokenAmount.toString(), isDeposit, isBorrow });
   </TypeScript>
 </SDKDoc>
 
-#### Get a perp position
-
-Get your perp position record for a market index (or `undefined` if no position exists).
-
 <SDKDoc>
   <TypeScript name="getPerpPosition" type="method" owner="User">
 ```js
-const position = velocityClient.getUser().getPerpPosition(0);
+const position = velocityClient.getUser().getPerpPosition(0); // undefined if flat
 console.log(position?.baseAssetAmount.toString());
 ```
   </TypeScript>
 </SDKDoc>
 
-#### Get an order by order id
-
-Look up a specific order using its internal Velocity `orderId`.
+Orders are addressable two ways: by the program's own `orderId`, or by the `userOrderId` set at placement. `getOpenOrders()` returns everything currently resting.
 
 <SDKDoc>
   <TypeScript name="getOrder" type="method" owner="User">
 ```js
-const order = velocityClient.getUser().getOrder(1);
-console.log(order);
+const user = velocityClient.getUser();
+
+const byOrderId = user.getOrder(1);             // program-assigned orderId
+const byUserOrderId = user.getOrderByUserOrderId(1); // caller-assigned tag
+const open = user.getOpenOrders();
+
+console.log(open.length);
 ```
   </TypeScript>
 </SDKDoc>
 
-#### Get an order by user order id
+### The active subaccount
 
-Look up a specific order using your custom `userOrderId`.
+The active subaccount is the one `VelocityClient` methods operate on when no subaccount ID is named. It defaults to `0`. `velocityClient.getUser()`, `getUserAccount()`, `getSpotPosition(marketIndex)`, and `placePerpOrder(orderParams)` all resolve against it.
 
-<SDKDoc>
-  <TypeScript name="getOrderByUserOrderId" type="method" owner="User">
-```js
-const order = velocityClient.getUser().getOrderByUserOrderId(1);
-console.log(order);
-```
-  </TypeScript>
-</SDKDoc>
-
-#### Get all open orders
-
-Return all currently open (unfilled/uncancelled) orders for this user.
-
-<SDKDoc>
-  <TypeScript name="getOpenOrders" type="method" owner="User">
-```js
-const orders = velocityClient.getUser().getOpenOrders();
-console.log(orders.length);
-```
-  </TypeScript>
-</SDKDoc>
-
-### Active Subaccount
-
-The **active subaccount** is the default subaccount that `VelocityClient` methods operate on when you don't explicitly specify a subaccount ID. By default, the active subaccount is 0.
-
-Many SDK methods use the active subaccount implicitly:
-- `velocityClient.getUser()` - returns the User for the active subaccount
-- `velocityClient.getUserAccount()` - returns the account data for the active subaccount
-- `velocityClient.placePerpOrder(orderParams)` - places an order on the active subaccount
-- `velocityClient.getSpotPosition(marketIndex)` - gets position from the active subaccount
-- `velocityClient.getUser().getPerpPosition(marketIndex)` - gets position from the active subaccount
-
-You can change which subaccount is active using `switchActiveUser()`, or you can explicitly pass a subaccount ID to methods that support it (like `getUser(subAccountId)`).
-
-### Switch Active Subaccount
-
-Change the active subaccount context used by default in `VelocityClient` methods.
+Change it with `switchActiveUser()`, or bypass it by passing a subaccount ID to the methods that accept one.
 
 <SDKDoc>
   <TypeScript name="switchActiveUser" type="method" owner="VelocityClient">
 ```js
-// Switch to subaccount 1.
 await velocityClient.switchActiveUser(1);
+const user1 = velocityClient.getUser(); // now subaccount 1
 ```
   </TypeScript>
 </SDKDoc>
 
-### Update Delegate
+### Update delegate
 
-A **delegate** is another wallet that can trade on behalf of your user account without being able to withdraw funds. This is useful for allowing trading bots to manage positions while keeping withdrawal authority secure.
-
-Learn more: [Delegated Accounts](/protocol/getting-started/delegated-accounts)
-
-Set or update the delegate authority allowed to trade on a subaccount.
+A delegate is another wallet that can trade on behalf of a user account without being able to withdraw funds, which is how a bot gets a position to manage while withdrawal authority stays with the owner. See [Delegated Accounts](/protocol/getting-started/delegated-accounts) for the trader-facing description.
 
 <SDKDoc>
   <TypeScript name="updateUserDelegate" type="method" owner="VelocityClient">
 ```js
 import { PublicKey } from "@solana/web3.js";
 
+// Pass PublicKey.default to clear the delegate.
 await velocityClient.updateUserDelegate(new PublicKey("<DELEGATE_PUBKEY>"), 0);
 ```
   </TypeScript>
 </SDKDoc>
 
-A delegate can sign most trading instructions (place/cancel orders, etc.) on a subaccount's behalf, but `withdraw` always requires the true owning authority's own signature: delegates can never withdraw funds out of the protocol.
+A delegate can sign most trading instructions on a subaccount's behalf: place orders, cancel orders, modify orders. `withdraw` always requires the owning authority's own signature, so a delegate can never move funds out of the protocol.
 
 #### Delegate-initiated internal transfers
 
-A delegate can move a subaccount's collateral to another of the *owner's* subaccounts via `transferDepositByDelegate`, but only once the owner has opted in. This opt-in is a single flag on the owner's `UserStats` account (`delegatePermissions`) that gates delegate transfers across *all* of that owner's subaccounts: it does not affect direct deposits/withdrawals or trading, and it is off by default.
+A delegate can move a subaccount's collateral to another of the *owner's* subaccounts via `transferDepositByDelegate`, but only after the owner opts in. The opt-in is a bit in `delegatePermissions` on the owner's `UserStats` account. It gates delegate transfers across *all* of that owner's subaccounts at once, and it does not affect direct deposits, withdrawals, or trading. While the bit is clear the program rejects `transferDepositByDelegate`; while it is set the delegate can move collateral between the owner's subaccounts. Read the owner's `UserStats` account for the bit's setting.
 
-**Step 1: the owner opts in** (signed by the owner's own wallet, not the delegate):
+The owner opts in first, signing with their own wallet rather than the delegate's:
 
 <SDKDoc>
   <TypeScript name="updateUserAllowDelegateTransfer" type="method" owner="VelocityClient">
@@ -270,14 +175,14 @@ await velocityClient.updateUserAllowDelegateTransfer(true);
   </TypeScript>
 </SDKDoc>
 
-**Step 2: the delegate transfers a deposit between the owner's subaccounts:**
+Then the delegate can transfer between the owner's subaccounts:
 
 <SDKDoc>
   <TypeScript name="transferDepositByDelegate" type="method" owner="VelocityClient">
 ```js
 // Run with a VelocityClient constructed with `authority: <OWNER_PUBKEY>` and a
-// delegate wallet, per the "Delegated accounts" note in Setup.
-const marketIndex = 0; // quote asset market
+// delegate wallet, per the delegated-accounts note in Setup.
+const marketIndex = 0; // spot market 0 is the quote asset
 const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
 
 await velocityClient.transferDepositByDelegate(
@@ -290,15 +195,11 @@ await velocityClient.transferDepositByDelegate(
   </TypeScript>
 </SDKDoc>
 
-If the owner has not called `updateUserAllowDelegateTransfer(true)`, the delegate's `transferDepositByDelegate` call is rejected on-chain regardless of which subaccount the delegate is authorized on.
+Without the opt-in, the program rejects the call regardless of which subaccount the delegate is authorized on. See [Transfers](/developers/velocity-sdk/transfers#delegate-transfers) for the rest of the transfer surface.
 
-### Update Margin Settings
+### Update margin settings
 
-**Margin trading** settings control how your account can use leverage and borrow against collateral. You can enable/disable margin trading or set custom margin ratios to control risk.
-
-Learn more: [Margin](/protocol/trading/margin)
-
-Enable or disable margin trading permissions for one or more subaccounts.
+Margin settings control how a subaccount uses leverage and borrows against collateral. Both updaters take an array, so one transaction can change several subaccounts. `marginRatio` is scaled by `MARGIN_PRECISION` (1e4), and it is a *minimum margin ratio*, so a larger number means less leverage: `10000` caps the account at 1x, `5000` at 2x, `2000` at 5x. See [Margin](/protocol/trading/margin).
 
 <SDKDoc>
   <TypeScript name="updateUserMarginTradingEnabled" type="method" owner="VelocityClient">
@@ -310,13 +211,10 @@ await velocityClient.updateUserMarginTradingEnabled([
   </TypeScript>
 </SDKDoc>
 
-Set a custom margin ratio cap for one or more subaccounts.
-
 <SDKDoc>
   <TypeScript name="updateUserCustomMarginRatio" type="method" owner="VelocityClient">
 ```js
-// marginRatio is a number scaled by 10000 (MARGIN_PRECISION)
-// e.g. 10000 = 1x max leverage, 5000 = 2x, 2000 = 5x
+// marginRatio is scaled by MARGIN_PRECISION (1e4).
 await velocityClient.updateUserCustomMarginRatio([
   { marginRatio: 5000, subAccountId: 0 }, // 2x max leverage
 ]);
@@ -324,11 +222,9 @@ await velocityClient.updateUserCustomMarginRatio([
   </TypeScript>
 </SDKDoc>
 
-### Delete a User Account
+### Delete a user account
 
-If a subaccount has no assets/liabilities, it can be deleted to reclaim rent.
-
-Delete an empty subaccount and close its user account.
+A subaccount with no assets and no liabilities can be deleted to reclaim its rent.
 
 <SDKDoc>
   <TypeScript name="deleteUser" type="method" owner="VelocityClient">

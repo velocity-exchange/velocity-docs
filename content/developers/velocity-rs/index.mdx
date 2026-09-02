@@ -1,0 +1,66 @@
+---
+title: "Velocity Rust SDK"
+asIndexPage: true
+---
+
+`velocity-rs` is the Rust client for the Velocity program. It derives accounts, builds and signs instructions, and keeps a live cache of onchain state that application code reads through accessors instead of round-tripping to RPC on every decision. It is the SDK the protocol's own keeper and Swift services are built on, and it is written for processes that run continuously: market making bots, fillers, liquidators, orderbook servers.
+
+For a front end, a script, or anything that makes a handful of calls per minute, the [TypeScript SDK](/developers/velocity-sdk) is the shorter path. Reach for `velocity-rs` when the integration needs a locally maintained orderbook, a gRPC account feed, or fill decisions inside a single slot.
+
+<Callout type="warning">
+`velocity-rs` is not published to crates.io, and there is no `docs.rs` page for it. It is consumed as a git dependency on the `velocity-v1` monorepo, which is itself private until after the audit. `cargo add velocity-rs` will not resolve, and neither will a public clone. Without access to the monorepo, these pages describe what the crate does, but building against it is not yet possible. [Setup](/developers/velocity-rs/setup) has the dependency line for whenever access is available.
+</Callout>
+
+## Where to start
+
+Read [Setup](/developers/velocity-rs/setup) first. Two of its constraints are hard failures rather than inconveniences: an Apple Silicon machine needs an x86_64 toolchain under Rosetta, and an application already pinned to `solana-sdk` 1.x or 2.x will not typecheck against this crate's 3.x types.
+
+Then read [The client](/developers/velocity-rs/client). Almost everything else on these pages assumes a subscribed `VelocityClient`, and the difference between a WebSocket subscription and a gRPC subscription changes what the rest of a bot can assume about freshness.
+
+## In this section
+
+<Cards>
+  <Card
+    title="Setup"
+    href="/developers/velocity-rs/setup"
+    description="The git dependency line, the Rust 1.89 minimum, the x86_64 requirement on Apple Silicon, cargo features, and how the IDL types stay in sync."
+  />
+  <Card
+    title="The client"
+    href="/developers/velocity-rs/client"
+    description="Constructing a VelocityClient, the wallet modes, and choosing between the WebSocket and gRPC subscription paths."
+  />
+  <Card
+    title="Reading state"
+    href="/developers/velocity-rs/reading-state"
+    description="The cached-accessor pattern, the market, oracle and account maps, precision constants, and offchain margin math."
+  />
+  <Card
+    title="Building and sending orders"
+    href="/developers/velocity-rs/orders"
+    description="TransactionBuilder, order params and tick sizes, place and take, filling Swift orders, and the JIT proxy path."
+  />
+  <Card
+    title="Subscriptions and events"
+    href="/developers/velocity-rs/subscriptions"
+    description="The event subscriber, the auction subscriber, the Swift order stream, and the slot, blockhash and priority fee helpers."
+  />
+  <Card
+    title="The DLOB"
+    href="/developers/velocity-rs/dlob"
+    description="Building a local orderbook from User accounts, reading L2 and L3 snapshots, and the crossing helpers a filler uses."
+  />
+  <Card
+    title="Examples"
+    href="/developers/velocity-rs/examples"
+    description="What each of the ten example crates in the repository demonstrates, and which ones CI actually builds."
+  />
+</Cards>
+
+## What the crate re-exports
+
+`velocity-rs` is the single point in the workspace that depends on the onchain program crate, and it re-exports it as `velocity_rs::program`. Program math, controller, state, error, and sdk modules are reachable through that path. This is deliberate: downstream consumers reach program internals through the SDK rather than taking a second path dependency on the program, so there is exactly one version of those types in a build.
+
+The Solana crates it is built on are re-exported too, so a consumer normally does not name them directly. `velocity_rs::RpcClient` is `solana_rpc_client::nonblocking::rpc_client::RpcClient`, `velocity_rs::Pubkey` is `solana_pubkey::Pubkey`, and `velocity_rs::types::solana_sdk` gathers the account, clock, commitment, instruction, message and signature types under one module path.
+
+IDL-derived account and instruction types live in `velocity_rs::velocity_idl`, generated from the same canonical IDL the TypeScript SDK uses. [Setup](/developers/velocity-rs/setup#idl-derived-types) covers how they stay in sync.

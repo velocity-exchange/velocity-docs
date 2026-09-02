@@ -1,0 +1,47 @@
+---
+title: "Admin keys and upgrade authority"
+---
+
+Velocity's parameters are not fixed. Margin ratios, fee splits, oracle sources and pause states are all settable, and a reader assessing risk should know who can change what, and how quickly.
+
+This page describes the structure. It does not publish key custody.
+
+## The problem with one admin key
+
+A single admin key that can change anything fails in two directions at once. Every routine operation carries the full authority of the protocol, so a compromise of an ordinary cranking key is a compromise of the whole system. And the safety controls have to be as slow as the most dangerous change, so the protocol cannot be paused quickly without also allowing arbitrary parameter changes at that speed.
+
+Velocity therefore splits authority by consequence. The keys that run day to day carry almost no power, the keys that carry power are used rarely and move slowly, and the one action that must be fast gets its own key that can only ever make things safer.
+
+## The tiers
+
+Three tiers, additive: **cold contains warm contains hot**. A cold signer can do anything a warm signer can, and a warm signer can do anything a hot signer can.
+
+**Cold.** The root authority, set when the protocol is initialized. Reserved for changes that could undermine another safety rail. Replacing a market's oracle is the example the code itself calls out: the oracle prices the withdraw guard, so an actor who can swap it can move a limit that exists to constrain them.
+
+**Warm.** The operational tier, used for routine parameter changes. It sits behind a timelock, so a warm change is visible before it takes effect rather than landing instantly.
+
+**Hot.** Purpose-specific keys, one per role, each able to do exactly one job and nothing else. These are the keys that run continuously: cranking the AMM, refreshing the market-maker oracle, adjusting spreads, settling and caching liquidity-pool state, withdrawing fees, extending accounts. A hot role that is left unassigned simply does not exist, and its actions fall through to warm or cold.
+
+The separation is the point. The keys that are online and in use constantly are the ones that can do the least.
+
+## The pause key
+
+Separate from the tier hierarchy is a dedicated **pause key**, and it works differently in two ways.
+
+**It has no timelock.** Pausing is the one action where delay is the risk. This key can act immediately.
+
+**It can only add pauses, never remove them.** This is enforced onchain: when the pause key writes a pause bitmask, the check requires that every bit already set stays set. It can stop deposits, withdrawals, order placement, fills, or settlement, at the exchange level, the market level, or for a single account. It cannot start any of them again.
+
+Unpausing requires warm or cold. So a compromise of the pause key is a denial of service and cannot become a theft, and recovery from a wrongly-triggered pause goes through the slower, more heavily controlled tier.
+
+## What this means in practice
+
+**Any parameter a position depends on can change.** Margin ratios, fee splits and market status are all admin-settable. Changes through the operational tier are timelocked; changes at the cold tier are not.
+
+**Funds can be frozen faster than they can be unfrozen.** That asymmetry is deliberate. It is what lets the protocol stop in an incident, and it means an incident can leave an account unable to withdraw for as long as it takes the slower tier to act.
+
+**Pauses are visible.** If an action is refused, [Block conditions](/protocol/risk-and-safety/guard-rails) lists which pause states block which operations, and how to tell a pause apart from a bug.
+
+## Program upgrades
+
+The Velocity program is not open source yet. It will be published once the post-fork audit report is final. See [Audits](/protocol/risk-and-safety/audits) for the current review status.

@@ -1,0 +1,195 @@
+---
+title: "The DLOB"
+---
+
+Resting orders on Velocity live inside each owner's `User` account, not in a shared book account. The **decentralized limit order book (DLOB)** is the offchain reconstruction of that: read every `User` account, pull the open orders out, and aggregate them into a price-ordered book. `velocity_rs::dlob` builds and maintains one in the consuming process.
+
+It is event driven rather than periodic. Order changes arrive as `User` account updates, the builder diffs each update against the previous state of that account, and only the changed orders are inserted or removed. Snapshots are then read off it with no locking on the read path.
+
+<Callout type="info">
+The DLOB is how the book works today. The fill route is already moving toward a CLOB market account that orders rest in directly. See [PropAMM and CLOB order flow](/developers/concepts/propamm-and-clob-order-flow) for where that is going.
+</Callout>
+
+## Wiring one up
+
+Four pieces: a synced `AccountMap`, a `DLOBBuilder`, a gRPC subscription that feeds it order changes, and a slot callback that feeds it the oracle. All of it requires the `unsafe_pub` feature, because the builder is constructed from the client backend's account map.
+
+<SDKDoc>
+  <Rust name="DLOBBuilder" type="struct">
+```rust
+use solana_commitment_config::CommitmentLevel;
+use velocity_rs::dlob::builder::DLOBBuilder;
+use velocity_rs::GrpcSubscribeOpts;
+
+// 1. bootstrap: pull every User account that has at least one open order
+let account_map = client.backend().account_map();
+account_map
+    .sync_user_accounts(vec![velocity_rs::memcmp::get_user_with_order_filter()])
+    .await
+    .expect("synced user accounts");
+
+// 2. build the book from what was just synced
+let dlob_builder = DLOBBuilder::new(account_map);
+
+// 3. keep it current
+let perp_markets = client.get_all_perp_market_ids();
+client
+    .grpc_subscribe(
+        grpc_url,
+        grpc_x_token,
+        GrpcSubscribeOpts::default()
+            .commitment(CommitmentLevel::Processed)
+            .usermap_on()
+            .on_user_account(dlob_builder.account_update_handler(account_map))
+            .on_slot(dlob_builder.slot_update_handler(client.clone(), perp_markets)),
+        true, // sync on startup, required to populate the usermap
+    )
+    .await?;
+
+let dlob = dlob_builder.dlob();
+dlob.enable_l2_snapshot(); // off by default
+```
+  </Rust>
+</SDKDoc>
+
+The bootstrap step matters. gRPC delivers changes, not current state, so without the initial `sync_user_accounts` the book starts empty and only fills in as accounts happen to be written. `get_user_with_order_filter` narrows the `getProgramAccounts` call to accounts that actually have orders, which is a fraction of all `User` accounts.
+
+`account_update_handler` diffs each update against the cached copy of that account, so it needs the same `AccountMap` the client is caching into. It handles the closed-account case too: an update with zero lamports removes that account's orders rather than panicking on empty data.
+
+`slot_update_handler` does two things per slot. It syncs the book's slot clock from `State`, which is a no-op unless a slot duration transition was synchronized, and it pushes the current market-maker oracle price for each named market. That second part is what keeps floating and oracle orders priced correctly, and it is the reason the handler needs a client and a market list.
+
+`DLOBBuilder::new_with_users(users, slot)` builds from any iterator of `User` accounts instead of an `AccountMap`, and `load_user(pubkey, &user, slot)` adds one account after the fact.
+
+## L2 and L3 snapshots
+
+Two views. L2 aggregates size by price level; L3 keeps individual orders with their owner and order id. L3 is maintained by default and L2 is not, because most consumers want one or the other and maintaining both costs work on every update.
+
+```rust
+dlob.enable_l2_snapshot();  // start maintaining the L2 view
+dlob.disable_l3_snapshot(); // stop maintaining the L3 view
+```
+
+A market's book is created lazily on the first order write for that market. A quiet market right after startup therefore has no book at all, and the plain `get_l2_snapshot` and `get_l3_snapshot` accessors panic in that case. Use the `_safe` variants in anything long running and serve an empty book on `None`.
+
+<SDKDoc>
+  <Rust name="get_l2_snapshot_safe" type="method" owner="DLOB">
+```rust
+use velocity_rs::types::MarketType;
+
+let Some(book) = dlob.get_l2_snapshot_safe(market_index, MarketType::Perp) else {
+    return empty_book();
+};
+
+// bids and asks are BTreeMap<u64, u64>, price -> aggregated size, ascending by price.
+// The best bid is therefore the LAST entry, the best ask the first.
+let best_bid = book.bids.iter().next_back();
+let best_ask = book.asks.iter().next();
+
+println!("slot {} oracle {}", book.slot, book.oracle_price);
+```
+  </Rust>
+</SDKDoc>
+
+`L2Book` also carries `vamm_bid_size` and `vamm_ask_size`, the cumulative size the AMM is quoting on each side, which is not part of the maker levels and has to be added separately to get total displayed depth.
+
+## Reading the L3 book
+
+`L3Book` yields `L3Order` values through four iterators: `bids`, `asks`, and the `top_bids` and `top_asks` forms that take a count. All of them take the same three context arguments, and passing the wrong ones is how a book comes out mispriced.
+
+<SDKDoc>
+  <Rust name="bids" type="method" owner="L3Book">
+```rust
+let book = dlob.get_l3_snapshot_safe(market_index, MarketType::Perp)?;
+let perp_market = client.try_get_perp_market_account(market_index).ok();
+
+let trigger_price = perp_market
+    .as_ref()
+    .map(|m| m.get_trigger_price(oracle_price as i64, unix_now, true).expect("trigger price"));
+
+for order in book.top_bids(20, Some(oracle_price), perp_market.as_ref(), trigger_price) {
+    println!("{} @ {} ({:?}) {}", order.size, order.price, order.kind, order.user);
+}
+```
+  </Rust>
+</SDKDoc>
+
+**`oracle_price`**: floating limit orders are stored as an offset, and oracle orders reprice continuously. Without the current oracle price they are rendered at whatever price the book last computed, which is stale by however long ago that was. A floating order at an offset of -100 against a $50,000 oracle sits at $49,900; feed a $51,000 oracle and it renders at $50,900, which is wrong by a full dollar of the oracle's error.
+
+**`perp_market`**: used to compute the vAMM fallback price for taker auctions that have run out their auction period without a custom limit price. Pass `None` to see only maker orders; those auction orders are then left out.
+
+**`trigger_price`**: pass `Some(price)` and untriggered trigger orders are included, sorted by their post-trigger price and yielded with `price` set to the price the program would fill them at once the trigger lands. Pass `None` and they are excluded. `PerpMarket::get_trigger_price` computes the right value, which is typically the oracle price but can be a funding-based median. `trigger_bids(trigger_price)` and `trigger_asks(trigger_price)` iterate only the trigger orders.
+
+### Order kinds
+
+`L3Order` carries `price`, `size`, `max_ts`, `order_id`, `user` and `kind`. The flags are read through methods: `is_long()`, `is_reduce_only()`, `is_post_only()`, `is_trigger_above()`, plus `is_maker()` and `is_taker()`, which forward to the kind.
+
+| `OrderKind` | Meaning | Side |
+|---|---|---|
+| `Limit` | Resting limit order | Maker |
+| `FloatingLimit` | Resting limit order priced as an oracle offset | Maker |
+| `Market` | Auction order at a fixed price offset | Taker |
+| `Oracle` | Auction order at an oracle offset | Taker |
+| `TriggerMarket` | Untriggered, becomes a market or oracle auction | Taker |
+| `TriggerLimit` | Untriggered, becomes a limit or market auction | Taker |
+
+To separate the two, filter on the kind. There are no separate maker and taker accessors on `DLOB` or `L3Book`.
+
+```rust
+use velocity_rs::dlob::OrderKind;
+
+let maker_bids: Vec<_> = book
+    .bids(Some(oracle_price), None, None)
+    .filter(|o| o.kind.is_maker())
+    .collect();
+```
+
+## Matching
+
+The crossing helpers are what a filler or an uncrossing keeper uses. They answer questions that would otherwise require reimplementing the raw iterators.
+
+**`find_crosses_for_taker_order(current_slot, oracle_price, taker_order, perp_market, depth)`** returns the maker orders a given taker order would fill against right now. It returns a `MakerCrosses` carrying up to 16 `(L3Order, fill_size)` pairs, the slot the crosses were found at, whether the fill is partial, and whether the taker crosses the vAMM quote. `depth` defaults to 32 maker orders scanned. A market with no book yet is treated as empty rather than an error, and the vAMM cross is still evaluated because it does not depend on the book.
+
+<SDKDoc>
+  <Rust name="find_crosses_for_taker_order" type="method" owner="DLOB">
+```rust
+use velocity_rs::dlob::TakerOrder;
+
+let taker = TakerOrder::from_order_params(order_params, limit_price);
+let market = client.try_get_projected_perp_market(market_index, slot, None).ok();
+
+let crosses = dlob.find_crosses_for_taker_order(
+    slot,
+    oracle_price,
+    taker,
+    market.as_ref(),
+    None, // depth, default 32
+);
+
+if !crosses.is_empty() {
+    for (maker, fill_size) in crosses.orders.iter() {
+        println!("{} against {} @ {}", fill_size, maker.user, maker.price);
+    }
+}
+```
+  </Rust>
+</SDKDoc>
+
+Use `try_get_projected_perp_market` for the market argument rather than the cached account. The cached AMM curve is as of its last onchain write, and the program re-projects the curve onto the current oracle before quoting, so a crossing check against the cached reserves mis-prices the vAMM side whenever the oracle has moved.
+
+**`find_crosses_for_auctions(market_index, market_type, slot, oracle_price, perp_market, trigger_price, depth)`** is the uncrossing sweep: every auction order currently crossing a resting limit order. It returns a `CrossesAndTopMakers` with the top three maker accounts on each side, a top-of-book limit cross if the book is crossed with itself, the resting orders the vAMM quote is currently crossing, and the per-taker crosses. `take_vamm_crossed_bid()` and `take_vamm_crossed_ask()` drain the vAMM-crossed resting orders, which are fillable with a `fill_perp_order` carrying no maker accounts.
+
+**`find_triggerable_orders(market_index, market_type, trigger_price, &mut out)`** appends `(user_subaccount, order_id)` for every trigger order whose condition is met. It writes into a caller-owned buffer and clears it first, so a per-slot keeper loop allocates nothing.
+
+**`find_crossing_region(oracle_price, market_index, market_type, perp_market)`** returns the crossed bids and asks when the book is crossed with itself, or `None` when it is not.
+
+Both `find_crosses_for_auctions` and `find_triggerable_orders` panic if the market's book has not been created. Guard with a `get_l3_snapshot_safe` call, or accept that they are only ever called for markets known to have traded.
+
+## Operational notes
+
+The `DLOB` is deliberately leaked to `'static`. `DLOBBuilder::new` boxes and leaks it so the notifier thread can hold a `&'static` reference, which is why `dlob()` returns `&'static DLOB` and why one gets built per process rather than per task.
+
+`Snapshot` uses a two-buffer swap: readers take an `Arc` of the current buffer while the writer fills the other, so a snapshot read never blocks an update and a held snapshot never changes underneath the reader.
+
+The `dlob_dbg` feature records order events inside the book. Turn it on when a local book disagrees with chain and the update sequence that produced the difference needs to be seen. It costs memory and work on the update path, so it does not belong in production.
+
+Two examples cover this end to end: `dlob-builder` runs the full gRPC-fed book behind an HTTP server serving L2 and L3, and `dlob-matching` walks the L3 accessors and the role of the oracle price. See [Examples](/developers/velocity-rs/examples).

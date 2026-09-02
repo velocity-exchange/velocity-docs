@@ -14,7 +14,8 @@ export type SDKBlockProps = {
     | "constant"
     | "static"
     | "struct"
-    | "type_alias";
+    | "type_alias"
+    | "example";
   owner?: string;
   children?: React.ReactNode;
 };

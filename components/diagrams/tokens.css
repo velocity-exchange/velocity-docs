@@ -1,14 +1,20 @@
-/* Diagram tokens. Every value derives from styles/theme.css so light/dark
-   need no diagram-specific overrides. Green may appear on one leg only. */
+/* Diagram tokens. Every value derives from the Fumadocs token set defined in
+   app/global.css, so light and dark need no diagram-specific overrides.
+   Green may appear on one leg only.
+
+   These previously derived from styles/theme.css, the Nextra theme. When the
+   site moved to Fumadocs that file stopped being imported, every --x-color-*
+   below resolved to nothing, and color-mix() with an undefined color yields an
+   invalid value, so every figure on the site drew with no visible stroke. */
 .dg {
-  --dg-ink: var(--x-color-gray-900);
-  --dg-muted: var(--x-color-gray-600);
-  --dg-rule: color-mix(in oklab, var(--x-color-gray-600) 18%, transparent);
-  --dg-node: color-mix(in oklab, var(--x-color-gray-600) 12%, transparent);
-  --dg-flow: color-mix(in oklab, var(--x-color-gray-400) 55%, transparent);
-  --dg-flow-out: color-mix(in oklab, var(--x-color-gray-400) 30%, transparent);
-  --dg-flow-signal: color-mix(in oklab, var(--vlc-brand) 55%, transparent);
-  --dg-node-signal: color-mix(in oklab, var(--vlc-brand) 22%, transparent);
+  --dg-ink: var(--color-fd-card-foreground);
+  --dg-muted: var(--color-fd-muted-foreground);
+  --dg-rule: color-mix(in oklab, var(--color-fd-muted-foreground) 18%, transparent);
+  --dg-node: color-mix(in oklab, var(--color-fd-muted-foreground) 12%, transparent);
+  --dg-flow: color-mix(in oklab, var(--color-fd-muted-foreground) 70%, transparent);
+  --dg-flow-out: color-mix(in oklab, var(--color-fd-muted-foreground) 38%, transparent);
+  --dg-flow-signal: color-mix(in oklab, var(--color-fd-primary) 55%, transparent);
+  --dg-node-signal: color-mix(in oklab, var(--color-fd-primary) 22%, transparent);
   --dg-font-value: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   --dg-radius-sm: 3px;
   --dg-radius-md: 8px;
@@ -64,7 +70,7 @@
   stroke-width: 1;
   rx: var(--dg-radius-sm);
 }
-.dg-node[data-tone="signal"] .dg-node-rect { fill: var(--dg-node-signal); stroke: var(--vlc-brand); }
+.dg-node[data-tone="signal"] .dg-node-rect { fill: var(--dg-node-signal); stroke: var(--color-fd-primary); }
 
 .dg-link {
   fill: none;
@@ -124,7 +130,7 @@
   stroke-width: 1;
   rx: var(--dg-radius-sm);
 }
-.dg-box[data-tone="signal"] .dg-box-rect { fill: var(--dg-node-signal); stroke: var(--vlc-brand); }
+.dg-box[data-tone="signal"] .dg-box-rect { fill: var(--dg-node-signal); stroke: var(--color-fd-primary); }
 /* Off-chain has no box: nothing on chain depends on it, and the dashed outline
    is the one thing a reader must see without reading a label. */
 .dg-box[data-kind="offchain"] .dg-box-rect {
@@ -152,7 +158,7 @@
   fill: var(--dg-muted);
   font-size: 12px;
   paint-order: stroke;
-  stroke: var(--x-color-gray-50);
+  stroke: var(--color-fd-card);
   stroke-width: 3px;
   stroke-linejoin: round;
 }

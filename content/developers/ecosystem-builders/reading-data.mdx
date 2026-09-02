@@ -1,6 +1,8 @@
-# Reading Data
+---
+title: "Reading Data"
+---
 
-This page covers every way to read Velocity state in your app: from the subscribed `VelocityClient`/`User` caches, to the stateless `VelocityCore` decoders, to the Data API REST endpoints.
+This page covers every way to read Velocity state from an application: the subscribed `VelocityClient`/`User` caches, the stateless `VelocityCore` decoders, and the Data API REST endpoints.
 
 ## Account data via VelocityClient / User
 
@@ -61,7 +63,9 @@ for (const order of userAccount.orders) {
   order.baseAssetAmountFilled;
   order.oraclePriceOffset;        // BN (i64): always wrap in `new BN(...)` when constructing
   order.reduceOnly;
-  order.bitFlags;                 // OrderBitFlag bitmask: postOnly / reduceOnly / HasBuilder
+  order.postOnly;                 // boolean field, not a bitFlags bit
+  order.bitFlags;                 // OrderBitFlag bitmask: SignedMessage / OracleTriggerMarket /
+                                  // SafeTriggerOrder / NewTriggerReduceOnly / HasBuilder
 }
 ```
 
@@ -72,7 +76,7 @@ for (const position of userAccount.spotPositions) {
   if (position.scaledBalance.isZero()) continue;
   position.marketIndex;
   position.balanceType;           // { deposit: {} } | { borrow: {} }
-  position.scaledBalance;         // SPOT_BALANCE_PRECISION (1e9); multiply by the market's cumulative interest for token amount
+  position.scaledBalance;         // SPOT_MARKET_BALANCE_PRECISION (1e9); multiply by the market's cumulative interest for token amount
 }
 
 const totalCollateral = user.getTotalCollateral();  // BN, QUOTE_PRECISION (1e6)
@@ -91,7 +95,7 @@ const connection = new Connection("<RPC_URL>");
 // Fetch + decode a User account in one call, no subscription required
 const userAccount = await VelocityCore.fetchUserAccount(connection, userAccountPublicKey);
 
-// Or decode a buffer you already have (e.g. from a websocket account notification)
+// Or decode a buffer already in hand (e.g. from a websocket account notification)
 const decoded = VelocityCore.decodeUserAccount(rawAccountBuffer);
 
 // PDA helpers (state, user, perp/spot market, vaults) are re-exported statically
@@ -112,18 +116,18 @@ const perpMarket = coder.accounts.decode("PerpMarket", rawAccountBuffer);
 </Callout>
 
 <Callout type="warning">
-**`MarketStatus` discriminants and account sizes can shift across program versions.** Velocity's current `MarketStatus` variants are `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4), and `PerpMarketAccount` is 1304 bytes. Always decode against the current `sdk/src/idl/velocity.json`, never a hardcoded enum or fixed offset carried over from an earlier integration. See [Account Model](/developers/concepts/account-model) for the full layout, or the [migration guide](/developers/migrate-from-drift/agent-guide#5-behavioral-divergences--stop-and-report) if you're porting a raw decoder from an earlier discriminant numbering.
+**`MarketStatus` discriminants and account sizes can shift across program versions.** The `MarketStatus` variants are `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), and `Delisted` (4). Always decode against the `sdk/src/idl/velocity.json` shipped with the SDK in use, never a hardcoded enum, a fixed offset, or a hardcoded account size carried over from an earlier integration. See [Account Model](/developers/concepts/account-model) for the full layout, or the [migration guide](/developers/migrate-from-drift/agent-guide#5-behavioral-divergences-stop-and-report) when porting a raw decoder from an earlier discriminant numbering.
 </Callout>
 
 <Callout type="warning">
 **Never validate an account by its exact data length.** Zero-copy account structs (`User`, `PerpMarket`, `SpotMarket`, `State`, `UserStats`, and others) can grow: when a struct runs out of reserved padding, the protocol grows the deployed accounts with the `extend_account` instruction, and the account then holds **more** bytes than an older client expects. Decode length-tolerantly:
 
-- Read exactly the `8 + size_of::<T>()` bytes your client knows and ignore the tail. The SDK already does this: Anchor's borsh coder and the `decodeUser` fast path both use start-relative offsets, so an extended account decodes unchanged.
+- Read exactly the `8 + size_of::<T>()` bytes the client knows and ignore the tail. The SDK already does this: Anchor's borsh coder and the `decodeUser` fast path both use start-relative offsets, so an extended account decodes unchanged.
 - Do not assert `data.length === EXPECTED_SIZE`, and do not derive a slice end from the buffer length.
 - **Do not filter `getProgramAccounts` by `dataSize`.** A hardcoded size silently matches zero accounts after an extension. Filter on the 8-byte discriminator with a `memcmp` instead, which is what every SDK map does.
-- On the Rust side, decode through `velocity-rs`'s `utils::deser_zero_copy` / `try_deser_zero_copy` or `AccountRef`, which trim to `8 + size_of::<T>()` before casting. Do not call Anchor's derived `T::try_deserialize` on a zero-copy type off-chain: it casts the whole tail and panics on any size mismatch.
+- On the Rust side, decode through `velocity-rs`'s `utils::deser_zero_copy` / `try_deser_zero_copy` or `AccountRef`, which trim to `8 + size_of::<T>()` before casting. Do not call Anchor's derived `T::try_deserialize` on a zero-copy type offchain: it casts the whole tail and panics on any size mismatch.
 
-Extension only ever appends. It never reorders, inserts, widens, or shrinks a field, so offsets you already read stay valid, and newly added bytes read as zero until code writes them. See [Account Model](/developers/concepts/account-model#account-sizes-can-grow).
+Extension only ever appends. It never reorders, inserts, widens, or shrinks a field, so offsets already in use stay valid, and newly added bytes read as zero until code writes them. See [Account Model](/developers/concepts/account-model#account-sizes-can-grow).
 </Callout>
 
 ## Market data
@@ -141,11 +145,11 @@ perpMarket.oracleSource;
 
 ### Orderbook (DLOB)
 
-For a live L2/L3 orderbook, subscribe to the DLOB directly with the SDK's `SlotSubscriber` / `OrderSubscriber` / `DLOBSubscriber` classes. See [DLOB](/developers/velocity-sdk/dlob) for the full setup sequence and [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) for the hosted DLOB server's REST/websocket API if you'd rather not run your own DLOB.
+For a live L2/L3 orderbook, subscribe to the DLOB directly with the SDK's `SlotSubscriber` / `OrderSubscriber` / `DLOBSubscriber` classes. See [DLOB](/developers/velocity-sdk/dlob) for the full setup sequence and [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) for the hosted DLOB server's REST/websocket API, which avoids running a DLOB in-process.
 
 ## Data API (REST)
 
-The Data API provides historical and aggregate data via REST endpoints, without running your own indexer. Use it for dashboards, analytics, or any non-SDK integration.
+The Data API provides historical and aggregate data via REST endpoints, without running an indexer. Use it for dashboards, analytics, or any non-SDK integration.
 
 <Callout type="info">
 Velocity's hosted Data API is live at `data.velocity.exchange`. The examples below use that host. See [Data API](/developers/data-api).
@@ -201,7 +205,7 @@ Note: Amounts are in protocol precision (base: 1e9, quote: 1e6). Divide accordin
 ### Fetching data in code
 
 <SDKDoc>
-  <TypeScript name="fetch" type="function">
+  <TypeScript name="fetch" type="example">
 ```js
 const marketsRes = await fetch("https://data.velocity.exchange/stats/markets");
 const markets = await marketsRes.json();

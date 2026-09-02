@@ -1,51 +1,86 @@
-# Account Health Breakdown 
+---
+title: "Account health"
+description: "One number that says how far the account is from liquidation, and exactly what goes into it."
+---
 
-Users can get a detailed overview of the status of their collateral and current margin requirements in the Account Health Breakdown. 
-
-The Account Health Breakdown is accessible from all [portfolio pages](https://velocity.exchange/portfolio/trade).
+Account health is a number between 0 and 100 that says how much room a subaccount has before it can be liquidated. It falls when a position moves against the account, when the collateral backing it loses value, or when interest accrues on a borrow, and at zero the account is liquidatable. The app shows it on every [portfolio page](https://velocity.exchange/portfolio/trade).
 
 <img src="/assets/account-health-1.png" alt="" width="800" height="auto"></img>
 
-The account health percentage indicates the overall health status of your main account, which can change based on your open positions and their margin requirements; when it reaches zero, it signifies that the weighted value of your total collateral has fallen below the maintenance margin requirement, potentially leading to liquidation. Health Breakdown is calculated as `1 - Maintenance Margin / Margin Collateral`.
+## The mechanism
 
-## Initial and Maintenance Margin
+The app also shows the raw gap between collateral and requirement, as free collateral. Health normalizes that gap into a fraction of the collateral, so it compares across accounts and over time:
 
-In the Health Breakdown, you can switch between the _Initial_ and _Maintenance_ margin breakdowns. Initial margin represents the total collateral you deposited across all markets, calculated with their respective asset weights. It is the amount required to take risk-increasing actions. If your initial margin is fully utilized (shown as a yellow-colored bar instead of green) within your existing position margin requirements and potentially existing borrow, you may not be able to open new positions.
+`health = 100 * (1 - maintenance margin requirement / total collateral)`
 
-Non-USDT collateral carries a discount weighting; for example, SOL has an initial asset weight of 80% and a maintenance asset weight of 90%. Additionally, the initial asset weight can programmatically shrink based on total notional deposits.
+Both inputs come from one calculation run at the Maintenance margin type, so **total collateral here means maintenance-weighted total collateral**, not the face value of the deposits and not the initial-margin figure on the other tab.
 
-<Callout type="important">
-Each asset has a calculated asset weight. You can see each asset's weight in the [Cross-collateral deposits](/protocol/getting-started/cross-collateral-deposits). 
-</Callout>
+### What total collateral includes
+
+- **Each deposit, at the oracle price times its maintenance asset weight.** USDT at 1.00 counts in full; SOL at a 90% maintenance weight counts at 90 cents on the dollar. See [Collateral and margin requirements](/protocol/trading/margin).
+- **Unsettled perp P&L, signed.** Positive P&L is weighted by the market's maintenance unrealized-P&L asset weight, an admin-set per-market value. Negative P&L is subtracted in full and never discounted.
+- **The favorable side of an open spot order's worst-case fill**, where that comes out positive.
+
+Borrows are not in it. A borrow raises the requirement rather than reducing collateral, which is why repaying a borrow and depositing the same value move health by different amounts.
+
+### What the maintenance margin requirement includes
+
+- **Each perp position's worst-case notional times the market's maintenance margin ratio**, with the IMF factor raising that ratio on large positions. Worst case means the position as it would stand if all the account's resting orders in that market filled.
+- **Each borrow's value times its maintenance liability weight.** A quote-asset borrow counts at face value; other borrows count at more.
+- **A small fixed requirement for every open order.**
+
+The account is liquidatable when the requirement meets or exceeds total collateral, which is where health reaches 0.
+
+## Worked example
+
+A \$10,000 account held entirely in SOL at an illustrative \$100, long 400 SOL-PERP from \$100, with an illustrative 90% maintenance asset weight on SOL and a 3% maintenance margin ratio on SOL-PERP.
+
+| SOL price | Maintenance collateral | Unrealized P&L | Total collateral | Notional | Requirement | Health |
+| --- | --- | --- | --- | --- | --- | --- |
+| \$100 | \$9,000 | \$0 | \$9,000 | \$40,000 | \$1,200 | 87 |
+| \$90 | \$8,100 | -\$4,000 | \$4,100 | \$36,000 | \$1,080 | 74 |
+| \$85 | \$7,650 | -\$6,000 | \$1,650 | \$34,000 | \$1,020 | 38 |
+| \$83.68 | \$7,531 | -\$6,528 | \$1,003 | \$33,472 | \$1,004 | 0 |
+| \$83 | \$7,470 | -\$6,800 | \$670 | \$33,200 | \$996 | 0, liquidatable |
+
+Health does not fall linearly. Between \$100 and \$90 the account gives up 13 points for a 10% move; between \$90 and \$83.68 it gives up the remaining 74 for a 7% move. Correlated collateral makes this worse, because collateral shrinks from two directions at once while the requirement barely moves.
+
+## The initial view is a different question
+
+The breakdown has an Initial tab and a Maintenance tab, answering different questions.
 
 <img src="/assets/account-health-2.png" alt="" width="800" height="auto"></img>
 
-The total collateral in the Maintenance margin breakdown will appear greater because it represents the amount required to avoid liquidation. 
- 
-<Callout type="important">
-Find the table for each asset's initial and margin requirements for each market on the [Margin](/protocol/trading/margin) page. 
-</Callout>
+Health is computed from the Maintenance view, which decides whether the account is liquidated. The Initial view uses stricter weights and ratios throughout, and decides whether the account may take a risk-increasing action: opening or increasing a position, borrowing, or withdrawing. It always shows a tighter picture on the same account, and that is correct rather than a discrepancy.
 
-## Assets
+Free collateral that will not support a new position is the Maintenance view being read while the protocol checks Initial. The initial weight on positive unsettled P&L is an admin-set per-market value, and while it is zero, paper profit that adds fully to maintenance collateral adds nothing to initial collateral until it is settled. A hard **\$100 per-position ceiling** on it applies to the Initial type on top of that.
 
-Under the Assets breakdown, you can see your deposited assets and Unsettled P&L. Unsettled P&L represents the unrealized profit or loss from open positions that have not yet been closed, fluctuating with market prices; it becomes realized when the positions are closed. More comprehensive explanation in [What is unsettled P&L?](/protocol/trading/profit-loss/unsettled-profit-loss)
+On a risk-increasing order, the market being increased runs at Initial and every other position at Maintenance.
+
+## Assets and liabilities
 
 <img src="/assets/account-health-3.png" alt="" width="800" height="auto"></img>
 
-## Liabilities
+The Assets section lists deposits at their weighted values, plus unsettled P&L, which earns and pays no lending interest: a large unsettled profit sitting in a subaccount is idle. See [Unsettled P&L](/protocol/trading/profit-loss). Liabilities lists open positions and borrows, weighted the same way. When liabilities reach or exceed assets in the Initial view, no new trade is accepted until a position is closed, P&L settled, a borrow repaid, or collateral deposited.
 
-Liabilities account for all of your open positions and borrows. If your liabilities are equal to or greater than your assets, you will not be able to place any new trades until you close existing positions, settle P&L, or deposit more collateral.
+## Capping leverage below the market's maximum
 
-## Account Health Breakdown FAQ
+The market's initial margin ratio sets the most leverage anyone can use there. On top of it an account can hold itself to a stricter limit, account-wide or per position. The calculation takes the largest applicable ratio, so an override can only be more conservative, and a value below the market's own has no effect. On a market with a 5% initial margin ratio, a 20x cap, an account-wide cap of 10x halves the size that can be opened there and one of 25x changes nothing.
 
-### I have free collateral, why can't I trade with margin? 
+<Callout type="important">
+The override applies only where the margin type is Initial. The check after a fill and the liquidation check both read the market's own ratios with the account's overrides zeroed out. A 10x cap on a 20x market lowers the size that can be opened. It does not move the liquidation price.
+</Callout>
 
-Make sure you're looking at the Initial Margin breakdown, not the Maintenance Margin. Initial Margin is the amount required to take risk-increasing actions, while Maintenance Margin represents the amount required to avoid liquidation.
+The market side of that comparison is itself the larger of the configured ratio and the IMF size premium, so a large enough position raises that floor above the headline number on its own.
 
-### How can I increase my account health? 
+<Callout type="warning">
+Per-market caps do not isolate risk between positions. Every position in a subaccount shares one pool of collateral and one maintenance margin requirement, so a large loss on one market still draws down the collateral backing a position on another and can contribute to a cross-margin liquidation of both.
+</Callout>
 
-Deposit more collateral, settle P&L, repay borrowed funds, or reduce active positions.
+## What happens at zero
 
-### If the health is 0%, will the position be fully liquidated or just partially to maintain a proper health value?
+Reaching zero health does not close the whole account at once. Liquidation starts partial, reducing the position far enough to bring the account back above its maintenance requirement plus a **2% buffer**, and escalates toward full closure only if the account keeps deteriorating and nothing is done to reduce it or add collateral. See [Liquidations](/protocol/trading/liquidations).
 
-It starts as being partially liquidated and progresses to full liquidation if the user doesn't reduce the position manually or deposit more collateral.
+## What this means in practice
+
+Health is read off the Maintenance tab and capacity off the Initial tab, and neither predicts the other. The four levers for more health are depositing collateral, settling P&L, repaying a borrow, and reducing a position. At size, the number worth watching is how fast health moves per percent of price rather than health itself: an account at 40 is much closer to zero than one at 80 is to 40.

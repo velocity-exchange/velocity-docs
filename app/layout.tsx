@@ -1,34 +1,39 @@
-import "nextra-theme-docs/style.css";
-import "katex/dist/katex.min.css";
-import "../styles/theme.css";
+import "./global.css";
 import "../components/diagrams/tokens.css";
 import "../components/diagrams/flowchart.css";
 import "../components/diagrams/sequence.css";
 import "../components/diagrams/price-ramp.css";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Footer, Layout, Navbar } from "nextra-theme-docs";
-import { getPageMap } from "nextra/page-map";
-import { Logo } from "../components/Logo";
+import { RootProvider } from "fumadocs-ui/provider";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { Providers } from "./providers";
 
+const sans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-sans",
+  display: "swap",
+});
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
 export const metadata: Metadata = {
   title: {
     default: "Velocity Protocol",
-    template: "%s – Velocity Protocol",
+    template: "%s | Velocity Protocol",
   },
   description:
-    "Velocity brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.",
+    "Velocity brings on-chain, cross-margined perpetual futures to Solana.",
   openGraph: {
     title: "Velocity Protocol",
     description:
-      "Velocity brings on-chain, cross-margined perpetual futures to Solana. Making futures DEXs the best way to trade.",
+      "Velocity brings on-chain, cross-margined perpetual futures to Solana.",
     images: ["/assets/meta-introduction.png"],
   },
-  twitter: {
-    card: "summary_large_image",
-    images: ["/assets/meta-introduction.png"],
-  },
+  twitter: { card: "summary_large_image", images: ["/assets/meta-introduction.png"] },
   icons: {
     icon: [
       { url: "/assets/favicon.svg", type: "image/svg+xml" },
@@ -40,55 +45,17 @@ export const metadata: Metadata = {
   },
 };
 
-const logo = (
-  <div className="nx-flex nx-items-center">
-    <Link href="/" className="nx-flex nx-items-center">
-      <Logo />
-    </Link>
-  </div>
-);
-
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const pageMap = await getPageMap();
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>
-        <Layout
-          pageMap={pageMap}
-          navbar={
-            <Navbar
-              logo={logo}
-              logoLink={false}
-              projectLink="https://github.com/velocity-exchange"
-              chatLink="https://discord.com/invite/95kByNnDy5"
-            >
-            </Navbar>
-          }
-          sidebar={{
-            defaultMenuCollapseLevel: 1,
-            toggleButton: true,
-          }}
-          docsRepositoryBase="https://github.com/velocity-exchange/velocity-docs/tree/master"
-          footer={
-            <Footer>
-              <a
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Velocity Protocol Landing Page"
-                href="https://www.velocity.exchange/"
-              >
-                <p>© {new Date().getFullYear()} Velocity Protocol</p>
-              </a>
-            </Footer>
-          }
-        >
+    <html
+      lang="en"
+      className={`${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="flex min-h-screen flex-col">
+        <RootProvider>
           <Providers>{children}</Providers>
-        </Layout>
+        </RootProvider>
       </body>
     </html>
   );

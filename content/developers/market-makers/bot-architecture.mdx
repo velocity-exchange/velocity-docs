@@ -1,10 +1,12 @@
-# Bot Architecture Patterns
+---
+title: "Bot Architecture Patterns"
+---
 
-Production market making bots need more than just order placement logic. This page covers the infrastructure patterns used across Velocity's [keeper-bots-v2](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2), applicable to market making, filling, and triggering bots.
+Order placement logic is the smallest part of a bot that runs unattended. This page covers the infrastructure around it: staying subscribed, staying inside the compute and fee budget, noticing when the bot's own account is in trouble, and shutting down without leaving quotes on the book. The patterns come from Velocity's keeper-bots-v2 and apply to market making, filling, and triggering bots alike.
 
 ## Subscription loop + resubscribe
 
-WebSocket connections drop. RPC nodes restart. Your bot must handle reconnections automatically. The `OrderSubscriber` supports automatic resubscription and periodic resync to catch any missed updates.
+WebSocket connections drop. RPC nodes restart. A bot must handle reconnections automatically. The `OrderSubscriber` supports automatic resubscription and periodic resync to catch any missed updates.
 
 ```js
 import { OrderSubscriber } from "@velocity-exchange/sdk";
@@ -20,7 +22,7 @@ const orderSubscriber = new OrderSubscriber({
 await orderSubscriber.subscribe();
 ```
 
-**Why `resyncIntervalMs`?** WebSocket subscriptions can silently miss updates (dropped messages, RPC hiccups). Periodic resync ensures your local state doesn't drift from onchain reality.
+**Why `resyncIntervalMs`?** WebSocket subscriptions can silently miss updates (dropped messages, RPC hiccups). Periodic resync keeps local state from drifting away from onchain reality.
 
 ## Periodic tasks + mutex guard
 
@@ -68,7 +70,7 @@ function shouldAttemptFill(nodeKey: string, cooldownMs = 1000): boolean {
 
 ## Priority fees and compute budget
 
-Solana transactions compete for block space via priority fees. During congestion, your transactions will be dropped without adequate fees. The SDK provides a `PriorityFeeSubscriber` that tracks recent fee levels.
+Solana transactions compete for block space via priority fees. During congestion, transactions without adequate fees are dropped. The SDK provides a `PriorityFeeSubscriber` that tracks recent fee levels.
 
 ```js
 import { ComputeBudgetProgram } from "@solana/web3.js";
@@ -117,7 +119,7 @@ const { blockhash } = await velocityClient.connection.getLatestBlockhash({
 
 ## Health monitoring
 
-Your bot should continuously monitor its own account health and cancel orders before liquidation:
+A bot should continuously monitor its own account health and cancel orders before liquidation:
 
 ```js
 import { QUOTE_PRECISION, convertToNumber, BN } from "@velocity-exchange/sdk";
@@ -155,7 +157,7 @@ setInterval(checkHealth, 5_000);
 
 ## Graceful shutdown
 
-When your bot stops (deploy, crash, SIGINT), it should cancel all resting orders to avoid being picked off while offline:
+When the bot stops (deploy, crash, SIGINT), it should cancel all resting orders to avoid being picked off while offline:
 
 ```js
 let isShuttingDown = false;
@@ -194,11 +196,11 @@ process.on("uncaughtException", async (err) => {
 });
 ```
 
-**Why this matters:** If your bot crashes with orders still on the book, those orders may fill at stale prices while you're not running, causing classic adverse selection.
+**Why this matters:** a bot that crashes with orders still on the book leaves those orders to fill at stale prices while nothing is watching them, which is classic adverse selection.
 
 ## Error handling patterns
 
-Solana transactions fail for many reasons. Your bot should handle these gracefully:
+Solana transactions fail for many reasons. A bot should handle these gracefully:
 
 ```js
 async function sendWithRetry(
@@ -252,7 +254,7 @@ async function sendWithRetry(
 
 For JIT and SWIFT flows, apply these filters before filling to avoid adverse selection and stay within risk limits.
 
-**Oracle validation**: Reject if oracle is stale, invalid, or confidence is too wide. `MMOraclePriceData` has no `isValid` field -- use `isOracleValid` (the same AMM-fill-oriented gate the program uses) against the market and the state's oracle guard rails. Pass the live slot to both calls: `getMMOracleDataForPerpMarket` needs it to classify a staged slot-duration switch correctly (omitting it falls back to a best-effort observed slot that can stall while a market is idle), and `isOracleValid` needs it plus the state's configured slot duration for its staleness window, so the threshold matches the on-chain check once a shorter slot duration is staged:
+**Oracle validation**: Reject if oracle is stale, invalid, or confidence is too wide. `MMOraclePriceData` has no `isValid` field, so use `isOracleValid` (the same AMM-fill-oriented gate the program uses) against the market and the state's oracle guard rails. Pass the live slot to both calls: `getMMOracleDataForPerpMarket` needs it to classify a staged slot-duration switch correctly (omitting it falls back to a best-effort observed slot that can stall while a market is idle), and `isOracleValid` needs it plus the state's configured slot duration for its staleness window, so the threshold matches the onchain check once a shorter slot duration is staged:
 
 ```js
 import { isOracleValid, activeSlotDurationFromState } from "@velocity-exchange/sdk";
@@ -271,7 +273,7 @@ if (!oracleIsValid) return;
 if (oracle.confidence.gt(maxConfidence)) return; // confidence is a BN, PRICE_PRECISION
 ```
 
-**Position limits**: Don't fill if it would exceed your max position or leverage. `perpPositions` is a fixed-size array of position *slots*, not indexed by market index: look it up with `getPerpPosition(marketIndex)` (or `getPerpPositionOrEmpty` if you want a zeroed placeholder instead of `undefined`), and use `BN` arithmetic throughout:
+**Position limits**: don't fill if the result would exceed the configured max position or leverage. `perpPositions` is a fixed-size array of position *slots*, not indexed by market index: look it up with `getPerpPosition(marketIndex)` (or `getPerpPositionOrEmpty` for a zeroed placeholder instead of `undefined`), and use `BN` arithmetic throughout:
 
 ```js
 import { convertToNumber, BASE_PRECISION } from "@velocity-exchange/sdk";
@@ -285,7 +287,7 @@ const newPositionSize = convertToNumber(
 if (Math.abs(newPositionSize) > maxPositionSize) return;
 ```
 
-**Toxic flow**: Skip orders that increase risk (e.g. direction that worsens your inventory) and skip when oracle/index divergence is high. Note the SDK's own `isOrderRiskIncreasing`/`isOrderRiskIncreasingInSameDirection` helpers were removed as dead exports: write this check against your own position/direction, e.g.:
+**Toxic flow**: skip orders that increase risk (e.g. a direction that worsens the bot's inventory) and skip when oracle/index divergence is high. Note the SDK's own `isOrderRiskIncreasing`/`isOrderRiskIncreasingInSameDirection` helpers were removed as dead exports: write this check against the bot's own position and direction, e.g.:
 
 ```js
 function isRiskIncreasing(order, currentPosition) {
@@ -307,7 +309,7 @@ A production bot typically follows this structure:
 
 <Steps>
 ### Initialize VelocityClient + subscribe
-Start your client and subscribe to required accounts/feeds.
+Start the client and subscribe to required accounts/feeds.
 
 ### Start OrderSubscriber (websocket + resync)
 Bring up real-time order subscriptions with automatic resync.
@@ -319,7 +321,7 @@ Track current priority fee levels for transaction construction.
 Ensure graceful shutdown and emergency cleanup paths are active.
 
 ### Main loop
-Check health (and emergency cancel if needed), refresh oracle prices, update quotes, process JIT auctions (if participating), and log metrics (position, PnL, fill rate).
+Check health (and emergency cancel if needed), refresh oracle prices, update quotes, process JIT auctions (if participating), and log metrics (position, P&L, fill rate).
 
 ### Sleep until next cycle
 Pause until the next scheduled run tick.
@@ -347,17 +349,14 @@ await velocityClient.addUser(subAccountId);
 await velocityClient.switchActiveUser(subAccountId);
 ```
 
-The [`JitMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts) enforces a 1:1 subaccount-to-market ratio and throws if the mapping isn't configured correctly.
+The `JitMaker` enforces a 1:1 subaccount-to-market ratio and throws if the mapping isn't configured correctly.
 
 ## Gotchas
 
-- **WebSocket silent failures**: Solana WebSocket connections can stop delivering updates without disconnecting. The `resyncIntervalMs` on `OrderSubscriber` catches this, but also monitor your last-update timestamp and force-reconnect if stale for >60s.
-- **Priority fee spikes**: during congestion, priority fees can spike 100x. Construct `PriorityFeeSubscriber` with `maxFeeMicroLamports` (and, if needed, `priorityFeeMultiplier`) so it enforces the cap itself before returning a strategy result, instead of draining your SOL balance on fees.
-- **Transaction size limits**: Velocity transactions reference many accounts. Without Address Lookup Tables (ALTs), you'll hit the 1232-byte transaction limit. Always fetch and use ALTs (see the ALT section above).
-- **Blockhash expiry**: Solana blockhashes expire after ~60 seconds. If your transaction is stuck in a queue, it will silently fail. Use `getLatestBlockhash` with `commitment: "confirmed"` and set `lastValidBlockHeight` for reliable expiry detection.
+- **WebSocket silent failures**: Solana WebSocket connections can stop delivering updates without disconnecting. The `resyncIntervalMs` on `OrderSubscriber` catches this, but also monitor the last-update timestamp and force-reconnect if it is stale for more than 60 seconds.
+- **Priority fee spikes**: during congestion, priority fees can spike 100x. Construct `PriorityFeeSubscriber` with `maxFeeMicroLamports` (and, if needed, `priorityFeeMultiplier`) so it enforces the cap itself before returning a strategy result, instead of draining the bot's SOL balance on fees.
+- **Transaction size limits**: Velocity transactions reference many accounts. Without Address Lookup Tables (ALTs), transactions hit the 1232-byte limit. Always fetch and use ALTs (see the ALT section above).
+- **Blockhash expiry**: Solana blockhashes expire after ~60 seconds. A transaction stuck in a queue silently fails. Use `getLatestBlockhash` with `commitment: "confirmed"` and set `lastValidBlockHeight` for reliable expiry detection.
 - **Rate limits**: even paid RPC providers have limits. Batch reads where possible (e.g., `getMultipleAccounts`) and avoid redundant subscriptions.
 
-See [keeper-bots-v2](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) for the reference implementation of these patterns. Key files:
-- [`floatingMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts): mutex guards, slot-based cooldowns, watchdog timer
-- [`jitMaker.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/jitMaker.ts): subaccount isolation, DLOB integration, volatility checks
-- [`utils.ts`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/utils.ts): throttling, market type conversion, volatility detection helpers
+The reference implementation of every pattern above is keeper-bots-v2, in the `velocity-v1` monorepo, which is not public yet. `floatingMaker.ts` carries the mutex guards, slot-based cooldowns, and watchdog timer; `jitMaker.ts` the subaccount isolation, DLOB integration, and volatility checks; `utils.ts` the throttling, market type conversion, and volatility detection helpers.

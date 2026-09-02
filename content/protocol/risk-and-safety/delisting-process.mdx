@@ -1,53 +1,63 @@
-# Delisting Process
+---
+title: "Delisting"
+---
 
-Delisting a perpetuals market can occur in a tail risk event, but the protocol has an on-chain procedure in place similar to the expiry of any derivatives contract (futures, options).
+A perpetual has no expiry, but a market can still have to be closed: its oracle fails, its liquidity goes, or its unrealized P&L grows past anything the protocol can pay. Velocity gives a perpetual an expiry date on demand and then runs it through the same shape as any dated contract: reduce-only, then a settlement price, then settlement, then the market's pools are wound up. Every step after the first is permissionless.
 
-The process is as follows:
-
-## Perpetual Markets
+## Perpetual markets
 
 <Steps>
-### Reduce only mode
-The market immediately enters "reduce only mode" once an expiry date is set.
-*   All new orders are forced to have reduce only flag
+### Reduce-only, from the moment an expiry is set
+Setting an expiry requires a future timestamp and immediately writes `MarketStatus::ReduceOnly` alongside it. There is no separate instruction to enter reduce-only; setting the date is entering it.
 
-*   All current orders that will increase risk will get cancelled on fill attempts
-
-*   Funding rate updates **continue**: funding still accrues throughout reduce-only mode (a market's funding updates while its status is `Active` **or** `ReduceOnly`), so positions keep paying/receiving funding right up to expiry
-
-*   Users cannot settle unrealized P&L prior to expiry
+- New orders are forced reduce-only.
+- Existing orders that would increase risk are clamped or cancelled at fill time, not at placement.
+- **Funding continues.** A market funds while its status is `Active` **or** `ReduceOnly`, so positions keep paying and receiving funding right up to expiry.
+- An account with an open base position cannot settle its unrealized P&L, because settlement requires `Active` when a base position is present. A **flat** account can still settle, so a trader who closes out during reduce-only is not stuck holding an unsettled claim until expiry.
 
 <Callout type="warning">
-Reduce-only applies at **fill** time, not only at placement. An order you placed while the market was still `Active` carries `reduce_only = false`, but the fill path re-derives reduce-only from the live market status for the taker and for every maker in the match, so that order can no longer add exposure. See [Block Conditions](/protocol/risk-and-safety/block-conditions#layer-3-market-status).
+Reduce-only applies at **fill** time, not only at placement. An order placed while the market was still `Active` can no longer add exposure, because the fill path re-derives reduce-only from the live market status for the taker and for every maker in the match. See [Guard rails](/protocol/risk-and-safety/guard-rails).
 </Callout>
 
-### Settlement price lock in
-After the expiry date, the market can lock in a settlement price.
-*   Must call the instruction: `settle_expired_market`
-    *   The target price is the amm's calculated 5-min oracle twap but is altered such that it allows for full solvency across all users
+### Settlement price lock-in
+After the expiry timestamp, anyone may lock in an expiry price. The starting point is the market's 5-minute oracle TWAP, adjusted so the resulting price is solvent for every remaining claimant rather than merely being the last honest print.
 
-### Expired Position Settlement
-After the expiry date + optional time buffer, users can settle their "expired positions" at the settlement price.
-*   The optional time buffer is the settlement duration, which acts as a buffer for liquidations
+### Expired position settlement
+After the expiry timestamp plus the settlement duration, a buffer that leaves room for liquidations, holders settle their expired positions at that locked price. Any insurance-fund draw or socialized loss happens here, through the ordinary [bankruptcy waterfall](/protocol/risk-and-safety/liquidation-and-bankruptcy). The taker fee is charged at position closure, so closing during reduce-only is cheaper than waiting to be settled.
 
-*   Any necessary insurance fund draws and/or social loss can occur
-
-*   At position closure, the taker fee is applied (so as to encourage close during reduce only mode)
-
-### PnL Pool Settlement
-Once the market is in Settlement status, all base exposure is closed out (no users left holding base), the net quote balance is zero, and no bankruptcy claims remain unresolved, the remaining balance in the PnL Pool can be settled into the quote asset's [Revenue Pool](/protocol/how-it-works/revenue-pool)
+### Winding up the market's pools
+Once the market is in `Settlement` and everything below has cleared, the remaining P&L pool is swept into the quote asset's [revenue pool](/protocol/how-it-works/revenue-pool) and the market is done.
 </Steps>
 
-## Spot Markets
+## What the final step actually requires
 
-<Steps>
-### Reduce only mode
-The market immediately enters "reduce only mode" once an expiry date is set
-*   This blocks new borrows and any deposit that does not pay down an existing borrow (there is no spot order book, so there are no spot "buys" to block)
+The last step is stricter than "the market must be wound down", and the full list matters while waiting on a delisting to complete. All of the following must hold:
 
-### Force close mode (coming soon)
-After the expiry date, the market is set into "force close mode"
-*   Deposits are sent back to the user's associated token address up to an amount that still satisfies their margin requirement
+1. **Status is `Settlement`.** Not `ReduceOnly`, not `Active`.
+2. **No user base exposure.** No long base, no short base, and no users still holding a base position.
+3. **Net user cost basis is zero.**
+4. **No unresolved bankruptcy claims.** The checks above cannot see a latched bad debt, because a bankrupt's settled debt nets against another user's claim and neither holds base. The final sweep reserves nothing, so it would drain the insurance tranche backing that debt.
+5. **The AMM holds no base.**
+6. **A settlement duration is configured.** A protocol that never set one cannot complete a delisting.
+7. **The escrow period has elapsed.** On any meaningfully configured protocol that is at least a day after expiry, so an operator can examine the settlement.
+8. **No unsettled revenue share**, or the instruction rejects with `UnsettledRevenueShareOnDelist`. Accrued builder and referrer fees must be paid before the P&L pool moves, otherwise third parties' earned fees would be handed to the revenue pool.
 
-*   Opens the possibility for liquidation of borrows and/or swaps of deposits to other accepted collateral
-</Steps>
+Conditions 4 and 8 are cleared permissionlessly and neither needs the admin. A latched debt is absorbed through the waterfall, or released by P&L settlement once the position's quote reaches zero; a revenue-share row is either paid or written off. The market stays in `Settlement` while they run.
+
+## Spot markets
+
+Setting an expiry on a spot market puts it into reduce-only the same way, again requiring a future timestamp. In that state the market blocks new borrows and blocks any deposit that does not pay down an existing borrow. There is no spot orderbook on Velocity, so there are no spot buys to block.
+
+<Callout type="warning">
+**There is no force-close mode in the deployed program.** Earlier documentation described a post-expiry "force close mode" that returns deposits to the holder and liquidates or swaps remaining borrows. No such instruction, status or code path exists on Velocity today, and there is no date for one. A spot market put into reduce-only stays in reduce-only until borrows are repaid or liquidated through the ordinary paths.
+</Callout>
+
+## What this means in practice
+
+**A holder is better off closing early.** Funding accrues through reduce-only, the taker fee is charged either way, and settling at expiry pays the solvency-adjusted price rather than a price an early exit could have chosen.
+
+**A flat account should settle.** It can settle its P&L during reduce-only, so there is no reason to leave a claim outstanding into expiry.
+
+**A market maker should watch the status, not the order book.** Quotes that would add exposure stop working the moment the status flips, not the moment they are replaced.
+
+**Anyone waiting on a delisting should read the counters.** A market stuck in `Settlement` is almost always waiting on an unresolved bankruptcy claim or an unsettled revenue share, and both are cleared by instructions anyone can call.

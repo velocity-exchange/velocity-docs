@@ -1,34 +1,50 @@
-# PnL & Risk
+---
+title: "PnL & Risk"
+---
 
 ## How it works
 
-Velocity calculates your account's risk using a **health** metric (0-100) derived from total collateral vs margin requirements. Health 100 = no margin used, health 0 = liquidation eligible.
+Velocity summarizes an account's risk as **health**, an integer from 0 to 100 derived from total collateral against the maintenance margin requirement. 100 means no maintenance requirement is being used; 0 means the account is at or past the liquidation threshold. It short-circuits to 0 as soon as the account is flagged as being liquidated, so a health of 0 is a state, not just a number.
 
-**PnL** (Profit and Loss) comes in two forms: **unrealized** (mark-to-market value of open positions) and **realized** (settled when positions close). Unrealized PnL is calculated by comparing your position's entry price to the current oracle price. For perps, you also have **funding PnL** from periodic funding rate payments between longs and shorts.
+**PnL** comes in two forms. Unrealized PnL is the mark-to-market value of open positions, computed against the current oracle price rather than the last trade. Realized PnL is what settles when a position closes. Perps add a third component, funding PnL, from the periodic payments between longs and shorts.
 
-**Free collateral** is the amount of collateral not currently backing positions, it's what you can withdraw or use to open new positions. Margin requirements increase with position size and vary by market. Leverage is calculated as notional position value divided by total collateral. These metrics update in real-time as prices and positions change.
+**Free collateral** is the collateral not currently backing a position: what is available to withdraw, or to open something new against. Margin requirements grow with position size and vary by market, and leverage is notional position value over total collateral. All of these read off the subscription cache, so they move as prices and positions do without a refetch.
 
 <Callout type="info">
-**The \$100 initial-margin uPnL cap.** When total collateral or free collateral is computed under `'Initial'` margin (i.e. for opening new positions, not for liquidation checks), each position's *weighted, positive* unrealized PnL is capped at **\$100** (`MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`, `QUOTE_PRECISION`) before it can count toward buying power. This guards against a single dangerously-configured or manipulated market inflating a user's initial margin capacity. The cap is per-position, applies only to gains (losses are never capped), and only kicks in when you request the asset-weighted PnL (see `getUnrealizedPNL` below): it has no effect on `'Maintenance'`-margin health/liquidation math, and it doesn't cap raw unweighted PnL.
+**The \$100 initial-margin uPnL cap.** When total or free collateral is computed under `'Initial'` margin, which is the path for opening new positions rather than for liquidation checks, each position's *weighted, positive* unrealized PnL is capped at **\$100** before it can count toward buying power. The constant is `MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`, `100000000` in `QUOTE_PRECISION` (1e6). It exists so one misconfigured or manipulated market cannot inflate an account's initial margin capacity.
+
+The cap is per position and applies only to gains: losses are never capped. It takes effect only on the asset-weighted PnL, meaning `getUnrealizedPNL` with a `withWeightMarginCategory` of `'Initial'`. It has no effect on `'Maintenance'`-margin health or liquidation math, and it does not cap raw unweighted PnL.
 </Callout>
+
+A second, per-market haircut on positive unrealized PnL exists in the program, gated on `PerpMarket.unrealizedPnlMaxImbalance`. While the field is above 0 it scales the unrealized-PnL asset weight down once the market's net unsettled user PnL exceeds it, under `Initial` and `Fill` margin only; while the field is 0 the discount branch does not run at all. The field is per market and admin-settable, so read it off the market account rather than modelling the discount into an integration's own margin math.
 
 ## SDK Usage
 
-These helpers are commonly used for risk checks, dashboards, and liquidation logic.
+These helpers back risk checks, dashboards, and liquidation logic. The imports in the first example carry through the rest of the page.
 
 ### User health
 
-Return an overall account health score from 0-100, where lower values mean higher liquidation risk.
+Health is an integer from 0 to 100. Lower means closer to liquidation. Pass a perp market index to scope it to one isolated position instead of the cross-margin account.
 
 <SDKDoc>
   <TypeScript name="getHealth" type="method" owner="User">
 ```js
 const user = velocityClient.getUser();
-const health = user.getHealth(); // returns number 0-100
-console.log(health); // e.g. 85 means 85% healthy
+const health = user.getHealth(); // integer, 0 to 100
+console.log(health); // 85 means 15% of the maintenance requirement is used
 ```
   </TypeScript>
 </SDKDoc>
+
+Three cases never reach the ratio at all, and they change what a client should display:
+
+- **100** when the maintenance requirement is zero and total collateral is not negative. Collateral of exactly zero with no requirement reports 100, not 0.
+- **0** when total collateral is negative. Collateral of exactly zero also reports 0, but only when there is a non-zero maintenance requirement; with no requirement it takes the case above.
+- **0** for an account or isolated position already flagged as being liquidated, short-circuited before the formula runs. A health of 0 is therefore a state, not only a low number.
+
+<Callout type="warning">
+`getHealth(perpMarketIndex)` tests its argument for truthiness rather than for `null`, so **perp market index 0 takes the cross-margin liquidation path**. Collateral and the requirement still come from market 0's isolated calculation, but the short-circuit reads the cross-margin flag: a cross-liquidated account reports 0 for a healthy isolated market-0 position, and an isolated market-0 position flagged as being liquidated does not short-circuit to 0. A client that displays isolated health for market 0 should check `isIsolatedPositionBeingLiquidated(0)` separately.
+</Callout>
 
 ### Collateral, margin requirement, leverage
 
@@ -60,6 +76,8 @@ console.log(convertToNumber(req, QUOTE_PRECISION)); // USD
   </TypeScript>
 </SDKDoc>
 
+A perp market whose status is `Settlement` contributes a margin ratio of 0 to these calculations, and its positions are valued at `market.expiryPrice` instead of the oracle price. The margin calculation applies that zero itself, after calling `calculateMarketMarginRatio`; the helper does not apply it. Do not use `calculateMarketMarginRatio` on its own as a settlement-aware ratio, because on a settling market it returns the market's normal ratio.
+
 Get currently available collateral that can be used for new positions or withdrawals.
 
 <SDKDoc>
@@ -78,36 +96,13 @@ Get current account leverage as a scaled value (convert to human-readable x leve
 ```js
 import { TEN_THOUSAND } from "@velocity-exchange/sdk";
 
-// getLeverage() returns BN scaled by 10000 (e.g. 2x = BN(20000))
+// getLeverage(includeOpenOrders?, perpMarketIndex?) returns a BN scaled by
+// TEN_THOUSAND (1e4), so 20000 is 2x. ZERO when net asset value is zero.
 const lev = velocityClient.getUser().getLeverage();
-console.log(lev.toNumber() / TEN_THOUSAND.toNumber()); // e.g. 2.5 (2.5x leverage)
+console.log(lev.toNumber() / TEN_THOUSAND.toNumber()); // 2.5 means 2.5x leverage
 ```
   </TypeScript>
 </SDKDoc>
-
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
-### Isolated positions
-
-A perp position opened in **isolated margin mode** is backed only by its own dedicated quote deposit rather than the account's shared cross-margin pool: a loss on an isolated position cannot draw down collateral backing your other positions, and vice versa. Every risk helper above accepts an optional trailing `perpMarketIndex` to scope its result to a single market's isolated position bucket instead of the cross-margin account:
-
-<SDKDoc>
-  <TypeScript name="Isolated position risk" type="example">
-```js
-const user = velocityClient.getUser();
-const isolatedMarketIndex = 2;
-
-// Health, collateral, margin requirement, and leverage can all be scoped
-// to one isolated market instead of the cross-margin account.
-const isolatedHealth = user.getHealth(isolatedMarketIndex);
-const isolatedFreeCollateral = user.getFreeCollateral('Initial', isolatedMarketIndex);
-const isolatedMarginReq = user.getMarginRequirement('Initial', undefined, undefined, undefined, isolatedMarketIndex);
-const isolatedLeverage = user.getLeverage(true, isolatedMarketIndex);
-```
-  </TypeScript>
-</SDKDoc>
-
-`getFreeCollateral` and `getLeverage` return `ZERO` for a market with no open isolated position; `getMarginRequirement` does the same. `getTotalCollateral(marginCategory, strict, includeOpenOrders, liquidationBuffer, perpMarketIndex)` is the one exception: it **throws** if no isolated margin calculation exists for that market, so guard the call if the position may not exist.
-*/}
 
 ### Unrealized PnL
 
@@ -145,7 +140,7 @@ Compute the effective entry price for a perp position from its cumulative trade 
 <SDKDoc>
   <TypeScript name="calculateEntryPrice" type="function">
 ```js
-import { calculateEntryPrice, PRICE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
+import { PRICE_PRECISION, calculateEntryPrice, convertToNumber } from "@velocity-exchange/sdk";
 
 const position = velocityClient.getUser().getPerpPosition(0);
 if (position) {
@@ -168,3 +163,13 @@ await velocityClient.settlePNL(user.userAccountPublicKey, user.getUserAccount(),
 ```
   </TypeScript>
 </SDKDoc>
+
+Whether the program accepts the call depends on the position and the market's status:
+
+- The market's `SettlePnl` operation must be unpaused in every case.
+- **With a base position still open**, the market's `SettlePnlWithPosition` operation must also be unpaused *and* the market's status must be `Active`. Either one failing gives `InvalidMarketStatusToSettlePnl`.
+- **With no base position left**, `ReduceOnly` is accepted alongside `Active`, and `SettlePnlWithPosition` is not consulted. So an account can still settle out of a market that has gone reduce-only, but only once it is flat.
+
+Settling someone else's account adds one rule. When the signer is neither the account's authority nor its delegate, and the position's unrealized PnL is negative, the call is rejected while the market's oracle validity is `StaleForMargin` or `InsufficientDataPoints`. Both of those are otherwise accepted for settle-PnL, so a keeper settling other users' losses can fail on a market where the same call from the owner succeeds.
+
+On an expired market, positions settle at the market's fixed `expiryPrice` rather than the live oracle price.

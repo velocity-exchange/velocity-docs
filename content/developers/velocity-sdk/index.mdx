@@ -1,31 +1,108 @@
 ---
+title: "Velocity SDK"
 asIndexPage: true
 ---
 
-# Velocity SDK
+`@velocity-exchange/sdk` is the TypeScript client for the Velocity program: it derives the accounts, builds the instructions, signs and sends the transactions, and keeps a live cache of the onchain state the caller reads between calls. These pages are written for someone integrating against it, whether that is a trading bot, a keeper, a front end, or a backend service. Everything here assumes the SDK; for the onchain layouts underneath it, see [Concepts](/developers/concepts).
 
-The TypeScript SDK (`@velocity-exchange/sdk`) is the primary way to build on Velocity: placing and canceling orders, managing accounts and positions, subscribing to onchain updates, and integrating protocol logic in your backend or client app.
+## Where to start
 
-## Suggested reading path
+Read [Setup](/developers/velocity-sdk/setup) and [Precision and Types](/developers/velocity-sdk/precision-and-types) before anything else. Setup covers constructing and subscribing a client; precision explains why every amount is a `BN` at a fixed exponent, which is the single mistake most likely to move real funds the wrong way. From there, [Deposits & Withdrawals](/developers/velocity-sdk/deposits-withdrawals) and [Orders](/developers/velocity-sdk/orders) cover the two paths almost every integration needs.
 
-The pages in this section build on each other. If you're new, read them in this order:
+The rest is reference. Read a page when the thing it covers comes up.
 
-1. **Get set up**: [Setup](/developers/velocity-sdk/setup) (program addresses, wallet, `VelocityClient`), then [Precision & Types](/developers/velocity-sdk/precision-and-types) (everything is `BN`s at fixed precision, read this before touching funds).
-2. **Move funds**: [Deposits & Withdrawals](/developers/velocity-sdk/deposits-withdrawals) and [Transfers](/developers/velocity-sdk/transfers).
-3. **Trade**: [Users](/developers/velocity-sdk/users), [Markets](/developers/velocity-sdk/markets), [Orders](/developers/velocity-sdk/orders), and [P&L / Risk](/developers/velocity-sdk/pnl-risk).
-4. **Go deeper**: [Events](/developers/velocity-sdk/events), [DLOB](/developers/velocity-sdk/dlob), [Swaps](/developers/velocity-sdk/swaps), [Swift](/developers/velocity-sdk/swift), [Builder Codes](/developers/velocity-sdk/builder-codes) (code examples; see [Velocity Builder Codes](/developers/builder-codes) for the underlying concepts), and [SDK Internals](/developers/velocity-sdk/sdk-internals) (including error handling).
+## In this section
 
-If you haven't yet, skim the [Concepts](/developers/concepts) section first: the [account model](/developers/concepts/account-model) explains the onchain state the SDK wraps.
+<Cards>
+  <Card
+    title="Setup"
+    href="/developers/velocity-sdk/setup"
+    description="Program IDs, the quote mint per environment, loading a wallet, and constructing and subscribing a VelocityClient."
+  />
+  <Card
+    title="Precision and Types"
+    href="/developers/velocity-sdk/precision-and-types"
+    description="The precision constants, BigNum, token math helpers, and why a slot count is not a fixed amount of time."
+  />
+  <Card
+    title="Deposits & Withdrawals"
+    href="/developers/velocity-sdk/deposits-withdrawals"
+    description="Moving tokens between a wallet token account and a subaccount's spot balance, plus the borrow and lend rates."
+  />
+  <Card
+    title="Transfers"
+    href="/developers/velocity-sdk/transfers"
+    description="Moving deposits, borrows, and perp positions between subaccounts under one authority, including delegate transfers."
+  />
+  <Card
+    title="Users"
+    href="/developers/velocity-sdk/users"
+    description="Subaccounts, the active subaccount, delegates, margin settings, and reading orders and positions off a User."
+  />
+  <Card
+    title="Markets, Oracles, and Positions"
+    href="/developers/velocity-sdk/markets"
+    description="Reading perp and spot market accounts, oracle prices, market tier numbers, and the global state account."
+  />
+  <Card
+    title="Orders"
+    href="/developers/velocity-sdk/orders"
+    description="Order types and post-only modes, placement and cancels, scale-order ladders, and the raw instruction builders."
+  />
+  <Card
+    title="PnL & Risk"
+    href="/developers/velocity-sdk/pnl-risk"
+    description="Health, total and free collateral, margin requirement, leverage, unrealized PnL, and settling perp PnL."
+  />
+  <Card
+    title="Events"
+    href="/developers/velocity-sdk/events"
+    description="The full event catalog and how EventSubscriber filters, buffers, and replays program events."
+  />
+  <Card
+    title="DLOB"
+    href="/developers/velocity-sdk/dlob"
+    description="Building a local order book out of user accounts, then querying L2 depth and best bid/ask."
+  />
+  <Card
+    title="Swaps"
+    href="/developers/velocity-sdk/swaps"
+    description="Routing a collateral swap through Jupiter or Titan so tokens move through the account's Velocity spot balances."
+  />
+  <Card
+    title="Swift"
+    href="/developers/velocity-sdk/swift"
+    description="Signing an order offchain and submitting it for keepers and market makers to land onchain."
+  />
+  <Card
+    title="Builder Codes"
+    href="/developers/velocity-sdk/builder-codes"
+    description="Attaching a builder fee to an order, the fill-time escrow requirement, and collecting accrued revenue share."
+  />
+  <Card
+    title="Transactions"
+    href="/developers/velocity-sdk/transactions"
+    description="The four tx senders, blockhash caching, compute-unit sizing, and the priority-fee subscribers."
+  />
+  <Card
+    title="SDK Internals"
+    href="/developers/velocity-sdk/sdk-internals"
+    description="Account subscription strategies, the subscriber and map catalog, caching behavior, and error handling."
+  />
+</Cards>
 
 ## End-to-end example
 
-A minimal flow: connect, deposit USDT, place a market order, and read back the position. Each step is covered in depth on its own page.
+Connect, deposit collateral, place a market order, and read back the position. Each step is covered in depth on its own page.
 
 ```js
 import { Connection } from "@solana/web3.js";
 import {
-  VelocityClient, Wallet, loadKeypair,
-  getMarketOrderParams, PositionDirection, BASE_PRECISION, BN,
+  PositionDirection,
+  VelocityClient,
+  Wallet,
+  getMarketOrderParams,
+  loadKeypair,
 } from "@velocity-exchange/sdk";
 
 // 1. Connect and subscribe (see Setup)
@@ -35,23 +112,24 @@ const velocityClient = new VelocityClient({ connection, wallet, env: "mainnet-be
 await velocityClient.subscribe();
 
 try {
-  // 2. Deposit 100 USDT as collateral (see Deposits & Withdrawals)
-  const marketIndex = 0; // quote asset spot market
-  const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
-  const associatedTokenAccount = await velocityClient.getAssociatedTokenAccount(marketIndex);
-  await velocityClient.deposit(amount, marketIndex, associatedTokenAccount);
+  // 2. Deposit 100 quote-asset units as collateral (see Deposits & Withdrawals)
+  const quoteMarketIndex = 0; // spot market 0 is the quote asset
+  const amount = velocityClient.convertToSpotPrecision(quoteMarketIndex, 100);
+  const associatedTokenAccount =
+    await velocityClient.getAssociatedTokenAccount(quoteMarketIndex);
+  await velocityClient.deposit(amount, quoteMarketIndex, associatedTokenAccount);
 
   // 3. Place a market order: long 1 SOL-PERP (see Orders)
   const txSig = await velocityClient.placePerpOrder(
     getMarketOrderParams({
-      marketIndex: 0,
+      marketIndex: 0, // perp market 0 is SOL-PERP
       direction: PositionDirection.LONG,
-      baseAssetAmount: new BN(1).mul(BASE_PRECISION),
+      baseAssetAmount: velocityClient.convertToPerpPrecision(1),
     })
   );
   console.log("order placed:", txSig);
 
-  // 4. Read back account state (see P&L / Risk)
+  // 4. Read back account state (see PnL & Risk)
   const user = velocityClient.getUser();
   console.log("health:", user.getHealth());
 } finally {
@@ -60,5 +138,5 @@ try {
 ```
 
 <Callout type="info">
-Every SDK call that sends a transaction can fail (insufficient collateral, stale oracle, RPC errors): wrap calls in `try/catch` and inspect the program error code. See [Error handling in SDK Internals](/developers/velocity-sdk/sdk-internals#error-handling) for how to decode program errors and retry safely.
+Every SDK call that sends a transaction can fail: insufficient collateral, a stale oracle, an RPC error. Wrap calls in `try`/`catch` and inspect the program error code. See [Error handling](/developers/velocity-sdk/sdk-internals#error-handling) for how to decode program errors and retry safely.
 </Callout>

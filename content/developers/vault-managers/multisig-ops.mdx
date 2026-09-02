@@ -1,8 +1,26 @@
-# Multisig Manager
+---
+title: "Multisig Manager"
+---
 
-The vault **manager** is the ultimate owner: they update parameters, fees, and the trading delegate, and collect fees (see [Vault Managers](/developers/vault-managers) for the full role breakdown). The manager is set to the signer of the vault creation transaction and can be changed with `update_vault_manager` (signed by the current manager). This page covers running that manager role through a multisig (e.g. Squads) instead of a single keypair.
+A vault has two privileged keys, and they want different security. The **manager** owns the vault: it sets fees and caps, appoints the trading delegate, collects the management and profit share, and on a Trusted vault can borrow from it. Every one of those actions is rare and irreversible enough to want more than one signature. The **delegate** signs every order the vault places, thousands of times a day, and has to be a hot key on the trading machine.
 
-**New vault with multisig as manager:** Set the manager to your Squads (or other multisig) address and use `--dump-transaction-message` to output a base58 transaction blob. Create a transaction in Squads (Developers → TX Builder → Create Transaction → Add Instruction → Import from base58), then have signers approve and execute.
+So the two roles split cleanly onto different key material: run the manager through a multisig such as Squads, keep the delegate as a plain keypair, and rotate the delegate with `manager-update-delegate` if that machine is ever compromised. A multisig cannot be the delegate in any practical sense, because each order would need a proposal round.
+
+This page covers driving the manager role through a multisig. For what the manager can actually do, see [Vault Managers](/developers/vault-managers) and [Manager operations](/developers/vault-managers/manager-operations).
+
+## How the CLI talks to a multisig
+
+The `vaults-sdk` CLI cannot sign for a multisig, so it does the next best thing: `--dump-transaction-message` builds the instructions, sets a fee payer and a placeholder blockhash, serializes without requiring signatures, and prints the result as base58. That base58 string goes into Squads (Developers, then TX Builder, Create Transaction, Add Instruction, Import from base58), where the multisig's signers approve and execute it.
+
+The flag is available on `init-vault`, on every `manager-*` command, and on the three `admin-*` commands (`admin-init-fee-update`, `admin-delete-fee-update`, `admin-update-vault-class`). It is not on `init-vault-depositor` or `apply-profit-share-all`, so those two have to be sent by a keypair that can sign directly, which is fine because neither requires the manager to sign.
+
+Several commands prompt for confirmation before they print anything: `init-vault`, `manager-update-vault`, `manager-update-vault-manager`, `manager-update-fees`, `admin-init-fee-update`, and `admin-delete-fee-update` all print the before and after values and wait for a typed `yes`. Do not pipe them.
+
+The CLI also loads a Ledger directly. Pass `-k usb://ledger` (with the optional `/<wallet-id>?key=<account>/<change>` suffix that the Solana CLI uses) instead of a keypair path, and the hardware wallet signs. That is a reasonable stand-in when a full multisig is more ceremony than the situation warrants.
+
+## Creating a vault owned by a multisig
+
+Pass the multisig address as `--manager`. The instruction stores whoever signs as `manager` on the vault, so the multisig has to be a signer on the transaction, which is exactly what happens when Squads executes it:
 
 ```bash
 bun run cli -- init-vault \
@@ -11,11 +29,20 @@ bun run cli -- init-vault \
   --redeem-period <SECONDS> \
   --profit-share <PERCENT> \
   --min-deposit-amount <AMOUNT> \
+  --delegate <HOT_TRADING_KEY> \
   --manager <MULTISIG_ADDRESS> \
   --dump-transaction-message
 ```
 
-**Existing vault:** Transfer management to a multisig by having the current manager run:
+When `--manager` is set, the multisig is both the `manager` and the rent `payer` on `initialize_vault`, so it needs SOL for the vault account, its token account, and the Velocity user and user-stats accounts created by CPI.
+
+<Callout type="warning" title="The init-vault blob needs a second signature">
+`init-vault` emits three instructions: `initialize_vault`, `update_delegate`, and `initialize_signed_msg_user_orders`, which allocates the account that holds the vault's signed-message order slots. That third instruction takes its rent `payer` from the CLI's own `-k` keypair, not from `--manager`, and `payer` is a required signer. A dumped `init-vault` transaction therefore carries two signers: the multisig and the CLI keypair. Fund the CLI keypair with SOL and have it co-sign, or drop that instruction and create the signed-message account separately.
+</Callout>
+
+## Handing an existing vault to a multisig
+
+The current manager runs:
 
 ```bash
 bun run cli -- manager-update-vault-manager \
@@ -23,6 +50,44 @@ bun run cli -- manager-update-vault-manager \
   --new-manager <MULTISIG_ADDRESS>
 ```
 
-**Any manager command via multisig:** Use `--dump-transaction-message` on manager commands (`bun run cli -- manager-*`) to get a base58 blob, then import it in Squads as above. The CLI uses the manager as fee payer, so ensure the multisig wallet has enough SOL for transaction fees.
+<Callout type="warning" title="There is no acceptance step">
+`update_vault_manager` writes the new pubkey and returns. The new manager never signs, so the program has no way to check that anyone controls the address supplied. It rejects exactly three values: the current manager, the vault's own address, and the all-zero pubkey. Everything else is accepted, and the write is one-way. A transposed character hands the vault to nobody, permanently: no fee collection, no parameter changes, no delegate rotation, and no path back. Confirm the address on the multisig's own page before sending this.
+</Callout>
 
-For the base vault creation flow these commands build on, see [Quickstart](/developers/vault-managers/quickstart). For manager borrowing under a Trusted vault, see [Trusted vaults](/developers/vault-managers/trusted-vaults).
+## Running a manager command through the multisig
+
+Every manager instruction takes the manager account from `vault.manager` rather than from the connected wallet, so the instruction the CLI builds is already correct for a multisig even though a different keypair built it:
+
+```bash
+bun run cli -- manager-update-vault \
+  --vault-address <VAULT_ADDRESS> \
+  --management-fee 0 \
+  --dump-transaction-message
+```
+
+Two things do not follow the manager, and both bite:
+
+**The fee payer on the blob is the CLI keypair.** `--dump-transaction-message` stamps the connected `-k` wallet as fee payer on every command except `init-vault`. Squads sets its own payer when it executes, so this is usually harmless, but do not read the dumped blob as a statement of who pays.
+
+**`manager-borrow` derives the wrong token account.** The program constrains the borrow destination with `token::authority = manager`, so the tokens must land in an account owned by the multisig. The CLI, alone among the manager commands, defaults that account to the associated token account of the connected `-k` keypair rather than of `vault.manager`, and the borrow will fail the constraint. Always pass it explicitly:
+
+```bash
+bun run cli -- manager-borrow \
+  --vault-address <VAULT_ADDRESS> \
+  --borrow-spot-market-index 0 \
+  --borrow-amount <AMOUNT> \
+  --manager-token-account <MULTISIG_TOKEN_ACCOUNT> \
+  --dump-transaction-message
+```
+
+`manager-repay`, `manager-deposit`, `manager-withdraw`, and the insurance-fund stake commands all derive from `vault.manager` correctly, so they need the flag only when a non-associated account is required.
+
+## Building the instructions directly
+
+If the CLI's shape does not fit, every `VaultClient` method has a `get...Ix` variant that returns instructions instead of sending them, and those take the manager from the vault account the same way. Assemble them into whatever the multisig tooling ingests. See [Manager operations](/developers/vault-managers/manager-operations).
+
+## Related pages
+
+- [Quickstart](/developers/vault-managers/quickstart): the base vault creation flow these commands build on.
+- [Trusted vaults](/developers/vault-managers/trusted-vaults): manager borrowing, which is where the token-account gotcha above matters most.
+- [Manager operations](/developers/vault-managers/manager-operations): the full SDK surface behind these commands.
