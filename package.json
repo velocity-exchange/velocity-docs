@@ -6,9 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "rust-docs": "ts-node scripts/rustDocs.ts",
+    "rust-docs": "bun scripts/rustDocs.ts",
+    "legal-pages": "bun scripts/replaceLegalPageContentFromS3.ts",
     "test": "vitest run",
-    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap && node scripts/generateLlmsTxt.mjs && node scripts/generateMarkdownPages.mjs"
+    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind && next-sitemap && bun scripts/generateLlmsTxt.mjs && bun scripts/generateMarkdownPages.mjs"
   },
   "repository": {
     "type": "git",
@@ -38,15 +39,15 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "source-map-support": "0.5.21",
-    "swagger-ui-react": "5.31.0",
-    "ts-node": "10.9.2"
+    "swagger-ui-react": "5.31.0"
   },
   "devDependencies": {
     "@types/d3-sankey": "0.12.5",
     "@types/node": "18.11.10",
+    "@types/react": "19.2.9",
     "pagefind": "1.4.0",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   },
-  "packageManager": "pnpm@10.11.1+sha512.e519b9f7639869dc8d5c3c5dfef73b3f091094b0a006d7317353c72b124e80e1afd429732e28705ad6bfa1ee879c1fce46c128ccebd3192101f43dd67c667912"
+  "packageManager": "bun@1.3.13"
 }

@@ -139,8 +139,8 @@ state is fully drawn; reduced-motion users never see animation.
 
 ## Finish checklist
 
-1. `pnpm test` passes (add a layout test if you changed layout code).
-2. `pnpm build` passes.
+1. `bun run test` passes (add a layout test if you changed layout code).
+2. `bun run build` passes.
 3. Check the page in light and dark, at 1280px and 375px, and with
    `prefers-reduced-motion: reduce`.
 4. Run `node ~/.claude/skills/impeccable/scripts/detect.mjs --json components/diagrams`

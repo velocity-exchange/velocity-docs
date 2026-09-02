@@ -236,8 +236,8 @@ async function loadOnChainData(rpcUrl: string): Promise<OnChainData> {
       let oraclePrice: BN = ZERO;
       try {
         // The SDK's own sub-dependencies pin a different @solana/web3.js
-        // patch version than the app, so pnpm keeps a second, structurally
-        // incompatible `Connection` class purely at the type level (same
+        // patch version than the app, so the installed tree keeps a second,
+        // structurally incompatible `Connection` class purely at the type level (same
         // reason utils/spot-markets.ts casts through `unknown` for
         // `VelocityProgram`). The runtime objects are interchangeable.
         const oracleClient = getOracleClient(
