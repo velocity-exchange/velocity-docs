@@ -42,6 +42,8 @@ synchronous placement to a user, while avoiding toxic flow.
 
 In both cases makers are able to see the orders before they execute. For more information see [The taker speed bump](#the-taker-speed-bump)
 
+# Velocity PropAMMs
+
 Similar to spot PropAMMs, Velocity fills a perp order using a router pass.
 The onchain router does three things:
 
@@ -237,9 +239,9 @@ A signed message user does not have to trust the filler, only the router that th
 to fill out the route digest.
 
 A signed order is also the attested path. SWIFT holds the message through a
-hold window and co-signs the fill, so the fill can take synchronously on a
-market with an activation delay. [Attested flow](#attested-flow) gives the
-rule.
+hold window and releases a detached attestation for the fill, so the fill can
+take synchronously on a market with an activation delay. [Attested
+flow](#attested-flow) gives the rule.
 
 ### A transaction that the taker builds
 
@@ -478,27 +480,32 @@ liquidation force-cancel is exempt, so a distressed account is never blocked.
 
 ## Attested flow
 
-An attestation is a co-signature. Velocity names one flow-authority key on its
-`State` account, and the [SWIFT](/developers/market-makers/swift-api) service
-signs with that key. A transaction that the flow authority co-signed is
-attested.
+An attestation is a flow-authority signature. Velocity names one
+flow-authority key on its `State` account, and the
+[SWIFT](/developers/market-makers/swift-api) service holds that key. It
+attests through two transports, and it never signs a transaction it did not
+build.
 
-Velocity reads the co-signature from the instructions sysvar, once, at its own
-boundary, and forwards the verdict to every quoter on the wire as
-`taker_served_window`. A quoter trusts that field the way it trusts every
-other field Velocity asserts on the wire — the user set, the caps, the taker.
-The field states a wider fact than the co-signature: the taker's flow served a
-protection window. An attested transaction served the SWIFT hold. A crank that
-fills a rested order earns the flag by measured rest: the orders it settles
-must have rested at least two slots, above the SWIFT hold. Construction alone
-is not enough — on a market with a zero default delay, "rested" could mean
-the previous transaction, and a fresh order could wear the flag into a
-protected quoter by resting and cranking back to back.
+On a transaction that SWIFT builds itself — a placement, a direct take — the
+key signs as a named `flow_authority` account, and presence of that signer is
+the attestation.
 
-The co-signature states that the order served its delay off chain, in
-front of the makers. SWIFT receives an order message, broadcasts it to the
-maker WebSocket feed, holds it, and co-signs the fill transaction after the
-hold. The default hold is 300 milliseconds.
+For a signed-message fill, the transaction is keeper-built, so the key signs
+a detached attestation instead: a signature over the order's own signature
+plus an expiry. SWIFT receives the order message, broadcasts it to the maker
+WebSocket feed, holds it, and releases the attestation when the hold ends.
+The default hold is 300 milliseconds. The keeper passes the blob as the
+fill's `flow_attestation` argument, and Velocity verifies it in-program next
+to the taker signature it binds to. The attestation authorizes exactly one
+order's flow, costs no signature fee, and the same blob serves every keeper —
+the order still fills once.
+
+Velocity verifies the attestation once, at its own boundary, and forwards the
+verdict to every quoter on the wire as `taker_served_window`. This field can indicate multiple cases,
+all ensure a taker was delayed. Either (a) attested
+transaction served the SWIFT hold or (b) a crank that fills a rested order earns
+the flag by measured rest; the orders it settles must have rested at least
+two slots, above the SWIFT hold.
 
 On a market whose default delay is more than zero:
 
