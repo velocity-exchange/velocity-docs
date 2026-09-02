@@ -259,10 +259,11 @@ export function buildTypeScriptTab(props: SDKBlockProps): SDKTab {
   // export statement, throws, and renders a warning box at the reader. Return
   // the sample on its own instead.
   if (tsType === "example") {
+    // Render like every other tab's raw code sample: always visible, not
+    // buried behind a collapsed section titled after itself.
     return {
       label: "TypeScript",
-      heading: props.name,
-      content: props.children,
+      example: { content: props.children },
     };
   }
 
