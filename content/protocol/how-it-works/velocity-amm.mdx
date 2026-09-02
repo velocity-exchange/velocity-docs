@@ -76,6 +76,7 @@ This pricing mechanism updates an asset's mark price towards its oracle price, a
 - better entries and exits closer to oracle price.
 
 The mark price is updated each time the oracle updates its price and when the contract is interacted with.
+
 </Steps>
 
 ### Oracle Live Pricing Sequence
@@ -96,7 +97,8 @@ The reservation (AMM) price is the `quote/base reserves * peg`.
 Beyond quoting its own curve, the AMM can also co-fill a resting orderbook maker order just-in-time (JIT): stepping in alongside that maker, at the maker's price, when doing so improves the AMM's own inventory. This trades away some of the AMM's natural curve spread in exchange for rebalancing.
 
 <Callout type="info">
-JIT only fires against resting maker orders. Filling directly against the AMM's own curve still requires the order to be eligible for an AMM fill (see above).
+  JIT only fires against resting maker orders. Filling directly against the AMM's own curve still
+  requires the order to be eligible for an AMM fill (see above).
 </Callout>
 
 ### When the AMM will JIT-make
@@ -113,7 +115,7 @@ Sizing is built from several caps, applied in sequence:
 
 1. **50% of the fill size.** The AMM can never take more than half of the matched fill amount (the smaller of the taker's and maker's remaining size): `max_jit_amount = fill_amount / 2`.
 2. **Wash-trade guard.** With no valid oracle price, JIT participation is disabled outright for that fill. Otherwise, if the fill price sits on the wrong side of oracle by more than 5 bps (a taker buying below `oracle − 5bps`, or selling above `oracle + 5bps`), the 50% cap from step 1 is shrunk further, scaled down by how far the price has strayed past that 5 bps band relative to the AMM's own opposite-side spread. The further past the band, the smaller the AMM's participation.
-3. **Imbalance-based sizing.** The AMM compares its maximum open bids against its maximum open asks (the same bounds `concentration_coef` sets, see above). If the larger side is at least 1.5x the smaller side, the book is considered imbalanced and the AMM is willing to take up to the *full* size of the fill; otherwise it caps itself to 25% of the fill size.
+3. **Imbalance-based sizing.** The AMM compares its maximum open bids against its maximum open asks (the same bounds `concentration_coef` sets, see above). If the larger side is at least 1.5x the smaller side, the book is considered imbalanced and the AMM is willing to take up to the _full_ size of the fill; otherwise it caps itself to 25% of the fill size.
 4. **Intensity scaling.** The step 3 result is scaled by `amm_jit_intensity / 100`: an intensity of 50, for instance, halves whatever step 3 allowed.
 5. **Inventory-flip guard.** The intensity-scaled amount is capped at the AMM's current absolute net position: a JIT fill can flatten the AMM's inventory but never flip it onto the opposite side.
 6. The final JIT size is the smaller of the wash-guard-adjusted cap from steps 1–2 and the imbalance/intensity-scaled amount from steps 3–5, standardized to the market's order step size.
@@ -122,9 +124,7 @@ Every JIT fill happens at the resting maker's price, not the AMM's own curve pri
 
 ## vAMM maker rebate
 
-The AMM can also be paid a maker rebate on the fills where it is the maker. This is gated by the `VammMakerRebate` bit on `State.featureBitFlags`, which is off by default and toggled exchange-wide (there is no per-market version of it). Enabling it is a cold-admin action; disabling it can be done by any signer holding the `FeatureFlag` role.
-
-How the rebate is computed and where it lands:
+The AMM can also be paid a maker rebate on the fills where it is the maker. How the rebate is computed and where it lands:
 
 - The rebate rate is the **base tier** maker rebate (`FeeStructure.feeTiers[0]`), currently 0.0025% of the filled notional, and is then scaled by the market's `feeAdjustment`. It deliberately does not use the taker's fee tier, so the AMM's earnings do not vary with which account happens to be taking.
 - It is carved out of the taker-fee remainder before that remainder is split between the AMM fee provision, the insurance fund, and the protocol, then folded into the AMM's `amm_fee` for the fill. If the remainder is too small to cover it, the rebate is clamped to what is left.
