@@ -1,4 +1,6 @@
-# DLOB (Decentralized Limit Order Book)
+---
+title: "DLOB (Decentralized Limit Order Book)"
+---
 
 <Callout type="warning">
 The DLOB is to be removed. An order will rest in one CLOB market account instead
@@ -10,32 +12,43 @@ page describes the DLOB as it works now. New work belongs on the CLOB book. See
 
 ## What is the DLOB?
 
-The **Decentralized Limit Order Book (DLOB)** is Velocity's on-chain representation of all resting limit orders across all users. Unlike a traditional centralized order book maintained by an exchange, the DLOB is constructed locally by reading on-chain user accounts and aggregating their open limit orders into a price-ordered book.
+The **Decentralized Limit Order Book (DLOB)** is Velocity's onchain representation of all resting limit orders across all users. Unlike a traditional centralized order book maintained by an exchange, the DLOB is constructed locally by reading onchain user accounts and aggregating their open limit orders into a price-ordered book.
 
 When a new order arrives, keepers and market makers query the DLOB to find matching resting orders. Velocity's matching engine then executes fills between the incoming taker and the resting makers on the DLOB, or routes to the AMM as a fallback.
 
 <Callout type="warning">
-Velocity removed **spot DLOB trading**: `place_spot_order`, `place_and_take_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist on-chain (calls now fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral/borrow-lend and for [swaps](/developers/velocity-sdk/swaps), but they can no longer be traded on an order book. In practice the DLOB only ever contains `MarketType.PERP` orders: the APIs below still accept a `marketType` parameter for API compatibility, but pass `MarketType.SPOT` and you'll only ever see an empty book.
+Velocity removed **spot DLOB trading**: `place_spot_order`, `place_and_take_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist onchain (calls now fail with `SpotDlobTradingDisabled`). Spot markets still exist for collateral, borrow-lend, and [swaps](/developers/velocity-sdk/swaps), but they can no longer be traded on an order book. In practice the DLOB only ever contains `MarketType.PERP` orders: the APIs below still accept a `marketType` parameter for compatibility, but a `MarketType.SPOT` query only ever returns an empty book.
 </Callout>
 
-**When you'd use the DLOB:**
-- **Market makers**: quote against the current best bid/ask and respond to order flow
-- **Keeper/filler bots**: identify and fill matchable perp orders for fee rewards
-- **Orderbook UIs**: display a live aggregated L2 or L3 view of a perp market
+Three kinds of integration read it. Market makers quote against the current best bid and ask and react to order flow. Keeper and filler bots scan it for matchable perp orders to fill for the fee reward. Orderbook UIs render the aggregated L2 or L3 view of a perp market.
 
 ## SDK Usage
 
-The SDK provides several classes to subscribe to and query the DLOB.
+A local DLOB is assembled from three subscribers, and all three must be running before any query returns a useful answer.
 
-### OrderSubscriber
+| Class | Role |
+|---|---|
+| `OrderSubscriber` | The raw feed. Subscribes to every open user order over websocket, polling, or gRPC, and emits `orderCreated`, `userUpdated`, and `updateReceived`. |
+| `SlotSubscriber` | The clock. Tracks the current Solana slot, which the book needs to price auctions and drop expired orders. |
+| `DLOBSubscriber` | The book. Rebuilds an aggregated `DLOB` from the order feed on a fixed interval and serves L2 and L3 views off it. |
+| `DLOB` | The data structure itself, with bid and ask sides and the query methods. Reach it through `dlobSubscriber.getDLOB()` rather than constructing one. |
 
-Subscribes to all open user orders in real-time via WebSocket or polling. This is the raw data feed that the DLOB is built from. You need this running before you can maintain a local DLOB.
+`UserMap` is the related cache for *accounts* rather than orders. Liquidation bots and anything that has to watch positions across the whole protocol use it instead of, or alongside, `OrderSubscriber`. See [SDK Internals](/developers/velocity-sdk/sdk-internals#usermap-for-multiple-users).
+
+### Setting up a local DLOB
+
+The full sequence, in dependency order. `updateFrequency` is the rebuild interval in milliseconds: lower it for a market-making loop, raise it for a dashboard.
 
 <SDKDoc>
-  <TypeScript name="OrderSubscriber" type="class">
+  <TypeScript name="DLOB setup" type="example">
 ```js
-import { OrderSubscriber } from "@velocity-exchange/sdk";
+import { DLOBSubscriber, OrderSubscriber, SlotSubscriber } from "@velocity-exchange/sdk";
 
+// 1. Track the current slot, needed for order expiry and auction pricing.
+const slotSubscriber = new SlotSubscriber(connection);
+await slotSubscriber.subscribe();
+
+// 2. Subscribe to all open orders across all users.
 const orderSubscriber = new OrderSubscriber({
   velocityClient,
   subscriptionConfig: { type: "websocket" },
@@ -43,120 +56,35 @@ const orderSubscriber = new OrderSubscriber({
   decodeData: true,
 });
 await orderSubscriber.subscribe();
-```
-  </TypeScript>
-</SDKDoc>
 
-### DLOBSubscriber
-
-Builds and continuously maintains an aggregated orderbook from the order stream. Use this when you need a live L2/L3 view without manually managing the DLOB state.
-
-<SDKDoc>
-  <TypeScript name="DLOBSubscriber" type="class">
-```js
-import { DLOBSubscriber } from "@velocity-exchange/sdk";
-
+// 3. Build and maintain the book from the order stream.
 const dlobSubscriber = new DLOBSubscriber({
   velocityClient,
-  dlobSource: orderSubscriber,   // feeds from your OrderSubscriber
-  slotSource: slotSubscriber,    // needed for order expiry/timing
-  updateFrequency: 1000,         // rebuild the book every 1000ms
+  dlobSource: orderSubscriber, // feeds from the OrderSubscriber above
+  slotSource: slotSubscriber,  // needed for order expiry and timing
+  updateFrequency: 1000,       // rebuild every 1,000 ms
 });
 await dlobSubscriber.subscribe();
-```
-  </TypeScript>
-</SDKDoc>
 
-### SlotSubscriber
-
-Tracks the current Solana slot. Required for timing-sensitive operations like JIT auction windows and order expiry checks.
-
-<SDKDoc>
-  <TypeScript name="SlotSubscriber" type="class">
-```js
-import { SlotSubscriber } from "@velocity-exchange/sdk";
-
-const slotSubscriber = new SlotSubscriber(connection);
-await slotSubscriber.subscribe();
-
-const currentSlot = slotSubscriber.getSlot();
-```
-  </TypeScript>
-</SDKDoc>
-
-### DLOB
-
-The core data structure with bid/ask sides and query methods. Under normal usage you access this via `dlobSubscriber.getDLOB()` rather than instantiating it directly.
-
-<SDKDoc>
-  <TypeScript name="DLOB" type="class">
-```js
-import { DLOB } from "@velocity-exchange/sdk";
-
-// Access via DLOBSubscriber (recommended)
 const dlob = dlobSubscriber.getDLOB();
 ```
   </TypeScript>
 </SDKDoc>
 
-### UserMap
+Call `unsubscribe()` on all three on shutdown so the websocket handles and rebuild interval are released.
 
-Efficiently tracks and caches the accounts of many users simultaneously. Used by liquidation bots and other applications that need to monitor positions across the whole protocol, rather than just orders.
+### Getting L2 orderbook data
 
-<SDKDoc>
-  <TypeScript name="UserMap" type="class">
-```js
-import { UserMap } from "@velocity-exchange/sdk";
-```
-  </TypeScript>
-</SDKDoc>
-
-### Setting Up a Local DLOB
-
-This is the full setup sequence to get a live, continuously-updated orderbook running:
-
-<SDKDoc>
-  <TypeScript name="DLOB setup" type="example">
-```js
-import { SlotSubscriber, OrderSubscriber, DLOBSubscriber } from "@velocity-exchange/sdk";
-
-// 1. Track the current slot (needed for order expiry)
-const slotSubscriber = new SlotSubscriber(connection);
-await slotSubscriber.subscribe();
-
-// 2. Subscribe to all open orders across all users
-const orderSubscriber = new OrderSubscriber({
-  velocityClient,
-  subscriptionConfig: { type: "websocket" },
-  fastDecode: true,
-  decodeData: true,
-});
-await orderSubscriber.subscribe();
-
-// 3. Build and maintain the DLOB from the order stream
-const dlobSubscriber = new DLOBSubscriber({
-  velocityClient,
-  dlobSource: orderSubscriber,
-  slotSource: slotSubscriber,
-  updateFrequency: 1000,
-});
-await dlobSubscriber.subscribe();
-```
-  </TypeScript>
-</SDKDoc>
-
-### Getting L2 Orderbook Data
-
-Once subscribed, query the aggregated L2 orderbook (price levels with cumulative size):
+Once subscribed, query the aggregated L2 orderbook: price levels with cumulative size at each.
 
 <Callout type="warning">
-`dlob.getL2()` on its own returns resting-limit maker liquidity only, it does not include the vAMM. For a book that matches what a taker actually trades against, call `dlobSubscriber.getL2({ ..., includeVamm: true })` instead, or pass `getVammL2Generator(...)` output as `fallbackL2Generators` if you're calling `dlob.getL2()` directly.
+`dlob.getL2()` on its own returns resting-limit maker liquidity only: it does not include the vAMM. For a book that matches what a taker actually trades against, call `dlobSubscriber.getL2({ ..., includeVamm: true })` instead, or pass `getVammL2Generator(...)` output as `fallbackL2Generators` when calling `dlob.getL2()` directly.
 </Callout>
 
 <SDKDoc>
   <TypeScript name="L2 orderbook" type="example">
 ```js
-import { MarketType, PRICE_PRECISION, BASE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
+import { BASE_PRECISION, MarketType, PRICE_PRECISION, convertToNumber } from "@velocity-exchange/sdk";
 
 const marketIndex = 0; // SOL-PERP
 
@@ -176,9 +104,9 @@ console.log("Top ask:", convertToNumber(l2.asks[0].price, PRICE_PRECISION),
   </TypeScript>
 </SDKDoc>
 
-### Getting Best Bid/Ask
+### Getting best bid and ask
 
-For quick access to the best bid and ask prices without fetching the full orderbook:
+For the top of book without building the full L2 array:
 
 <SDKDoc>
   <TypeScript name="Best bid/ask" type="example">

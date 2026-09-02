@@ -1,39 +1,36 @@
-import nextra from "nextra";
+import { createMDX } from "fumadocs-mdx/next";
 
-const withNextra = nextra({
-  defaultShowCopyCode: true,
-  latex: true,
-});
+const withMDX = createMDX();
 
 const redirects = [
     ["/rewards/traderrewards", "/rewards"],
     ["/rewards/rewards-program", "/rewards"],
-    ["/about-v3/understanding-drift", "/protocol/how-it-works"],
+    ["/about-v3/understanding-drift", "/protocol"],
     ["/about-v3/drift-amm", "/protocol/how-it-works/velocity-amm"],
-    ["/about-v3/decentralized-orderbook", "/protocol/how-it-works/decentralized-orderbook"],
-    ["/about-v3/keepers", "/protocol/how-it-works/keepers"],
-    ["/about-v3/keepers-decentralized-orderbook-faq", "/protocol/how-it-works/keepers/keepers-dlob-faq"],
+    ["/about-v3/decentralized-orderbook", "/protocol/how-it-works/orderbook-and-keepers"],
+    ["/about-v3/keepers", "/protocol/how-it-works/orderbook-and-keepers"],
+    ["/about-v3/keepers-decentralized-orderbook-faq", "/protocol/how-it-works/orderbook-and-keepers"],
     ["/about-v3/keeper-incentives", "/protocol/how-it-works/keepers/keeper-incentives"],
-    ["/about-v3/matching-engine", "/protocol/how-it-works/matching-engine"],
-    ["/about-v3/jit-maker-faq", "/protocol/how-it-works/jit-faq"],
+    ["/about-v3/matching-engine", "/protocol/trading/how-fills-work"],
+    ["/about-v3/jit-maker-faq", "/protocol/trading/how-fills-work"],
     ["/about-v3/revenue-pool", "/protocol/how-it-works/revenue-pool"],
     ["/about-v3/optimizations", "/developers/concepts/optimizations"],
     ["/about-v3/program-vault-addresses", "/developers/concepts/program-vault-addresses"],
     ["/protocol/how-it-works/optimizations", "/developers/concepts/optimizations"],
     ["/protocol/how-it-works/program-vault-addresses", "/developers/concepts/program-vault-addresses"],
-    ["/protocol/how-it-works/block-conditions", "/protocol/risk-and-safety/block-conditions"],
-    ["/developers/concepts/block-conditions", "/protocol/risk-and-safety/block-conditions"],
-    ["/protocol/how-it-works/liquidators", "/protocol/how-it-works/liquidation-engine"],
+    ["/protocol/how-it-works/block-conditions", "/protocol/risk-and-safety/guard-rails"],
+    ["/developers/concepts/block-conditions", "/protocol/risk-and-safety/guard-rails"],
+    ["/protocol/how-it-works/liquidators", "/protocol/trading/liquidations"],
     ["/developers/trading-automation/bot-wallet", "/developers/trading-automation#bot-wallet"],
     ["/developers/trading-automation/rpc-providers", "/developers/trading-automation#rpc-providers"],
     ["/protocol/borrow-lend/amplify/monitoring-a-position", "/protocol/borrow-lend/amplify/managing-a-position"],
     ["/protocol/borrow-lend/amplify/closing-a-position", "/protocol/borrow-lend/amplify/managing-a-position"],
     ["/protocol/trading/versioned-transactions", "/protocol/getting-started/wallet-setup"],
-    ["/getting-started/wallet-setup/phantom-setup", "/protocol/getting-started/wallet-setup/phantom-wallet"],
+    ["/getting-started/wallet-setup/phantom-setup", "/protocol/getting-started/wallet-setup"],
     ["/getting-started/wallet-setup/metamask-setup", "/protocol/getting-started/wallet-setup/metamask"],
     ["/getting-started/wallet-setup/bot-wallet-setup", "/developers/trading-automation#bot-wallet"],
-    ["/getting-started/wallet-setup/wallet-faq", "/protocol/getting-started/wallet-setup/wallet-faq"],
-    ["/getting-started/cross-collateral-deposits", "/protocol/getting-started/cross-collateral-deposits"],
+    ["/getting-started/wallet-setup/wallet-faq", "/protocol/getting-started/wallet-setup"],
+    ["/getting-started/cross-collateral-deposits", "/protocol/trading/margin"],
     ["/getting-started/managing-subaccount", "/protocol/getting-started/managing-subaccounts"],
     ["/getting-started/delegated-accounts", "/protocol/getting-started/delegated-accounts"],
     ["/getting-started/versioned-transactions", "/protocol/getting-started/wallet-setup"],
@@ -46,38 +43,38 @@ const redirects = [
     ["/trading/order-types", "/protocol/trading/order-types"],
     ["/trading/all-order-types", "/protocol/trading/order-types"],
     ["/protocol/trading/order-types/advanced-order-types", "/protocol/trading/order-types"],
-    ["/trading/advanced-orders-faq", "/protocol/trading/order-types/advanced-orders-faq"],
+    ["/trading/advanced-orders-faq", "/protocol/trading/order-types"],
     ["/trading/account-health", "/protocol/trading/margin/account-health"],
     ["/trading/auction-parameters", "/protocol/trading/auction-parameters"],
     ["/trading/trading-fees", "/protocol/trading/trading-fees"],
     ["/protocol/trading/perpetuals-trading", "/protocol/trading"],
     ["/protocol/trading/perpetuals-trading/funding-rates", "/protocol/trading/funding-rates"],
     ["/protocol/trading/perpetuals-trading/auction-parameters", "/protocol/trading/auction-parameters"],
-    ["/trading/other-trading-fees", "/protocol/trading/trading-fees/other-trading-fees"],
-    ["/trading/fee-pool", "/protocol/how-it-works/fee-pool"],
+    ["/trading/other-trading-fees", "/protocol/trading/trading-fees"],
+    ["/trading/fee-pool", "/protocol/trading/profit-loss"],
     ["/trading/versioned-transactions", "/protocol/getting-started/wallet-setup"],
-    ["/trading/block-conditions", "/protocol/risk-and-safety/block-conditions"],
+    ["/trading/block-conditions", "/protocol/risk-and-safety/guard-rails"],
     ["/trading/oracles", "/protocol/how-it-works/oracles"],
     ["/profit-loss/profit-loss-intro", "/protocol/trading/profit-loss"],
-    ["/profit-loss/accounting-settlement", "/protocol/trading/profit-loss/accounting-settlement"],
-    ["/profit-loss/what-is-unsettled-profit-loss", "/protocol/trading/profit-loss/unsettled-profit-loss"],
-    ["/profit-loss/profit-loss-pool", "/protocol/how-it-works/profit-loss-pool"],
+    ["/profit-loss/accounting-settlement", "/protocol/trading/profit-loss"],
+    ["/profit-loss/what-is-unsettled-profit-loss", "/protocol/trading/profit-loss"],
+    ["/profit-loss/profit-loss-pool", "/protocol/trading/profit-loss"],
     ["/liquidations/liquidations", "/protocol/trading/liquidations"],
-    ["/liquidations/liquidation-engine", "/protocol/how-it-works/liquidation-engine"],
-    ["/liquidations/liquidators", "/protocol/how-it-works/liquidators"],
-    ["/lend-borrow/borrow-interest-rate", "/protocol/how-it-works/borrow-interest-rate"],
-    ["/lend-borrow/isolated-pools", "/protocol/how-it-works/isolated-pools"],
-    ["/lend-borrow/lend-borrow-faq", "/protocol/borrow-lend/borrow-lend-faq"],
+    ["/liquidations/liquidation-engine", "/protocol/trading/liquidations"],
+    ["/liquidations/liquidators", "/protocol/trading/liquidations"],
+    ["/lend-borrow/borrow-interest-rate", "/protocol/borrow-lend/interest-rates"],
+    ["/lend-borrow/isolated-pools", "/protocol/borrow-lend/isolated-pools"],
+    ["/lend-borrow/lend-borrow-faq", "/protocol/borrow-lend"],
     ["/lend-borrow/rewards", "/protocol/referrals"],
-    ["/lend-borrow/supply-borrow-apy", "/protocol/borrow-lend/borrow-lend-apy"],
+    ["/lend-borrow/supply-borrow-apy", "/protocol/borrow-lend"],
     ["/lend-borrow/what-is-lend-borrow", "/protocol/borrow-lend"],
     ["/amplify/how-it-works", "/protocol/borrow-lend/amplify"],
     ["/amplify/opening-a-position", "/protocol/borrow-lend/amplify/opening-a-position"],
-    ["/amplify/monitoring-a-position", "/protocol/borrow-lend/amplify/monitoring-a-position"],
-    ["/amplify/closing-a-position", "/protocol/borrow-lend/amplify/closing-a-position"],
+    ["/amplify/monitoring-a-position", "/protocol/borrow-lend/amplify/managing-a-position"],
+    ["/amplify/closing-a-position", "/protocol/borrow-lend/amplify/managing-a-position"],
     ["/amplify/risk", "/protocol/borrow-lend/amplify/risk"],
-    ["/market-makers/market-maker-participation", "/protocol/market-makers/market-maker-participation"],
-    ["/market-makers/maker-rebate-fees", "/protocol/market-makers/maker-fee-rebate"],
+    ["/market-makers/market-maker-participation", "/protocol/market-makers"],
+    ["/market-makers/maker-rebate-fees", "/protocol/trading/trading-fees"],
     ["/market-makers/rewards-program", "/protocol/market-makers"],
     ["/insurance-fund/insurance-fund-intro", "/protocol/insurance-fund"],
     ["/insurance-fund/insurance-fund-staking", "/protocol/insurance-fund/insurance-fund-staking"],
@@ -93,15 +90,16 @@ const redirects = [
     ["/developers/trading-automation/trading-bots/jit-trading-bot", "/developers/trading-automation/keeper-bots/jit-maker-bot"],
     ["/developers/trading-automation/trading-bots", "/developers/trading-automation/keeper-bots"],
     ["/developers/trading-automation/liquidator-bots", "/developers/trading-automation/keeper-bots/liquidation-bot"],
-    ["/tutorial-bots/rpc-providers", "/developers/trading-automation/rpc-providers"],
+    ["/developers/trading-automation/trading-workflows", "/developers/trading-automation#trading-workflows-without-a-bot"],
+    ["/tutorial-bots/rpc-providers", "/developers/trading-automation#rpc-providers"],
     ["/tutorial-bots/troubleshooting", "/developers/trading-automation/troubleshooting"],
     ["/historical-data/historical-data-v1", "/developers/data-api"],
     ["/historical-data/historical-data-v2", "/developers/data-api"],
     ["/historical-data/historical-data-glossary", "/developers/data-api/glossary"],
     ["/fuel/overview", "/"],
     ["/risk-and-safety/delisting-process", "/protocol/risk-and-safety/delisting-process"],
-    ["/risk-and-safety/protocol-guard-rails", "/protocol/risk-and-safety/protocol-guard-rails"],
-    ["/risk-and-safety/risk-parameters", "/protocol/risk-and-safety/risk-parameters"],
+    ["/risk-and-safety/protocol-guard-rails", "/protocol/risk-and-safety/guard-rails"],
+    ["/risk-and-safety/risk-parameters", "/protocol/risk-and-safety/guard-rails"],
     ["/drift-safety-module", "/protocol/risk-and-safety/drift-safety-module"],
     ["/security/audits", "/protocol/risk-and-safety/audits"],
     ["/security/risks", "/protocol/risk-and-safety/risks"],
@@ -110,16 +108,46 @@ const redirects = [
     ["/legal-and-regulations/terms-of-use", "/protocol/legal-and-regulations/terms-of-use"],
     ["/legal-and-regulations/disclaimer", "/protocol/legal-and-regulations/disclaimer"],
     ["/legal-and-regulations/privacy-policy", "/protocol/legal-and-regulations/privacy-policy"],
+    ["/protocol/getting-started/wallet-setup/phantom-wallet", "/protocol/getting-started/wallet-setup"],
+    ["/protocol/getting-started/wallet-setup/wallet-faq", "/protocol/getting-started/wallet-setup"],
+    ["/protocol/how-it-works", "/protocol"],
+    ["/protocol/how-it-works/isolated-pools", "/protocol/borrow-lend/isolated-pools"],
+    ["/protocol/market-makers/market-maker-participation", "/protocol/market-makers"],
+    // --- Content port: pages merged during the rewrite. Each old route now
+    // points at the page that absorbed it.
+    ["/protocol/borrow-lend/borrow-lend-apy", "/protocol/borrow-lend"],
+    ["/protocol/borrow-lend/borrow-lend-faq", "/protocol/borrow-lend"],
+    ["/protocol/getting-started/cross-collateral-deposits", "/protocol/trading/margin"],
+    ["/protocol/how-it-works/borrow-interest-rate", "/protocol/borrow-lend/interest-rates"],
+    ["/protocol/how-it-works/decentralized-orderbook", "/protocol/how-it-works/orderbook-and-keepers"],
+    ["/protocol/how-it-works/fee-pool", "/protocol/trading/profit-loss"],
+    ["/protocol/how-it-works/jit-faq", "/protocol/trading/how-fills-work"],
+    ["/protocol/how-it-works/keepers", "/protocol/how-it-works/orderbook-and-keepers"],
+    ["/protocol/how-it-works/keepers/keepers-dlob-faq", "/protocol/how-it-works/orderbook-and-keepers"],
+    ["/protocol/how-it-works/liquidation-engine", "/protocol/trading/liquidations"],
+    ["/protocol/how-it-works/matching-engine", "/protocol/trading/how-fills-work"],
+    ["/protocol/how-it-works/profit-loss-pool", "/protocol/trading/profit-loss"],
+    ["/protocol/how-it-works/withdrawal-limit-mechanics", "/protocol/borrow-lend/withdrawal-limits"],
+    ["/protocol/market-makers/maker-fee-rebate", "/protocol/trading/trading-fees"],
+    ["/protocol/risk-and-safety/bankruptcy-resolution", "/protocol/risk-and-safety/liquidation-and-bankruptcy"],
+    ["/protocol/risk-and-safety/block-conditions", "/protocol/risk-and-safety/guard-rails"],
+    ["/protocol/risk-and-safety/protocol-guard-rails", "/protocol/risk-and-safety/guard-rails"],
+    ["/protocol/risk-and-safety/risk-parameters", "/protocol/risk-and-safety/guard-rails"],
+    ["/protocol/trading/margin/per-market-leverage", "/protocol/trading/margin/account-health"],
+    ["/protocol/trading/order-types/advanced-orders-faq", "/protocol/trading/order-types"],
+    ["/protocol/trading/profit-loss/accounting-settlement", "/protocol/trading/profit-loss"],
+    ["/protocol/trading/profit-loss/unsettled-profit-loss", "/protocol/trading/profit-loss"],
+    ["/protocol/trading/trading-fees/fee-mechanics", "/protocol/trading/trading-fees"],
+    ["/protocol/trading/trading-fees/other-trading-fees", "/protocol/trading/trading-fees"],
     // --- IA reorg: pages relocated into the "How Velocity Works" section
     ["/protocol/trading/oracles", "/protocol/how-it-works/oracles"],
-    ["/protocol/trading/liquidations/liquidation-engine", "/protocol/how-it-works/liquidation-engine"],
-    ["/protocol/trading/liquidations/liquidators", "/protocol/how-it-works/liquidators"],
-    ["/protocol/trading/profit-loss/profit-loss-pool", "/protocol/how-it-works/profit-loss-pool"],
-    ["/protocol/trading/trading-fees/fee-pool", "/protocol/how-it-works/fee-pool"],
-    ["/protocol/trading/block-conditions", "/protocol/risk-and-safety/block-conditions"],
-    ["/protocol/borrow-lend/borrow-interest-rate", "/protocol/how-it-works/borrow-interest-rate"],
-    ["/protocol/borrow-lend/isolated-pools", "/protocol/how-it-works/isolated-pools"],
-    ["/protocol/getting-started/wallet-setup/bot-wallet", "/developers/trading-automation/bot-wallet"],
+    ["/protocol/trading/liquidations/liquidation-engine", "/protocol/trading/liquidations"],
+    ["/protocol/trading/liquidations/liquidators", "/protocol/trading/liquidations"],
+    ["/protocol/trading/profit-loss/profit-loss-pool", "/protocol/trading/profit-loss"],
+    ["/protocol/trading/trading-fees/fee-pool", "/protocol/trading/profit-loss"],
+    ["/protocol/trading/block-conditions", "/protocol/risk-and-safety/guard-rails"],
+    ["/protocol/borrow-lend/borrow-interest-rate", "/protocol/borrow-lend/interest-rates"],
+    ["/protocol/getting-started/wallet-setup/bot-wallet", "/developers/trading-automation#bot-wallet"],
 ]
 
 const nextConfig = {
@@ -169,6 +197,22 @@ const nextConfig = {
     ];
   },
   webpack: (config, { isServer }) => {
+    // fumadocs-mdx loads source.config.ts via `import(url.href)`, a dynamic
+    // import webpack cannot resolve statically, so it cannot register that file
+    // as a build dependency and warns about cache invalidation on every start.
+    // The only real consequence is narrow: after editing source.config.ts,
+    // restart dev or clear .next. This belongs on webpack's own config, not on
+    // Next's, where it is an unrecognised key and silently ignored.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { module: /node_modules\/fumadocs-mdx/ },
+    ];
+
+    // nextra/tsdoc (used by components/sdkdoc) resolves this alias internally
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "next-mdx-import-source-file": new URL("./mdx-components.tsx", import.meta.url).pathname,
+    };
     if (!isServer) {
       config.resolve.fallback = {
         fs: false,
@@ -179,11 +223,6 @@ const nextConfig = {
     }
     return config;
   },
-  turbopack: {
-    resolveAlias: {
-      'next-mdx-import-source-file': './mdx-components.tsx'
-    }
-  }
 };
 
-export default withNextra(nextConfig);
+export default withMDX(nextConfig);

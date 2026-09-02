@@ -1,69 +1,150 @@
-# Market Specs
+---
+title: "Market specs"
+description: "Every configurable field on a perpetual or spot market: what it means, what unit it is stored in, and what it refuses when it binds."
+---
 
-## Perpetual Markets Specs
+Every market on Velocity is a single onchain account holding a few dozen numbers, and those numbers are what make one market riskier, cheaper, or more restrictive than another. This page is the field reference. Every field is admin-settable, so read the live market account for what a market is set to today; the [SDK markets reference](/developers/velocity-sdk/markets) covers how to fetch them.
 
-### Contract Tier
-Contract tiers are used to categorically label and rank the risk of perpetual markets. There are six unique tiers:
-- A
-- B
-- C
-- Speculative
-- Highly Speculative
-- Isolated
+## Reading a precision
 
-These ranked tiers are used for:
-- priority access to collateral in liquidations
-- max limits for insurance
-- determining acceptable range of oracle price divergence
-- sanitization rules for twap / funding rate updates
+Most fields are integers with an implied decimal point, and the point differs by field. Getting these wrong is the most common way to misread a market account.
 
-Fundamentally, a market in Contract Tier B is in a 'safer' tranche vs Contract Tier C, Speculative, and Isolated. 
+| Precision | Value | Used by |
+| --- | --- | --- |
+| `BASE_PRECISION` | 1e9 | Base sizes: open interest, step size, position sizes |
+| `PRICE_PRECISION` | 1e6 | Prices and tick sizes |
+| `QUOTE_PRECISION` | 1e6 | Quote amounts, thresholds denominated in the quote asset |
+| `MARGIN_PRECISION` | 1e4 | Margin ratios, so 500 is 5% |
+| `SPOT_WEIGHT_PRECISION` | 1e4 | Asset and liability weights, so 8,000 is 80% |
+| `SPOT_IMF_PRECISION` | 1e6 | IMF factors |
+| `LIQUIDATION_FEE_PRECISION` | 1e6 | All three liquidation fee rates |
+| `IF_FACTOR_PRECISION` | 1e6 | Lending carveout factors |
+| Token mint precision | Per market | Spot token amounts, from the market's `decimals` |
 
-Each market's current Contract Tier assignment can change over time as risk parameters are reviewed; the authoritative value for a given market is shown in-app and on-chain.
+## Perpetual market fields
 
-For the full per-tier numeric limits (insurance caps, oracle confidence bands, TWAP-sanitization bounds, and PnL-settlement divergence thresholds), see the [Contract Tiers](/protocol/risk-and-safety/contract-tiers) reference.
+### Identity and status
 
-| Tier                   | Description                                                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Speculative | Speculative tier has no access to external insurance funds (only the perpetual market's fee pool)
-| Highly Speculative | Same restrictions as Speculative, but sits a tranche below.
-| Isolated | Isolated tier requires the user account refrain / disable cross margin trading (on both perpetual and spot markets). Users with 'Margin Trading' enabled, a non-USDT borrow, or another perpetual position will NOT be allowed to enter an Isolated Tier market. If the account has liabilities beyond the perpetual market's quote asset and the isolated perpetual market, it is forced to enter Reduce Only mode.
+**`marketIndex`.** The market's numeric id, stable for the life of the market. The mapping to a name is a convention rather than a rule; read `name` from the account.
 
-### Oracle Source
-The oracle provider which provides a price, confidence band, and timeliness information for the market.
+**`status`.** `Active`; `ReduceOnly`, which refuses risk-increasing orders; `Settlement`, which stops trading and settles every position at `expiryPrice`; and `Delisted`. See [Delisting](/protocol/risk-and-safety/delisting-process).
 
-| Source                 | Description                                                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Pyth | [Read more](https://docs.pyth.network/home)
-| Pyth Lazer | Pyth's low-latency push oracle service. [Read more](https://docs.pyth.network/lazer)
-| Switchboard | **Deprecated.** Legacy Switchboard oracle sources are no longer supported; markets configured with a deprecated Switchboard source will fail to load a price. [Read more](https://docs.switchboard.xyz/)
+**`pausedOperations`.** Operations the admin has switched off for this market alone: AMM fills, orderbook fills, liquidation, funding updates and settlement, each independently. One of four pause layers; see [Guard rails](/protocol/risk-and-safety/guard-rails).
 
-### Max Open Interest
-A maximum amount of open interest that can exist within the perpetual market. Additional orders/fills that would breach this open interest limit are blocked.
+**`quoteSpotMarketIndex`.** Which spot market this perpetual settles P&L in; index 0 is the quote asset.
 
-### IMF Factor
-A margin fraction factor. Used to increase liability weight and decrease asset weight for large positions
+**`poolId`.** Which collateral pool the market belongs to. Perpetual trading requires pool 0. See [Isolated pools](/protocol/borrow-lend/isolated-pools).
 
+### Risk classification
 
-## Spot Markets Specs
+**`contractTier`.** `A`, `B`, `C`, `Speculative`, `HighlySpeculative` or `Isolated`. It sets this market's insurance cap, oracle confidence tolerance, TWAP sanitization band, settlement divergence limits and auction bands. New markets default to `HighlySpeculative`. Every per-tier number is on [Contract tiers](/protocol/risk-and-safety/contract-tiers).
 
-### Asset Tier
-Asset tiers are used to categorically label and rank the risk of a spot markets. There are five unique tiers:
+**`oracleSource`.** Which oracle format the `oracle` account is decoded as. `PythLazer` and `Pyth` push are supported, `Prelaunch` is for markets not yet on a feed, and the Switchboard and Pyth pull variants are rejected with `InvalidOracle`. See [Oracles](/protocol/how-it-works/oracles).
 
- - Collateral:  full privilege
- - Protected: collateral, but no borrow
- - Cross: not collateral, allow multi-borrow
- - Isolated: not collateral, only single borrow
- - Unlisted: no privilege
+### Margin
 
-### Scale Initial Asset Weight Start
-The notional value of total user deposits needed to begin scaling down the initial asset weight
+**`marginRatioInitial`, `marginRatioMaintenance`.** `MARGIN_PRECISION`, 1e4. The fraction of notional required to open a position, and the fraction below which it is liquidated. Maximum leverage is `MARGIN_PRECISION / marginRatioInitial`, so 500 is a 5% initial ratio and 20x. Bounded between 125 (80x) and 10,000 (1x). See [Margin](/protocol/trading/margin).
 
-### Max Token Deposits
-A maximum amount of tokens that can be added to collateral vault.
+**`imfFactor`.** `SPOT_IMF_PRECISION`, 1e6. Raises the required margin ratio as a position grows, in proportion to the square root of position size, so it is invisible on ordinary sizes and material on concentrated ones.
 
-### IMF Factor
-A margin fraction factor. Used to increase liability weight and decrease asset weight for large positions
+**`unrealizedPnlInitialAssetWeight`, `unrealizedPnlMaintenanceAssetWeight`.** `SPOT_WEIGHT_PRECISION`, 1e4. The haircut on positive unsettled P&L when it counts as collateral; negative unsettled P&L always counts in full. A weight of zero means positive unsettled P&L contributes nothing at that margin type, so read the live value before assuming paper profit is spendable.
 
-### Order Step/Tick Size
-Spot markets retain `order_step_size` and `order_tick_size` fields, but **spot order placement is disabled on Velocity**. There is no spot order book. These fields are therefore unused for spot; deposits, borrows, and swaps are not subject to them. (On **perpetual** markets, order sizes must be a multiple of the step size and prices a multiple of the tick size.)
+**`unrealizedPnlMaxImbalance`.** `QUOTE_PRECISION`, 1e6. How much net P&L users may collectively be owed before positive unrealized P&L starts being discounted for initial margin and the market becomes eligible to draw on the insurance fund. See [Revenue pool](/protocol/how-it-works/revenue-pool).
+
+### Size limits
+
+**`maxOpenInterest`.** `BASE_PRECISION`, 1e9. The largest open interest the market will carry, checked at placement against the order's own side and again after the fill. Both reject with `MaxOpenInterest`, and an order that breaches it never rests or partially fills. `0` disables the check and is the initialization default.
+
+**`orderStepSize`.** `BASE_PRECISION`, 1e9. Order sizes must be a whole multiple of this.
+
+**`orderTickSize`.** `PRICE_PRECISION`, 1e6. Limit prices must be a whole multiple of this.
+
+**`marketStats.minOrderSize`.** `BASE_PRECISION`, 1e9. The smallest order the market accepts, initialized equal to the step size. It lives on `marketStats`, not at the market's top level.
+
+### Fees and funding
+
+**`feeAdjustment`.** A signed percentage between -100 and 100 that scales this market's fees. At -50 a 5 bps fee becomes 2.5 bps; at 50 it becomes 7.5 bps.
+
+**`takerFeeAddonTenthBps`.** Tenth of a basis point, so 10 is 1 bp. An unsigned surcharge added to the taker fee before `feeAdjustment` scales the sum, and never a discount. See [Trading fees](/protocol/trading/trading-fees).
+
+**`marketStats.fundingPeriod`.** Seconds. How often funding is applied.
+
+**`fundingClampThreshold`.** `BPS_PRECISION`, 1e4. The dead zone around zero: mark-to-oracle TWAP spreads inside this band add no funding premium.
+
+**`fundingRampSlope`.** `PERCENTAGE_PRECISION`, 1e6. How hard the funding premium leans on the part of the spread that clears the dead zone. See [Funding rates](/protocol/trading/funding-rates).
+
+### Liquidation
+
+**`liquidatorFee`, `ifLiquidationFee`, `protocolLiquidationFee`.** All `LIQUIDATION_FEE_PRECISION`, 1e6. The three-way split of what is taken from the liquidatee: to the liquidator, to the insurance fund, and to the protocol's withdrawable pool. All three initialize to zero, so a market pays liquidators only if an admin set a rate. See [Liquidations](/protocol/trading/liquidations).
+
+**`insuranceClaim`.** Bounds what this market may draw from the insurance fund: `quoteMaxInsurance` is the lifetime ceiling, `quoteSettledInsurance` the amount already drawn, `maxRevenueWithdrawPerPeriod` the per-period allowance. The ceiling is set by contract tier and is zero for the three riskiest tiers. See [Revenue pool](/protocol/how-it-works/revenue-pool).
+
+## Spot market fields
+
+Spot markets are collateral and borrow-lend venues. There is no spot orderbook, and swaps route directly rather than through a book.
+
+### Classification
+
+**`assetTier`.** What a deposit in this market is allowed to do. The five values are ordered from most to least privileged:
+
+| Tier | Usable as collateral | Borrowing |
+| --- | --- | --- |
+| `Collateral` | Yes | Yes, alongside other borrows |
+| `Protected` | Yes | Cannot be borrowed |
+| `Cross` | No | Yes, alongside other borrows |
+| `Isolated` | No | Yes, but it must be the account's only borrow |
+| `Unlisted` | No | No |
+
+`Unlisted` is the default for a new market. The tier also sets the oracle confidence multiplier and TWAP sanitization band, from 1x at `Collateral` to 50x at `Isolated` and `Unlisted`.
+
+<Callout type="info">
+The `Isolated` asset tier and an [isolated pool](/protocol/borrow-lend/isolated-pools) are different things. The tier is a per-market restriction on how a borrow may be combined with others inside one account. An isolated pool is a separate collateral pool with its own subaccount. A market can have either, both, or neither.
+</Callout>
+
+**`poolId`.** Which collateral pool the market belongs to; zero is the main cross-collateralized pool. A deposit or withdrawal whose subaccount pool does not match is rejected with `InvalidPoolId`.
+
+**`decimals`.** The token mint's decimals. Every "token mint precision" field below is `10^decimals`.
+
+**`oracleSource`.** As on perpetual markets. The quote-asset market uses `QuoteAsset`, a fixed price of one rather than a feed.
+
+### Weights
+
+**`initialAssetWeight`, `maintenanceAssetWeight`.** `SPOT_WEIGHT_PRECISION`, 1e4. What a dollar of deposit contributes to collateral when opening new risk, and when the protocol decides whether to liquidate. An 8,000 initial weight makes \$100 of deposits \$80 of buying power.
+
+**`initialLiabilityWeight`, `maintenanceLiabilityWeight`.** Same precision. What a dollar of borrow contributes to the margin requirement.
+
+**`imfFactor`.** `SPOT_IMF_PRECISION`, 1e6. Discounts the asset weight and raises the liability weight as a single account's balance in this market grows.
+
+**`scaleInitialAssetWeightStart`.** `QUOTE_PRECISION`, 1e6. The market's total deposit value above which everyone's initial asset weight starts decaying, linearly and with no floor. Disabled when `0`. This is the market's total, not any one account's. All four weight mechanics are on [Margin](/protocol/trading/margin).
+
+### Deposit and borrow caps
+
+**`maxTokenDeposits`.** Token mint precision. The largest total deposit balance the market will hold. A deposit that would breach it reverts with `MaxDeposit`. `0` means no limit, and `0` is the initialization default.
+
+**`maxTokenBorrowsFraction`.** A fraction of `maxTokenDeposits` in ten-thousandths, so 1 is 0.01%. Total borrows above `maxTokenDeposits * fraction / 10000` revert with `MaxBorrows`. It is disabled when either it or `maxTokenDeposits` is zero: raising the deposit cap raises the borrow cap with it, and a borrow fraction on a market with no deposit cap does nothing.
+
+**`withdrawGuardThreshold`, `depositGuardThreshold`, `withdrawCircuitBreakerBps`, `maxDepositBpsPerDay`.** The rolling 24-hour rate limits. Withdrawals below the guard threshold skip the limit; above it, the market allows a fraction of its 24-hour deposit TWAP per window, defaulting to 25% when `withdrawCircuitBreakerBps` is `0`. The deposit side mirrors it and is disabled when `maxDepositBpsPerDay` is `0`. See [Withdrawal limits](/protocol/borrow-lend/withdrawal-limits).
+
+### Interest rate curve
+
+**`optimalUtilization`.** `SPOT_UTILIZATION_PRECISION`, 1e6. Where the first kink in the borrow curve sits.
+
+**`optimalBorrowRate`, `maxBorrowRate`.** `SPOT_RATE_PRECISION`, 1e6. The annualized borrow rate at the kink and at 100% utilization.
+
+**`minBorrowRate`.** Counted in half percentage points, so 4 is 2% annualized. Every market is created with it at zero. The full curve is on [Interest rates](/protocol/borrow-lend/interest-rates).
+
+### Fee carveouts
+
+**`insuranceFund.ifFeeFactor`, `protocolFeeFactor`.** Both `IF_FACTOR_PRECISION`, 1e6. Two carveouts taken from **deposit-interest gain**, not from borrow interest: the first to this market's revenue pool for the insurance fund, the second to the protocol's withdrawable pool. Lenders receive the remainder, and the two must sum to less than 100%. See [Revenue pool](/protocol/how-it-works/revenue-pool).
+
+**`insuranceFund.revenueSettlePeriod`.** Seconds between revenue settlements to the insurance fund vault, 3,600 at market creation.
+
+**`liquidatorFee`, `ifLiquidationFee`, `protocolLiquidationFee`.** `LIQUIDATION_FEE_PRECISION`, 1e6, and the same three-way split as on perpetual markets.
+
+### Fields that exist but are unused
+
+**`orderStepSize`, `orderTickSize`, `minOrderSize`, `ordersEnabled`.** Retained on spot markets, but spot order placement is disabled and there is no spot orderbook. Deposits, borrows, repayments and swaps are not subject to them.
+
+**`maxPositionSize`.** Token mint precision, `0` at every market's initialization. Nothing in the program reads it.
+
+**`totalSwapFee`.** The counter exists, but direct swaps are charged nothing, so it does not move.

@@ -1,12 +1,18 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useSearchContext } from "fumadocs-ui/provider";
 import Link from "next/link";
-import { Search } from "nextra/components";
 import { BoltMark } from "../components/BoltMark";
 import styles from "./not-found.module.css";
 
-export const metadata: Metadata = {
-  title: "Page not found",
-};
+function SearchTrigger() {
+  const { setOpenSearch } = useSearchContext();
+  return (
+    <button type="button" onClick={() => setOpenSearch(true)}>
+      Search the docs
+    </button>
+  );
+}
 
 export default function NotFound() {
   return (
@@ -20,7 +26,7 @@ export default function NotFound() {
       </p>
 
       <div className={styles.search}>
-        <Search placeholder="Search the docs…" />
+        <SearchTrigger />
       </div>
 
       <div className={styles.actions}>

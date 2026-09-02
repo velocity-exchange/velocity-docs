@@ -1,4 +1,6 @@
-# Orderbook & Matching
+---
+title: "Orderbook & Matching"
+---
 
 <Callout type="warning">
 The DLOB is to be removed. An order will rest in one CLOB market account instead
@@ -8,192 +10,134 @@ page describes the DLOB as it works now. New work belongs on the CLOB book. See
 [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow).
 </Callout>
 
-Understanding how Velocity's orderbook and matching engine work is essential for market makers. This page covers the DLOB architecture, liquidity priority, and how to access orderbook data.
+Where a resting order sits, and what beats it to a fill, decides whether it fills at all. This page covers the DLOB that holds maker quotes, the fill plan the program builds against them, and the three ways to read the book.
 
 ## What is the DLOB?
 
-The **DLOB** (Decentralized Limit Order Book) is Velocity's offchain orderbook that aggregates all resting limit orders across user accounts. It provides a unified orderbook view for matching and price discovery while keeping order storage onchain.
+The **DLOB** (decentralized limit order book) is Velocity's offchain orderbook. It aggregates the resting limit orders scattered across individual user accounts into one sorted bid/ask view for matching and price discovery, while the orders themselves stay onchain.
 
-**Why offchain?**
+Storing a sorted book onchain would cost a write for every insertion and every reprice. Velocity instead stores orders in user accounts, up to 32 per subaccount, and the DLOB server reads all relevant `UserAccount` state from chain, pulls the active fillable limit orders out of each account, sorts them into bid and ask price levels, and publishes the result over WebSocket and HTTP. It never writes onchain state. It is a read-only projection.
 
-Storing a sorted orderbook onchain would be prohibitively expensive. Instead, Velocity stores orders in user accounts (up to 32 per user), and the DLOB server:
+That split is worth holding onto. Onchain is the source of truth: orders live in `UserAccount`, the program processes fills, and settlement, P&L, collateral, and margin checks all happen there. The DLOB is the derived view: sorted depth, aggregation, realtime updates, and a convenient API. If the DLOB server goes down, resting orders are still onchain, still valid, and still fillable. They stop appearing in the aggregated book until it recovers, and nothing else changes.
 
-<Steps>
-### Scan all user accounts
-Read all relevant `UserAccount` state from chain.
-
-### Extract resting limit orders
-Pull active, fillable limit orders from each account.
-
-### Sort into a bid/ask orderbook
-Group and order quotes by price levels.
-
-### Serve via WebSocket and HTTP
-Publish snapshots and updates for UIs and bots.
-</Steps>
-
-This gives you Binance-style orderbook depth without onchain sorting costs.
+The server also filters what it publishes. It drops expired orders, honours order flags (post-only, reduce-only), and hides orders in markets that are not `Active`. Reduce-only order types are the exception: those stay visible in a `ReduceOnly` market too. See [Market status](#market-status).
 
 ## How matching works
 
-Taker fills are built by a single **router pass** (`fulfill_perp_order_router_pass` in `programs/velocity/src/controller/orders.rs`). There is no fixed JIT → DLOB → AMM waterfall, and there is no per-maker fill plan: every liquidity source quotes a price ladder, and the taker's size is divided across those ladders in one step.
+Taker fills are built by `fulfill_perp_order` in the perp order controller. It first asks `determine_perp_fulfillment_methods` for a fill plan, then executes that plan step by step through `fulfill_perp_order_step`. The plan is a list of `PerpFulfillmentMethod` values, and the type has exactly two variants: `AMM(Option<u64>)`, whose payload is the price cap on that step and is `None` when the step is uncapped, and `Match(Pubkey, u16, u64)`, carrying the maker's account, its order index, and the maker's price.
 
 <Steps>
-### Every source quotes a ladder
+### Makers are collected and sorted by price
 
-Each source answers with price levels — a price and the base available at it. Resting DLOB orders are bridged into single-level ladders. The CLOB book and any registered quoter program are asked over a CPI call (`quote_v0`). Every ladder is truncated at the taker's limit price.
+`get_maker_orders_info` gathers the crossing maker orders and binary-inserts each one into price order, best price first for the taker: descending for a taker selling, ascending for a taker buying.
 
-### The vAMM quotes last
+There is no time priority inside a price level. The program walks the maker accounts the filler passed in pubkey order, and an equal-priced candidate is inserted ahead of the one already in the list, so which of two makers quoting the same price fills first follows from their account addresses rather than from when either order was placed.
 
-The vAMM builds its ladder after seeing every other source's, so the rest of the book is its last look. It shades its rungs toward rival prices, but only within **5% of its own top price** (`LAST_LOOK_BAND`); outside that band it quotes its own curve. Its ladder is capped at the taker's limit by inverting the curve, so every rung's true cost is inside the limit.
+### The plan walks that list in price order
 
-### Size divides by tier, then pro rata
+For each maker in turn, the planner stops as soon as a maker no longer crosses the taker's limit price. Otherwise the maker becomes a `Match` step. The walk also stops once the plan holds more than six steps, so one taker order reaches a bounded number of makers however deep the book is, and the size beyond them falls to the residual `AMM` step or goes unfilled.
 
-Each source carries a priority number: the vAMM is **0**, the CLOB book is **10**, a custom quoter program is **20** (defaults; an admin can change them). At a given price the lowest number fills first. Sources sharing a tier at the same price split that level in proportion to their depth. Every allocation is a multiple of the market's `order_step_size`.
+### The AMM is inserted ahead of any maker it out-prices
 
-### Each source is held to its own quote
+Before each `Match`, the planner compares the maker's price against the AMM's current bid or ask (including spread and reference price offset). If the maker is not better than the AMM, an `AMM` step is inserted **in front of** that maker, capped at the maker's price, and the running AMM price is pulled to the maker's price for the next comparison. If the maker is better, the maker goes first and the AMM waits.
 
-Execution happens after the division. A source that quoted a good price and then filled worse fails the comparison, and the whole fill reverts. Margin is checked for the taker and for every maker touched, before the instruction ends.
+### A residual AMM step closes out the plan
+
+After the maker list is exhausted, if the taker still crosses the AMM price, one final uncapped `AMM` step absorbs whatever is left.
 </Steps>
 
 Size that no source has depth for stays unfilled. A limit order rests with that size; an immediate-or-cancel order cancels it.
 
-The practical difference from a price-level-by-price-level comparison: the vAMM no longer fills *ahead of* an individual maker at that maker's price. It quotes against the whole book at once, and at an equal price its tier-0 position means it fills **before** a book or a quoter program, not after.
+A `Match` step is bounded by the maker's own unfilled size, and a reduce-only maker is bounded a second time by its current position: the fill can shrink that position toward zero but can never grow or flip it. A reduce-only quote's advertised size is therefore an upper bound, not the size on offer. A market whose status is `ReduceOnly` stamps every resting maker order reduce-only at fill time, whatever flag it was placed with, so the same bound applies to all of them.
 
-The vAMM only quotes at all if it passes the gates checked at fill time: `AmmFill` isn't paused for the market (`PerpOperation.AMM_FILL`), the AMM doesn't have too much drawdown, and the oracle (including the MM oracle, when active) is valid and not too volatile. If any gate trips, the vAMM contributes an empty ladder and the fill divides across the remaining sources only.
+A post-only order takes a different path entirely. `determine_perp_fulfillment_methods_for_maker` asks only whether the AMM's quote crosses the post-only price, and returns either a single uncapped `AMM` step or an empty plan. A post-only order is never matched against another maker, which is why two post-only orders can never trade with each other.
 
-<Callout type="warning">
-The AMM no longer competes as a **JIT maker inside a match**. It is a source with its own ladder and its own allocation. `OrderActionExplanation.OrderFilledWithAMMJit` is retained for historical records and is no longer emitted on the fill path.
+So the AMM does not sit at the end of a fixed JIT then DLOB then AMM waterfall, and it does not get a blanket priority over makers either. It competes level by level: better price fills first, and the AMM's fill is always capped at the price of the maker it jumped ahead of, so a maker is never crossed at a worse price than it quoted. JIT is not an earlier stage that runs before this walk. JIT maker quotes, and an AMM-JIT quote when the gates permit, compete for each fill inside the same walk, purely on price.
+
+The AMM only participates if it passes the gates checked at fill time: `AmmFill` isn't paused for the market (`PerpOperation.AMM_FILL`), the AMM's drawdown is inside the limit the program checks on each fill, and the oracle (including the MM oracle, when active) is valid and not too volatile. "Not too volatile" for the MM oracle is a hard 1% band: once an active, sufficiently recent MM oracle price differs from the exchange oracle by more than `MM_EXCHANGE_FALLBACK_THRESHOLD`, one percent of price, the AMM is dropped from the plan. `amm_can_fill_order` resolves all of that into `amm_is_available`, and if it comes out false the plan contains `Match` steps only.
+
+<Callout type="info">
+The AMM also still competes **as a JIT maker inside a `Match` step**. When `amm_jit_allowed` is true, the step builds an `AmmJitQuoter` alongside the maker's own order and the two split that fill. A fill the AMM wins that way is recorded with `OrderActionExplanation.OrderFilledWithAMMJit`, a variant on the live fill path rather than a legacy one kept for historical records.
 </Callout>
 
-For the full model — the quoter interface, the registry, and the account limits a client must respect — see [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow). That page calls a liquidity source a **quoter**; this page keeps "source" because the L2 API field is named `sources`.
+<Callout type="warning">
+A different model, in which every liquidity source quotes a price ladder and a router pass divides the taker's size across those ladders by priority tier, is designed but **not live**. Nothing on this page describes it. Anything describing quoter registration, ladder quoting, or per-source priority tiers belongs to that future design: see [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow), which carries its own not-live banner. Do not build against it yet.
+</Callout>
 
-Spot markets have no order-book matching at all: `place_spot_order` / `place_and_make_spot_order` / `fill_spot_order` don't exist on-chain, and there's no external-DEX (Serum/Phoenix/OpenBook) fulfillment path either. Both were removed. Spot markets exist only for collateral and borrow-lend; the matching logic above applies to perp markets only.
+Spot markets have no orderbook matching at all: `place_spot_order` / `place_and_make_spot_order` / `fill_spot_order` don't exist onchain, and there's no external-DEX (Serum/Phoenix/OpenBook) fulfillment path either. Both were removed. Spot markets exist only for collateral and borrow-lend; everything above applies to perp markets only.
 
-**Division in practice:**
+### Two AMM staleness thresholds, not one
 
-A 10 SOL market buy might divide like this:
-- 4 SOL to the vAMM at oracle + 0.02% (tier 0, shaded toward the book)
-- 3 SOL to a resting maker at oracle + 0.05%
-- 3 SOL to the vAMM at oracle + 0.12% (further along the curve)
+Oracle staleness gates the AMM twice, at two different ages, and the two fail independently. `OracleValidity::StaleForAMM` is **not** a unit variant: it is `StaleForAMM { immediate: bool, low_risk: bool }`, and each flag is one of the thresholds.
 
-The taker gets a blended price better than any single source would provide. Note that one source can win size at more than one price: an allocation is per price level, not per source.
+- **`low_risk`** compares the price's age against `State.oracleGuardRails.validity.slotsBeforeStaleForAmm`; read the live `State` account for that threshold. Failing it drops the AMM out of the plan entirely, leaving `Match` steps only.
+- **`immediate`** is far tighter. With no per-market override it is same-slot freshness for an exchange-sourced price, and 800ms (`MM_ORACLE_MIN_WRITE_GAP`, the shortest interval the MM oracle crank may write at) for an MM-sourced one. Failing it blocks only the immediate JIT path, and a low-risk fill still routes to the AMM.
 
-## What is "indicative" liquidity?
+The SDK flattens the pair into the `OracleValidity` numeric discriminant that `AmmCache` stores per market: `5` is stale on both thresholds, `6` is stale for immediate fills only, `7` is valid. The TypeScript enum spells those two members `OracleValidity.StaleForAMMLowRisk` and `OracleValidity.isStaleForAmmImmediate`. The second is camelCased differently from every other member of that enum, so copy it verbatim rather than guessing at it. A Rust caller has to destructure the variant: matching `StaleForAMM` as a unit variant does not compile.
 
-When you query the DLOB orderbook, you'll see two types of liquidity:
+### A plan in practice
 
-- **Committed (DLOB) liquidity:** real onchain resting limit orders. These are guaranteed to be available for matching at their stated price.
-- **Indicative liquidity:** estimated liquidity from the AMM (vAMM) at various price levels. This is what the AMM *would* fill at each price based on its curve, but it's not a firm order; it's a projection. Indicative liquidity also includes offchain [indicative quotes](./indicative-quotes) published by market makers who signal intent to provide liquidity without committing onchain.
+Take a 10 SOL market buy against a book holding 3 SOL at oracle + 0.05% and 3 SOL at oracle + 0.12%, with the AMM asking oracle + 0.02%. All prices here are illustrative. That plans as:
 
-**Why does this matter?** When reading orderbook depth, indicative liquidity gives a more complete picture of available liquidity (DLOB + AMM), but only DLOB orders are firm commitments. The AMM's price and available depth can shift with oracle updates.
+- `AMM` capped at oracle + 0.05%, inserted ahead of the first maker because the AMM out-prices it
+- `Match` the 3 SOL maker at oracle + 0.05%
+- `Match` the 3 SOL maker at oracle + 0.12%, which the AMM no longer beats once its price has been pulled up
+- residual `AMM` for whatever size is still left inside the taker's limit
 
-In the L2 API response, the `sources` field on each price level tells you where the liquidity comes from. See [REST API](#rest-api-l2l3) below.
+The taker gets a blended price better than any single source would provide, and the AMM appears at two separate points in one plan. Read the same shape from the maker's side: an order resting at oracle + 0.05% against an AMM quoting oracle + 0.02% is not touched until the AMM has taken the first slice at *that maker's* price. Being on the book is not enough. A maker has to beat the AMM's quote to see the whole fill.
 
-## DLOB architecture
+## Committed and indicative liquidity
 
-### DLOB responsibilities
+A DLOB query returns two kinds of depth, and only one of them is a commitment.
 
-**Orderbook state:**
-- Bids sorted descending by price
-- Asks sorted ascending by price
-- Grouped by price levels
-- Market depth aggregation
+**Committed (DLOB) liquidity** is real onchain resting limit orders. They are available for matching at their stated price until they are filled or cancelled.
 
-**Order filtering:**
-- Excludes expired orders
-- Filters by market type
-- Handles order flags (post-only, reduce-only)
-- Shows only valid, fillable orders
-- Excludes orders in markets that aren't `Active` (or, for reduce-only-only order types, `ReduceOnly`). See [market status](#market-status) below
+**Indicative liquidity** is not a firm order. It covers the AMM's projected depth at each price level, which is what the vAMM curve would fill at rather than an order it has placed, and it covers the offchain [indicative quotes](./indicative-quotes) that market makers publish to signal intent without committing onchain.
 
-**Real-time updates:**
-- Subscribes to UserAccount changes via RPC
-- Updates orderbook when orders placed/canceled/filled
-- Publishes updates via WebSocket
-
-### Order lifecycle
-
-<Steps>
-### User places limit order
-`UserAccount` is updated onchain.
-
-### DLOB detects new order
-The order is picked up via RPC subscriptions.
-
-### Order added to DLOB
-The order is inserted at the correct price level.
-
-### Orderbook update broadcast
-WebSocket clients receive refreshed depth.
-
-### Order fills
-`UserAccount` is marked filled and DLOB removes the order.
-
-### Update broadcast
-Clients receive the reduced depth after fill.
-</Steps>
-
-*The DLOB never modifies onchain state, it's read-only.*
-
-## DLOB vs onchain state
-
-**Onchain (source of truth)**
-
-- Orders stored in UserAccount
-- Fills processed by Velocity program
-- Settlement and PnL calculation
-- Collateral and margin checks
-
-**DLOB (aggregated view)**
-
-- Sorted orderbook for matching
-- Depth aggregation
-- Real-time orderbook updates
-- Convenient API for UIs and bots
-
-If DLOB goes down, orders are still onchain and valid, they just won't be visible in the aggregated orderbook until DLOB recovers.
+The distinction matters when reading depth. Including indicative liquidity gives a fuller picture of what a taker can probably get, but the AMM's price and available depth shift with every oracle update, and an indicative quote carries no obligation. In the L2 API response, the `sources` field on each price level separates the two. See [REST API (L2/L3)](#rest-api-l2l3).
 
 ## Market status
 
-Every perp and spot market has a `MarketStatus` that gates whether it's fillable at all: `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4). Only `Active` markets accept new risk-increasing orders; `ReduceOnly` markets accept only orders that shrink an existing position; `Settlement`/`Delisted` markets are winding down and shouldn't appear as tradable in a market maker's UI or bot config at all.
+Every perp and spot market has a `MarketStatus` that gates whether it's fillable at all: `Initialized` (0), `Active` (1), `ReduceOnly` (2), `Settlement` (3), `Delisted` (4). Only `Active` markets accept new risk-increasing orders; `ReduceOnly` markets accept only orders that shrink an existing position; `Settlement` and `Delisted` markets are winding down and shouldn't appear as tradable in a market maker's UI or bot config at all.
 
-> **If you maintain a custom (non-IDL) decoder for `PerpMarket`/`SpotMarket`,** note that these discriminant values are Velocity-specific: the deprecated `FundingPaused`/`AmmPaused`/`FillPaused`/`WithdrawPaused` variants that used to sit between `Active` and `ReduceOnly` were removed, so `ReduceOnly`/`Settlement`/`Delisted` now sit at 2/3/4 instead of 6/7/8. Decoding via the SDK's `MarketStatus` class (`MarketStatus.ACTIVE`, etc.) or the IDL avoids this entirely: only a decoder that hardcodes the old numeric values would misread the status.
+<Callout type="warning">
+**A custom (non-IDL) decoder for `PerpMarket`/`SpotMarket` needs care here.** These discriminant values are Velocity-specific: the deprecated `FundingPaused`/`AmmPaused`/`FillPaused`/`WithdrawPaused` variants that used to sit between `Active` and `ReduceOnly` were removed, so `ReduceOnly`/`Settlement`/`Delisted` now sit at 2/3/4 instead of 6/7/8. Decoding via the SDK's `MarketStatus` class (`MarketStatus.ACTIVE`, and so on) or the IDL avoids this entirely: only a decoder that hardcodes the old numeric values would misread the status.
+</Callout>
 
 ## Tick size
 
-Every perp/spot market has an `orderTickSize` (`PerpMarketAccount.orderTickSize` / `SpotMarketAccount.orderTickSize`, `PRICE_PRECISION` units). The on-chain program standardizes every auction price and oracle-offset limit price to this tick size before comparing it against anything else: long orders floor to the nearest tick, short orders ceil.
+Every perp and spot market has an `orderTickSize` (`PerpMarketAccount.orderTickSize` / `SpotMarketAccount.orderTickSize`, `PRICE_PRECISION` units). The onchain program standardizes every auction price and oracle-offset limit price to this tick size before comparing it against anything else: long orders floor to the nearest tick, short orders ceil.
 
-If you compute prices client-side (rather than letting the program clamp them), pass the market's tick size through so your numbers match what the program will actually use:
+Prices computed client-side, rather than left for the program to clamp, should carry the market's tick size through so they match what the program will actually use:
 
-- `getAuctionPrice(order, slot, oraclePrice, tickSize)` (see [JIT Auctions](./jit-auctions#auction-pricing-formula))
+- `getAuctionPrice(order, slot, oraclePrice, tickSize)`, see [JIT Auctions](./jit-auctions#auction-pricing-formula)
 - `getLimitPrice(order, oraclePriceData, slot, fallbackPrice, tickSize)`
 - `DLOBNode.getPrice(oraclePriceData, slot, tickSize)`
 
-All four `tickSize` parameters are optional and default to `ONE` (no effective rounding) for backward compatibility, but on any market with `orderTickSize > 1`, omitting it means your client-computed price can disagree with the program's by up to one tick, which is enough to misjudge whether a maker price is inside or outside the current auction range. Pass `perpMarket.orderTickSize` (or `spotMarket.orderTickSize`) explicitly.
+Every one of those `tickSize` parameters is optional and defaults to `ONE`, meaning no effective rounding, for backward compatibility. On any market with `orderTickSize > 1`, omitting it lets a client-computed price disagree with the program's by up to one tick, which is enough to misjudge whether a maker price is inside or outside the current auction range. Pass `perpMarket.orderTickSize` (or `spotMarket.orderTickSize`) explicitly.
 
 ## Accessing the DLOB
+
+Three read paths, in increasing order of control and effort: REST snapshots from the hosted server, a WebSocket stream from the same server, or a book built in-process from onchain accounts.
+
+<Callout type="warning">
+**Endpoints are provisional.** `dlob.velocity.exchange` below follows Velocity's `<sub>.velocity.exchange` hosted-endpoint convention but hasn't been confirmed as the final production hostname. Check with the team before hardcoding it.
+</Callout>
 
 ### REST API (L2/L3)
 
 The hosted DLOB server provides L2 (aggregated price levels) and L3 (individual orders) endpoints. This is the simplest way to get an orderbook snapshot.
 
-> **Endpoint is provisional.** `dlob.velocity.exchange` below follows Velocity's `<sub>.velocity.exchange` hosted-endpoint convention but hasn't been confirmed as the final production hostname. Check with the team before hardcoding it.
-
-**L2 orderbook** (aggregated by price level):
-
 ```
 GET https://dlob.velocity.exchange/l2?marketName=SOL-PERP&depth=10&includeIndicative=true
+GET https://dlob.velocity.exchange/l3?marketName=SOL-PERP
 ```
 
-Parameters:
-- `marketName`: e.g. `SOL-PERP`, `BTC-PERP`, `SOL` (spot)
-- `depth`: number of price levels per side (default 100, capped at 100)
-- `includeIndicative=true`: include offchain indicative quotes from market makers
+`marketName` takes a symbol such as `SOL-PERP`, `BTC-PERP`, or `SOL` for spot. `depth` is the number of price levels per side, defaulting to 100 and capped at 100. `includeIndicative=true` folds in the offchain indicative quotes; omitting it underestimates available liquidity. `/l3` returns the individual orders with maker addresses, which is what identifies a specific resting order.
 
-`/l2` serves the server's Redis-cached book; whether vAMM liquidity is included in that cache is decided server-side, not by a query parameter. `includeVamm` (along with `includeOracle`) is a parameter of the separate `/batchL2`/`/batchL2Cache` endpoints, not `/l2`.
+`/l2` serves the server's Redis-cached book. Whether vAMM liquidity is included in that cache is decided server-side, not by a query parameter: `includeVamm` (along with `includeOracle`) is a parameter of the separate `/batchL2` and `/batchL2Cache` endpoints, not of `/l2`. Use those to control vAMM inclusion explicitly.
 
-**L2 response structure:**
+An L2 level looks like this:
 
 ```json
 {
@@ -220,17 +164,7 @@ Parameters:
 }
 ```
 
-> **Important:** The `sources` field is an **object** mapping source names to size strings (in raw precision), not a flat string. Common source keys are `"dlob"` (resting limit orders) and `"vamm"` (AMM indicative liquidity). Prices and sizes are in raw precision (divide by `PRICE_PRECISION` / `BASE_PRECISION`).
-
-**L3 orderbook** (individual orders):
-
-```
-GET https://dlob.velocity.exchange/l3?marketName=SOL-PERP
-```
-
-Returns individual orders with maker addresses, useful for identifying specific resting orders.
-
-**Fetching in TypeScript:**
+Two things trip up first integrations. `sources` is an **object** mapping source names to size strings, not a flat string: the common keys are `"dlob"` for resting limit orders and `"vamm"` for AMM indicative liquidity. And every price and size is raw precision, so divide prices by `PRICE_PRECISION` (1e6) and sizes by `BASE_PRECISION` (1e9) or the numbers are nonsense.
 
 ```typescript
 interface L2Level {
@@ -258,9 +192,11 @@ for (const bid of orderbook.bids) {
 }
 ```
 
-### WebSocket (realtime updates)
+Ecosystem builders reading the same server for a UI or an indexer will want the full endpoint reference in [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws), which documents the batch, top-makers, priority-fee, and auction-params routes as well.
 
-For live orderbook feeds with subsecond updates:
+### WebSocket stream
+
+For live orderbook feeds with subsecond updates, subscribe over WebSocket instead of polling:
 
 ```typescript
 const ws = new WebSocket("wss://dlob.velocity.exchange/ws");
@@ -278,9 +214,11 @@ ws.onmessage = (event) => {
 };
 ```
 
-### SDK DLOB class (local orderbook)
+The hosted server typically updates within 1 to 2 seconds of an onchain change, and lags further under load. That is fine for a UI and too slow for a latency-sensitive strategy.
 
-Build and maintain orderbook locally for maximum control. This subscribes directly to onchain UserAccount changes and builds the orderbook in-process, giving you the lowest latency view.
+### Local DLOB from onchain accounts
+
+Building the book in-process subscribes directly to onchain `UserAccount` changes and gives the rawest feed available, ahead of anything the hosted server publishes. This is the path for a bot that competes on latency.
 
 <SDKDoc>
   <TypeScript name="DLOB local setup" type="example">
@@ -312,7 +250,7 @@ const dlobSubscriber = new DLOBSubscriber({
 await dlobSubscriber.subscribe();
 
 // getBestBid/getBestAsk live on the DLOB snapshot itself, not the subscriber.
-// Pass the market's tick size so client-side rounding matches the on-chain standardization.
+// Pass the market's tick size so client-side rounding matches the onchain standardization.
 const dlob = dlobSubscriber.getDLOB();
 const slot = slotSubscriber.getSlot();
 const perpMarket = velocityClient.getPerpMarketAccount(marketIndex);
@@ -320,110 +258,29 @@ const oracleData = velocityClient.getMMOracleDataForPerpMarket(marketIndex);
 
 const bestBid = dlob.getBestBid(marketIndex, slot, MarketType.PERP, oracleData, perpMarket.orderTickSize);
 const bestAsk = dlob.getBestAsk(marketIndex, slot, MarketType.PERP, oracleData, perpMarket.orderTickSize);
-// Both are `BN | undefined` -- undefined means there's no resting-limit bid/ask right now
+// Both are `BN | undefined`: undefined means there's no resting-limit bid/ask right now
 // (this ignores AMM fallback liquidity; it's DLOB-only, by design).
 ```
   </TypeScript>
 </SDKDoc>
 
-### Auction subscriber (JIT auctions)
-
-Subscribe via `AuctionSubscriber` to get active auctions; see [JIT Auctions](./jit-auctions) for setup and place-and-make flow.
-
-### Detecting Swift orders
-
-Use `isSignedMsgOrder(order)` to identify SWIFT-origin orders when subscribed to both SWIFT and onchain feeds. See [SWIFT API](./swift-api#detecting-swift-orders-in-onchain-feeds) for details.
-
-## DLOB matching mechanics
-
-DLOB resting orders fill in **price-time priority**, same as [How matching works](#how-matching-works) describes: best price wins, ties broken by arrival order. JIT is not an earlier stage that runs before this; JIT maker quotes (and an AMM-JIT quote, gates permitting) compete for each fill *inside* this same walk, purely on price:
-
-<Steps>
-### Best price wins
-Lowest ask fills buys first; highest bid fills sells first. At each price level, an AMM (or AMM-JIT) quote that beats the level is inserted ahead of it, capped at that level's price.
-
-### Time priority for tied prices
-Among resting orders at the same price, earlier orders fill first (FIFO).
-
-### Walk the book
-Continue across price levels until fully filled or liquidity is exhausted. A final residual AMM fill absorbs whatever is left after the maker list is exhausted.
-</Steps>
-
-**Example** (taker buying 10 SOL):
-- DLOB has: 3 SOL @ \$100, 5 SOL @ \$100.10, 4 SOL @ \$100.20
-- Taker fills: 3 @ \$100, 5 @ \$100.10, 2 @ \$100.20
-
-If the book doesn't fully fill, any remaining size that still crosses the taker's limit fills against the AMM.
-
-## Matching examples
-
-### Example 1: Market order (long), JIT maker wins the best level
-
-<Steps>
-### Order enters the fill plan at oracle + 0.1% (its limit)
-The taker's auction window bounds the acceptable fill price as it interpolates toward this limit.
-
-### A JIT maker quote beats the DLOB's best level and fills 60% at oracle + 0.02%
-The JIT quote competes purely on price against the resting maker at that level.
-
-### Remaining 40% fills against the next DLOB level at oracle + 0.05%
-Residual size walks to the next price level in the book.
-
-### AMM not needed (fully filled)
-Order is fully filled before the residual AMM fill is required.
-</Steps>
-
-### Example 2: Large market order, book exhausted
-
-<Steps>
-### Best level fills 40% at oracle + 0.03% (JIT maker beats the resting order)
-Best available price fills first.
-
-### Next DLOB level fills 30% at oracle + 0.08%
-Matches against the next resting price level.
-
-### Residual AMM fill absorbs remaining 30% at oracle + 0.15% (price impact)
-After the maker list is exhausted, the AMM fills whatever still crosses the limit, at more slippage.
-</Steps>
-
-### Example 3: Limit order at DLOB price
-
-<Steps>
-### Order bypasses JIT (not crossing spread)
-Since it does not cross, it does not trigger auction flow.
-
-### Rests on DLOB as maker order
-Order is posted to the book and waits for taker flow.
-
-### Earns maker rebate when filled
-Fill is credited as maker liquidity.
-</Steps>
-
-## Performance characteristics
-
-**DLOB performance:**
-- **Latency**: 1-2 seconds from onchain placement to DLOB update
-- **Depth**: Aggregates thousands of orders across hundreds of users
-- **Uptime**: Redundant servers ensure high availability
-- **WebSocket**: Handles thousands of concurrent connections
-
-**For low-latency bots:**
-
-Subscribing directly to onchain UserAccounts (via RPC or gRPC) can be faster than waiting for DLOB updates. The SDK's `OrderSubscriber` with `type: "websocket"` gives you the rawest feed.
+Two related feeds sit alongside the book. `AuctionSubscriber` streams active JIT auctions, covered in [JIT Auctions](./jit-auctions). `isSignedMsgOrder(order)` identifies SWIFT-origin orders when both the SWIFT and onchain feeds are subscribed, covered in [SWIFT API](./swift-api#detecting-swift-orders-in-onchain-feeds).
 
 ## Gotchas
 
-- **`/l2` doesn't take an `includeVamm` parameter:** whether vAMM liquidity is folded into the `/l2` response is decided server-side by the cache it reads from, not by a query flag. `includeVamm` only exists on `/batchL2`/`/batchL2Cache`; if you need to control vAMM inclusion explicitly, use those endpoints instead.
-- **`includeIndicative=true` for full picture:** indicative quotes from market makers (see [Indicative Quotes](./indicative-quotes)) are only included when this flag is set. Without it, you may underestimate available liquidity.
+- **The AMM can out-price a maker at that maker's own price:** an `AMM` step inserted ahead of a `Match` is capped at the maker's quote, so the taker's first slice trades at that price against the AMM instead. Beating the AMM's bid or ask is the price of getting the fill.
+- **A matching price does not queue behind whoever quoted it first:** the program applies no time priority within a price level, so posting early buys nothing against another maker at the same price. Improving the price by one tick does.
+- **`/l2` doesn't take an `includeVamm` parameter:** whether vAMM liquidity is folded into the `/l2` response is decided server-side by the cache it reads from, not by a query flag. `includeVamm` only exists on `/batchL2` and `/batchL2Cache`.
+- **`includeIndicative=true` for the full picture:** indicative quotes from market makers (see [Indicative Quotes](./indicative-quotes)) are only included when this flag is set.
 - **Prices are raw precision:** L2 response prices are in `PRICE_PRECISION` (1e6) and sizes in `BASE_PRECISION` (1e9). Forgetting to divide produces nonsensical numbers.
 - **L2 `sources` is an object, not a string:** each price level's `sources` field maps source names to size strings. Don't try to parse it as a flat value.
-- **DLOB server can lag:** the hosted DLOB server typically updates within 1-2 seconds of onchain changes, but during high load it can lag further. For latency-sensitive strategies, build the orderbook locally using `DLOBSubscriber` + `OrderSubscriber`.
-- **Oracle offset orders in the DLOB:** oracle offset orders appear at their *effective* price (oracle + offset) in the DLOB. When the oracle moves, their DLOB price updates automatically. This means the orderbook shifts without any onchain transactions.
+- **DLOB server can lag:** the hosted server typically updates within 1 to 2 seconds of onchain changes, and further under load. For latency-sensitive strategies, build the book locally with `DLOBSubscriber` and `OrderSubscriber`.
+- **Oracle offset orders move without a transaction:** they appear at their effective price (oracle + offset) in the DLOB, and that price updates whenever the oracle does. The orderbook shifts with no onchain activity at all.
 
 ## Related
 
-- [JIT Auctions](./jit-auctions) - How JIT competes inside DLOB matching
-- [DLOB MM](./dlob-mm) - Market making with resting DLOB orders
-- [JIT-only MM](./jit-only) - Active market making through auctions
-- [Indicative Quotes](./indicative-quotes) - Offchain liquidity signaling
-- [SWIFT API](./swift-api) - Pre-auction order visibility
+- [JIT Auctions](./jit-auctions): how JIT competes inside DLOB matching
+- [DLOB MM](./dlob-mm): market making with resting DLOB orders
+- [JIT-only MM](./jit-only): active market making through auctions
+- [Indicative Quotes](./indicative-quotes): offchain liquidity signaling
+- [SWIFT API](./swift-api): pre-auction order visibility

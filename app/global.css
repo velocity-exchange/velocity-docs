@@ -1,0 +1,337 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/preset.css";
+@import "katex/dist/katex.min.css";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Velocity docs theme
+
+   Colors are solved, not eyeballed. Every ratio below is measured against
+   the surface it sits on. Two rules govern the set:
+
+   1. Contrast is not maxed. The previous theme ran body text at 17.2:1 in
+      light and pure white on near-black at 20:1 in dark. Past roughly 16:1
+      text stops gaining legibility and starts costing comfort, and pure
+      white on pure black halates.
+   2. The scale carries hierarchy on its own. The old dark scale ran
+      20.0 / 19.2 / 17.6 / 14.4, four steps inside the top quarter of the
+      range, which is why dark mode read flat.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  --color-fd-background: #f7f8f7;
+  --color-fd-foreground: #363d37;          /* body            10.5:1 */
+  --color-fd-muted: #eef0ee;
+  --color-fd-muted-foreground: #535c55;    /* secondary        6.5:1 */
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #2b312c;
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: #2b312c;
+  --color-fd-border: #dfe3e0;
+  --color-fd-primary: #007333;             /* brand green      5.6:1 */
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #eef0ee;
+  --color-fd-secondary-foreground: #2b312c;
+  --color-fd-accent: #e7ebe8;
+  --color-fd-accent-foreground: #2b312c;
+  --color-fd-ring: #007333;
+
+  --color-fd-info: #126dbe;                /* 5.0:1 */
+  --color-fd-warning: #9f5f00;             /* 4.8:1 */
+  --color-fd-error: #c53631;               /* 5.0:1 */
+  --color-fd-success: #007333;
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* One 8px ladder for every vertical gap in the content column. */
+  --spacing-s1: 4px;
+  --spacing-s2: 8px;
+  --spacing-s3: 12px;
+  --spacing-s4: 16px;
+  --spacing-s5: 24px;
+  --spacing-s6: 32px;
+  --spacing-s7: 48px;
+}
+
+.dark {
+  --color-fd-background: #111512;
+  --color-fd-foreground: #d6dad6;          /* body            13.0:1 */
+  --color-fd-muted: #1b201c;
+  --color-fd-muted-foreground: #9ba19c;    /* secondary        7.0:1 */
+  --color-fd-popover: #171b18;
+  --color-fd-popover-foreground: #e2e5e2;
+  --color-fd-card: #171b18;
+  --color-fd-card-foreground: #e2e5e2;
+  --color-fd-border: #262c27;
+  --color-fd-primary: #58bf79;             /* brand green      8.0:1 */
+  --color-fd-primary-foreground: #0b0f0c;
+  --color-fd-secondary: #1b201c;
+  --color-fd-secondary-foreground: #e2e5e2;
+  --color-fd-accent: #212722;
+  --color-fd-accent-foreground: #e2e5e2;
+  --color-fd-ring: #58bf79;
+
+  --color-fd-info: #65a9f4;                /* 7.5:1 */
+  --color-fd-warning: #d6a24b;             /* 8.0:1 */
+  --color-fd-error: #f27267;               /* 6.5:1 */
+  --color-fd-success: #58bf79;
+}
+
+/* ── Measure and rhythm ───────────────────────────────────────────────────
+   Everything here targets DIRECT children of .prose, and that is deliberate.
+
+   Fumadocs wraps the inside of every component (callouts, cards, table cells,
+   steps, the previous/next nav) in `prose-no-margin` to zero out typography.
+   A descendant selector carrying an id outranks that class, so `#nd-page
+   .prose p` silently put the margins back inside every component on the site.
+   Scoping to `>` keeps our rules on our copy and leaves the theme's own
+   components alone.
+
+   Measure: the old site had no maximum width and ran past 120 characters.
+   Comfortable reading is 65 to 75. Long lines are also what made short
+   paragraphs look stranded and gaps look like holes. */
+/* No measure on the prose. The edit link and the previous/next cards sit in
+   <article> but outside .prose, so they fill the article column; holding the
+   text to a narrower measure left the page with two different right edges.
+   The article is already bounded by the three-column layout, so lines do not
+   run away without it. */
+
+/* Everything shares the same edge, figures and callouts included. A block that
+   genuinely needs more room scrolls inside the column rather than breaking out
+   of it, which is what the diagram frame already does below its minimum width.
+   The alternative, letting figures run wider than the prose, reads as an
+   alignment bug even when it is deliberate. */
+
+#nd-page .prose > :is(p, ul, ol) { margin-block: 0 var(--spacing-s4); }
+#nd-page .prose > :is(ul, ol) > li { margin-block: 0 var(--spacing-s2); }
+#nd-page .prose > :is(ul, ol) > li > :is(ul, ol) { margin-block: var(--spacing-s2) 0; }
+
+/* Fumadocs' own components carry their own vertical margin (Callout ships `my-4`,
+   Steps and Tabs the same) except Cards, which ships none at all. A <Cards> grid
+   as a direct child of .prose therefore touches whatever follows it with no gap,
+   which is invisible until a page ends on one. Every Card carries `data-card`,
+   so select the grid by what it contains rather than a Tailwind class that could
+   change under us. */
+#nd-page .prose > div:has(> [data-card]) { margin-block: 0 var(--spacing-s4); }
+
+/* Space belongs above a heading, not below it. A heading should sit close to
+   the text it introduces and far from the text it follows, so the eye reads
+   the gap as a boundary rather than as a hole. */
+#nd-page .prose > h2 {
+  margin-block: var(--spacing-s7) var(--spacing-s4);
+  padding-bottom: var(--spacing-s2);
+  border-bottom: 1px solid var(--color-fd-border);
+}
+#nd-page .prose > h3 { margin-block: var(--spacing-s6) var(--spacing-s3); }
+#nd-page .prose > h4 { margin-block: var(--spacing-s5) var(--spacing-s2); }
+#nd-page .prose > :is(h2, h3, h4) + :is(h3, h4) { margin-top: var(--spacing-s4); }
+#nd-page .prose > :last-child { margin-bottom: 0; }
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "cv05" 1, "ss01" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+#nd-page article > h1 {
+  font-weight: 600;
+  font-size: clamp(1.9rem, 3.2vw, 2.35rem);
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+  max-width: 24ch;
+  margin-bottom: var(--spacing-s2);
+}
+
+#nd-page .prose > :is(h2, h3, h4) {
+  letter-spacing: -0.011em;
+  text-wrap: balance;
+}
+#nd-page .prose > h2 { font-size: 1.4rem; font-weight: 600; line-height: 1.25; }
+#nd-page .prose > h3 { font-size: 1.1rem; font-weight: 600; line-height: 1.35; }
+
+/* Leading is safe to set broadly; it is inherited, not additive. */
+#nd-page .prose { line-height: 1.65; }
+
+/* `pretty` asks the browser to avoid leaving a single word alone on the last
+   line. `balance` is for short blocks like headings; on a long paragraph it
+   evens every line and costs more to lay out, so headings get balance and
+   body copy gets pretty. */
+#nd-page .prose > :is(p, li) { text-wrap: pretty; }
+
+/* ── Formulas ───────────────────────────────────────────────────────────── */
+.katex-display {
+  margin: var(--spacing-s5) 0;
+  padding: 20px var(--spacing-s5);
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--color-fd-border);
+  background: var(--color-fd-card);
+}
+.katex-display > .katex { white-space: nowrap; }
+
+/* ── Figures ────────────────────────────────────────────────────────────── */
+#nd-page .prose > :is(p, figure) img,
+#nd-page .prose > img { margin-block: var(--spacing-s5); border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ── Swagger UI ───────────────────────────────────────────────────────────
+   Salvaged from the Nextra-era stylesheet. The Data API page embeds Swagger,
+   which ships its own light-only CSS, so these rules exist to make it legible
+   on our dark surface. Repointed at the Fumadocs tokens. */
+/* Swagger UI Dark Mode Fixes */
+.swagger-ui {
+  .wrapper {
+    padding: 0 !important;
+  }
+
+  .opblock-tag-section {
+    background: none !important;
+  }
+
+  table {
+    margin: 0;
+    background: none !important;
+    ;
+  }
+
+  th {
+    background: none;
+  }
+
+  .opblock-control-arrow,
+  .expand-operation {
+    position: relative;
+    color: currentColor;
+    padding: 12px;
+
+    svg.arrow {
+      display: none;
+    }
+
+    &::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      transition: transform 0.15s ease;
+    }
+
+    &[aria-expanded="true"]::before {
+      transform: rotate(-135deg);
+    }
+  }
+}
+
+.dark {
+  .swagger-ui {
+    color: var(--color-fd-muted-foreground);
+
+    .info,
+    .info .title,
+    .info .title small,
+    .info .title small pre,
+    .info a,
+    p,
+    th,
+    td,
+    button {
+      color: var(--color-fd-card-foreground) !important;
+    }
+
+    .opblock,
+    .opblock-tag-section,
+    .scheme-container,
+    .parameters,
+    .responses-wrapper,
+    .model-box,
+    .model {
+      color: var(--color-fd-card-foreground);
+      background: color-mix(in oklab, var(--color-fd-muted-foreground) 6%, transparent);
+      border-color: color-mix(in oklab, var(--color-fd-muted-foreground) 18%, transparent);
+    }
+
+    .opblock-summary,
+    .opblock-tag,
+    .tab-header .tab-item {
+      color: var(--color-fd-card-foreground);
+      border-color: color-mix(in oklab, var(--color-fd-muted-foreground) 18%, transparent);
+    }
+
+    .opblock-summary-method,
+    .opblock-title,
+    h4 {
+      color: var(--color-fd-card-foreground) !important;
+    }
+
+    .opblock-section-header {
+      color: var(--color-fd-card-foreground);
+      background: color-mix(in oklab, var(--color-fd-muted-foreground) 6%, transparent) !important;
+    }
+
+    .parameter__name,
+    .parameter__type,
+    .response-col_status,
+    .response-col_description,
+    .model-title,
+    .model .property.primitive,
+    .model .property,
+    .model-toggle {
+      color: var(--color-fd-card-foreground);
+    }
+
+    .description,
+    .markdown,
+    .renderedMarkdown,
+    .responses-inner,
+    .parameter__in {
+      color: var(--color-fd-muted-foreground);
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="number"],
+    select,
+    textarea {
+      background: color-mix(in oklab, var(--color-fd-muted-foreground) 10%, transparent);
+      color: var(--color-fd-card-foreground);
+      border-color: color-mix(in oklab, var(--color-fd-muted-foreground) 20%, transparent);
+    }
+
+    .btn,
+    .btn.cancel,
+    .btn.execute {
+      color: var(--color-fd-card-foreground);
+      background: color-mix(in oklab, var(--color-fd-muted-foreground) 14%, transparent);
+      border-color: color-mix(in oklab, var(--color-fd-muted-foreground) 22%, transparent);
+    }
+
+    .table-container,
+    table {
+      color: var(--color-fd-foreground);
+    }
+
+    .highlight-code,
+    pre,
+    code {
+      color: var(--color-fd-card-foreground);
+      background: color-mix(in oklab, var(--color-fd-muted-foreground) 10%, transparent);
+    }
+
+    .opblock .opblock-summary-path,
+    .opblock .opblock-summary-operation-id {
+      color: var(--color-fd-card-foreground);
+    }
+  }
+}

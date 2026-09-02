@@ -1,12 +1,14 @@
-# Data API Glossary
+---
+title: "Data API Glossary"
+---
 
 <Callout type="warning">
 The Data API is live at `https://data.velocity.exchange`. See [Data API](/developers/data-api). Some columns below describe features Velocity removed (noted inline) and are kept here only for reference until Velocity's own Data API schema is confirmed.
 </Callout>
 
 <Callout type="important">
-  This is extensive list for every API endpoint. Choose the category of
-  historical data you're analysing in the right sidebar for quick access. ➡️ ➡️
+  This is an extensive list covering every API endpoint. Pick the category of
+  historical data to analyse from the right sidebar for quick access. ➡️ ➡️
   ➡️
 </Callout>
 
@@ -41,7 +43,7 @@ Columns in the table below are part of each category:
 | takerFee                                   | int                               |           | Fee charged to the taker for filling the order.                            |
 | makerRebate                                | int                               |           | Rebate provided to the maker for placing the order.                        |
 | referrerReward                             | int                               |           | Reward received by the referrer for referring the order.                   |
-| quoteAssetAmountSurplus                    | int                               |           | The vAMM's quote surplus on the fill, kept by the LPs: its spread capture (the curve versus the reference price), plus — when it shaded its price toward the book — the gap it held back between the price the taker paid and the live curve. Not related to unfilled size. |
+| quoteAssetAmountSurplus                    | int                               |           | The vAMM's quote surplus on the fill, kept by the LPs: its spread capture (the curve versus the reference price), plus, when it shaded its price toward the book, the gap it held back between the price the taker paid and the live curve. Not related to unfilled size. |
 | takerOrderBaseAssetAmount                  | int                               |           | Total amount of the base asset the taker ordered to buy or sell.           |
 | takerOrderCumulativeBaseAssetAmountFilled  | int                               |           | Cumulative amount of the base asset filled for the taker's order.          |
 | takerOrderCumulativeQuoteAssetAmountFilled | int                               |           | Cumulative amount of the quote asset filled for the taker's order.         |
@@ -71,7 +73,7 @@ Columns in the table below are part of each category:
 | takerFee                                   | int                                                                  |           | Fee charged to the taker for filling the order.                         |
 | makerRebate                                | int                                                                  |           | Rebate provided to the maker for placing the order.                     |
 | referrerReward                             | int                                                                  |           | Reward received by the referrer for referring the order.                |
-| quoteAssetAmountSurplus                    | int                                                                  |           | The vAMM's quote surplus on the fill, kept by the LPs: its spread capture (the curve versus the reference price), plus — when it shaded its price toward the book — the gap it held back between the price the taker paid and the live curve. Not related to unfilled size. |
+| quoteAssetAmountSurplus                    | int                                                                  |           | The vAMM's quote surplus on the fill, kept by the LPs: its spread capture (the curve versus the reference price), plus, when it shaded its price toward the book, the gap it held back between the price the taker paid and the live curve. Not related to unfilled size. |
 | takerOrderBaseAssetAmount                  | int                                                                  |           | Total amount of the base asset the taker ordered to buy or sell.        |
 | takerOrderCumulativeBaseAssetAmountFilled  | int                                                                  |           | Cumulative amount of the base asset filled for the taker's order.       |
 | takerOrderCumulativeQuoteAssetAmountFilled | int                                                                  |           | Cumulative amount of the quote asset filled for the taker's order.      |
@@ -103,9 +105,9 @@ Columns in the table below are part of each category:
 | cumulativeFundingRateShort     | int  |           | Short positions' cumulative funding.          |
 | oraclePriceTwap                | int  |           | TWAP of oracle price (period).                |
 | markPriceTwap                  | int  |           | TWAP of mark price (period).                  |
-| ~~periodRevenue~~              | int  |           | **Removed on Velocity.** The on-chain `FundingRateRecord` no longer carries this field. |
+| ~~periodRevenue~~              | int  |           | **Removed on Velocity.** The onchain `FundingRateRecord` no longer carries this field. |
 | baseAssetAmountWithAmm         | int  |           | Total base asset in the AMM pool.             |
-| ~~baseAssetAmountWithUnsettledLp~~ | int  |           | **Removed on Velocity.** vAMM LP shares were removed, and the on-chain `FundingRateRecord` no longer carries this field. |
+| ~~baseAssetAmountWithUnsettledLp~~ | int  |           | **Removed on Velocity.** vAMM LP shares were removed, and the onchain `FundingRateRecord` no longer carries this field. |
 
 ### Funding Payments
 

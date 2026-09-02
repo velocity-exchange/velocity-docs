@@ -1,6 +1,8 @@
-# Sending Actions
+---
+title: "Sending Actions"
+---
 
-This page covers every way to send transactions in your app: from high-level `VelocityClient` methods, to the stateless `VelocityCore` instruction builders for full control without a subscribed client.
+This page covers every way to send transactions from an application: the high-level `VelocityClient` methods, and the stateless `VelocityCore` instruction builders for full control without a subscribed client.
 
 ## VelocityClient methods
 
@@ -62,12 +64,12 @@ await velocityClient.withdraw(
 
 ## `VelocityCore`: stateless instruction builders
 
-For advanced use cases (indexers, keeper bots without a full subscribed client, or any context where you only need to construct instructions), `VelocityCore` provides pure instruction builders that take explicit account pubkeys instead of reading from a subscription cache.
+For advanced use cases (indexers, keeper bots without a full subscribed client, or any context where only the instructions are needed), `VelocityCore` provides pure instruction builders that take explicit account pubkeys instead of reading from a subscription cache.
 
 | Approach | Use when |
 |---|---|
-| `VelocityClient` methods (above) | You already have a subscribed client: simplest path for most apps |
-| `VelocityCore.build*Instruction` (below) | You don't want a full subscription, need multiple instructions in one transaction, or are building a lightweight/serverless integration |
+| `VelocityClient` methods (above) | A subscribed client already exists: the shortest path for most apps |
+| `VelocityCore.build*Instruction` (below) | A full subscription is unwanted, several instructions have to go in one transaction, or the integration is lightweight or serverless |
 
 <Steps>
 ### Get an Anchor `Program<Velocity>`
@@ -82,7 +84,7 @@ const provider = new AnchorProvider(connection, wallet, {});
 const program = new Program(VelocityCore.defaultIdl(), provider);
 ```
 
-### Derive the accounts you need
+### Derive the required accounts
 
 ```ts
 const state = await VelocityCore.pdas.getVelocityStateAccountPublicKey(program.programId);
@@ -112,7 +114,7 @@ const remainingAccounts = VelocityCore.remainingAccounts.getRemainingAccounts(
 ```
 
 <Callout type="info">
-`getRemainingAccounts` takes two arguments (a `RemainingAccountsContext` of resolver hooks/caches you own, and a `RemainingAccountParams` describing the markets/positions for this call), not a single combined object. It derives the same oracle/market account set `VelocityClient`'s internal builder does, without needing a live subscription.
+`getRemainingAccounts` takes two arguments (a `RemainingAccountsContext` of caller-owned resolver hooks and caches, and a `RemainingAccountParams` describing the markets/positions for this call), not a single combined object. It derives the same oracle/market account set `VelocityClient`'s internal builder does, without needing a live subscription.
 </Callout>
 
 ### Build a deposit instruction
@@ -170,7 +172,7 @@ const placeOrderIx = await VelocityCore.buildPlacePerpOrderInstruction({
 
 ### Compose and send the transaction
 
-`VelocityCore` builders return raw `TransactionInstruction`s: bring your own transaction sender (Anchor's `sendAndConfirm`, `@solana/web3.js` directly, or a `VelocityClient.txSender` you construct separately):
+`VelocityCore` builders return raw `TransactionInstruction`s, so sending them is the caller's job: Anchor's `sendAndConfirm`, `@solana/web3.js` directly, or a separately constructed `VelocityClient.txSender`.
 
 ```js
 import { ComputeBudgetProgram, VersionedTransaction, TransactionMessage } from "@solana/web3.js";
@@ -195,13 +197,13 @@ console.log("Transaction:", signature);
 
 ## Atomic cancel-and-place (order replacement) via VelocityClient
 
-A common pattern for trading UIs is atomically canceling existing orders and placing new ones in a single transaction, avoiding the window where you have no resting orders while updating prices. With a subscribed client, build the individual instructions and compose them yourself:
+A common pattern for trading UIs is atomically canceling existing orders and placing new ones in a single transaction, closing the window with no resting orders while prices are updated. With a subscribed client, build the individual instructions and compose them:
 
 <SDKDoc>
   <TypeScript name="getCancelOrdersIx" type="method" owner="VelocityClient">
 ```js
 import { ComputeBudgetProgram } from "@solana/web3.js";
-import { getLimitOrderParams, PositionDirection } from "@velocity-exchange/sdk";
+import { getLimitOrderParams, PositionDirection, PostOnlyParams } from "@velocity-exchange/sdk";
 
 const cancelIx = await velocityClient.getCancelOrdersIx(
   null,   // marketType (null = all)
@@ -214,7 +216,7 @@ const bidParams = getLimitOrderParams({
   direction: PositionDirection.LONG,
   baseAssetAmount: velocityClient.convertToPerpPrecision(1),
   price: velocityClient.convertToPricePrecision(120),
-  postOnly: true,
+  postOnly: PostOnlyParams.MUST_POST_ONLY,
 });
 
 const askParams = getLimitOrderParams({
@@ -222,7 +224,7 @@ const askParams = getLimitOrderParams({
   direction: PositionDirection.SHORT,
   baseAssetAmount: velocityClient.convertToPerpPrecision(1),
   price: velocityClient.convertToPricePrecision(125),
-  postOnly: true,
+  postOnly: PostOnlyParams.MUST_POST_ONLY,
 });
 
 const bidIx = await velocityClient.getPlacePerpOrderIx(bidParams);
@@ -251,10 +253,10 @@ console.log("Cancel + place transaction:", signature);
 
 ## Transaction performance
 
-If you're batching or sending frequent transactions, consider:
+For batched or frequent transaction sending:
 
 - **Priority fees**: Set `ComputeUnitPrice` to land transactions faster during congestion
 - **Compute budget**: Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
 - **Address Lookup Tables (ALTs)**: Reduce transaction size when referencing many accounts
 - **Retry logic**: Transactions can be dropped; implement retries with backoff for production systems
-- **Bulk order margin enforcement**: `placeOrders`/`placeScaleOrders` now run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than a single end-of-batch check, a batch that previously succeeded may now revert with `InsufficientCollateral`
+- **Bulk order margin enforcement**: `placeOrders` and `placeScaleOrders` run the initial-margin check once per risk scope touched by the batch{/* HIDDEN:  (cross-margin, plus each isolated market with a risk-increasing order) */} rather than as a single end-of-batch check. A batch that previously succeeded may now revert with `InsufficientCollateral`.

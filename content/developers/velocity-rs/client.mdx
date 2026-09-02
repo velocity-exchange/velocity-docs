@@ -1,0 +1,194 @@
+---
+title: "The client"
+---
+
+`VelocityClient` is the entry point. It holds the RPC connection, the wallet, the network context, and a background cache of onchain accounts. Almost every other type in the crate either takes a client or is reached through one.
+
+## Constructing a client
+
+Three arguments: the network context, an `RpcClient`, and a `Wallet`. The constructor validates the RPC URL immediately so a typo fails at startup rather than on the first request, and it derives the WebSocket endpoint from the RPC URL.
+
+<SDKDoc>
+  <Rust name="new" type="method" owner="VelocityClient">
+```rust
+use velocity_rs::{Context, RpcClient, VelocityClient, Wallet};
+
+let wallet = Wallet::try_from_str(&std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY set"))
+    .expect("loaded wallet");
+
+let client = VelocityClient::new(
+    Context::MainNet,
+    RpcClient::new(std::env::var("RPC_URL").expect("RPC_URL set")),
+    wallet,
+)
+.await
+.expect("initialized client");
+```
+  </Rust>
+</SDKDoc>
+
+Use `VelocityClient::new_with_ws_url` when the WebSocket provider is not the same host as the RPC provider. It takes the same three arguments plus an explicit pubsub URL.
+
+`Context` is a struct with two associated constants, `Context::MainNet` and `Context::DevNet`, each carrying the address lookup tables and the Pyth program ID for that network. It is not an enum, so match on equality rather than on variants.
+
+### Clone the client, do not build a second one
+
+`VelocityClient` is `Clone` and cloning is cheap: the clone shares the same backend, the same subscriptions, and the same cache. Building a second client with `::new()` starts a second set of connections and a second cache, and the backend is intentionally never dropped, so a process that constructs clients in a loop grows without bound. Construct once at startup and clone into every task that needs it.
+
+## Wallet modes
+
+A `Wallet` is a signer plus the Velocity authority it signs for. It has three modes, and the mode decides what signing does.
+
+| Constructor | Mode | Signing |
+|---|---|---|
+| `Wallet::new(keypair)`, `Wallet::try_from_str(path_or_key)`, `Wallet::from_seed_bs58(seed)` | Normal | The keypair is the authority. |
+| `Wallet::delegated(signer, authority)` | Delegated | The keypair signs on behalf of another authority's subaccounts. |
+| `Wallet::read_only(authority)` | Read only | `sign_tx` and `sign_message` return `SdkError::WalletSigningDisabled`. |
+
+`Wallet::try_from_str` accepts either a base58 private key or a path to a `wallet.json` file, which is what most of the examples use so one environment variable covers both shapes.
+
+Subaccount addresses are derived, not looked up. `wallet.default_sub_account()` is subaccount 0, `wallet.sub_account(3)` is subaccount 3, and the static `Wallet::derive_user_account(&authority, sub_account_id)` does the same for an authority with no keypair held locally. `Wallet::derive_stats_account`, `Wallet::derive_swift_order_account` and `Wallet::derive_associated_token_address` cover the other PDAs a transaction builder needs.
+
+<SDKDoc>
+  <Rust name="Wallet" type="struct">
+```rust
+use velocity_rs::Wallet;
+
+// base58 private key, or a path to wallet.json
+let wallet = Wallet::try_from_str(&std::env::var("PRIVATE_KEY").unwrap()).unwrap();
+
+let authority = wallet.authority();          // &Pubkey
+let sub_account = wallet.sub_account(0);     // subaccount 0 PDA
+let stats = wallet.stats();                  // &Pubkey, the UserStats PDA
+```
+  </Rust>
+</SDKDoc>
+
+## The subscription model
+
+The client is usable without subscribing to anything: every read has an async form that goes to RPC. That is the wrong shape for a bot. Subscribing starts background tasks that keep account data in a local cache, and the synchronous `try_get_*` accessors then read that cache with no network round trip.
+
+The naming is the contract. An `async fn` named `get_*` always hits RPC. A synchronous `fn` named `try_get_*` reads the cache and returns an error or `None` if that account was never subscribed. A bot on its hot path should be calling `try_get_*` exclusively, and any `get_*` call in a per-slot loop is a latency bug.
+
+```rust
+// hits RPC every call
+let user: User = client.get_user_account(&sub_account).await?;
+
+// reads the local cache, no I/O
+let user: User = client.try_get_account(&sub_account)?;
+```
+
+Two subscription transports feed that cache: Solana WebSocket subscriptions, or a Yellowstone gRPC (Geyser) stream. They populate the same cache and the same accessors read it either way, so the choice does not change the rest of the trading code.
+
+## Subscribing over WebSocket
+
+WebSocket subscriptions are explicit: only the accounts named are watched, nothing else.
+
+<SDKDoc>
+  <Rust name="subscribe_markets" type="method" owner="VelocityClient">
+```rust
+use velocity_rs::types::MarketId;
+
+let market_id = client.market_lookup("sol-perp").expect("market found");
+
+client.subscribe_markets(&[market_id]).await?;
+client.subscribe_oracles(&[market_id]).await?;
+client.subscribe_account(&wallet.sub_account(0)).await?;
+client.subscribe_blockhashes().await?;
+```
+  </Rust>
+</SDKDoc>
+
+Each call is a no-op if that subscription is already running, so it is safe to call them again on a reconnect path. `subscribe_all_markets`, `subscribe_all_perp_markets`, `subscribe_all_spot_markets` and the matching `*_oracles` calls cover the whole set without enumerating individual markets.
+
+Every one of these has a `_with_callback` variant that also passes each raw account update as it arrives, which is how a caller reacts to a market or oracle change rather than polling the cache. `subscribe_account_polled` swaps the WebSocket for RPC polling at a configurable interval, for accounts that change rarely or providers that throttle subscriptions.
+
+`subscribe_blockhashes` is worth calling on any bot that sends transactions: it keeps a fresh blockhash in memory so building a transaction does not wait on `getLatestBlockhash`.
+
+## Subscribing over gRPC
+
+`grpc_subscribe` connects to a Yellowstone gRPC endpoint and streams account, slot, transaction and block metadata updates. It takes the endpoint, the authentication token, an options builder, and a `sync` flag that backfills all oracle, market and User accounts over RPC at startup so the cache is complete before the first update arrives.
+
+<SDKDoc>
+  <Rust name="grpc_subscribe" type="method" owner="VelocityClient">
+```rust
+use solana_commitment_config::CommitmentLevel;
+use velocity_rs::GrpcSubscribeOpts;
+
+client
+    .grpc_subscribe(
+        std::env::var("GRPC_URL").expect("GRPC_URL set"),
+        std::env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN set"),
+        GrpcSubscribeOpts::default()
+            .commitment(CommitmentLevel::Processed)
+            .usermap_on(),
+        true, // sync all markets, oracles and User accounts on startup
+    )
+    .await?;
+```
+  </Rust>
+</SDKDoc>
+
+The gRPC connection always subscribes to every Velocity account regardless of the options. What the options control is what the client *caches* and which callbacks fire. Turning caching off does not reduce what crosses the wire, only what the process holds in memory.
+
+### What the options do
+
+<SDKDoc>
+  <Rust name="GrpcSubscribeOpts" type="struct">
+```rust
+use anchor_lang::Discriminator;
+use solana_commitment_config::CommitmentLevel;
+use velocity_rs::grpc::grpc_subscriber::AccountFilter;
+use velocity_rs::types::accounts::User;
+use velocity_rs::GrpcSubscribeOpts;
+
+let opts = GrpcSubscribeOpts::default()
+    .commitment(CommitmentLevel::Processed)
+    .usermap_on()   // cache every User account
+    .statsmap_on()  // cache every UserStats account
+    .on_slot(move |new_slot| { /* must not block */ })
+    .on_account(
+        AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+        move |update| { /* must not block */ },
+    );
+```
+  </Rust>
+</SDKDoc>
+
+| Option | Default | Notes |
+|---|---|---|
+| `commitment(level)` | `Confirmed` | `Processed` for fill decisions, `Confirmed` for accounting. |
+| `usermap_on()` | off | Caches every `User` account. Needed for a DLOB or for fast maker transaction building. Budget roughly 2 GiB of resident memory. |
+| `statsmap_on()` | off | Caches every `UserStats` account, which saves an RPC round trip per counterparty when building fills. |
+| `oraclemap_off()` | oracle caching on | Turns off oracle caching. |
+| `user_accounts(vec)` | empty | Caches only these subaccounts, for a bot that does not need the whole set. |
+| `interslot_updates_on()` | off | Delivers updates within a slot instead of only at slot boundaries. |
+| `subscribe_slots(bool)` | on | Slot updates. |
+| `subscribe_block_meta(bool)` | off | Block metadata updates, paired with `on_block_meta`. |
+| `transaction_include_accounts(vec)` | empty | Streams transactions touching these accounts, paired with `on_transaction`. |
+
+Callbacks are registered with `on_slot`, `on_account`, `on_user_account`, `on_oracle_update`, `on_transaction` and `on_block_meta`. `on_user_account` is `on_account` with the `User` discriminator filter already applied. `on_oracle_update` fires *before* the oracle map is updated, so it sees the previous cached value if it reads one.
+
+<Callout type="warning">
+Every gRPC callback runs on the gRPC task. Blocking inside one stalls the entire stream, including the account updates fill logic depends on. Do any inline arithmetic needed and send anything slower to another task through a channel.
+</Callout>
+
+### Choosing between WebSocket and gRPC
+
+| | WebSocket | gRPC |
+|---|---|---|
+| Provider | Any Solana RPC with pubsub | A Yellowstone or Geyser endpoint, usually paid |
+| Scope | The accounts named | The whole program, filtered client side |
+| Whole-protocol views | Not practical | `usermap_on()` provides every `User` account |
+| Callbacks | Per subscription, via `_with_callback` | Slot, account, oracle, transaction and block metadata |
+| Typical use | Quoting one or a few markets, a dashboard, a script | DLOB servers, fillers, liquidators, anything that must see the whole book |
+
+The market maker example ships both paths against the same strategy code, which is a useful shape to copy: the transport is a startup decision, and the trading loop does not know which one it got.
+
+## Shutting down
+
+`client.unsubscribe().await` stops the WebSocket subscriptions and clears the cache. `client.grpc_unsubscribe()` stops the gRPC stream. `client.unsubscribe_account(&pubkey)` drops a single account subscription without touching the rest. Separately constructed subscribers, such as `EventSubscriber` streams or an `AuctionSubscriber`, have their own `unsubscribe`, and dropping one of those without calling it ends the stream silently.
+
+## Reaching the backend
+
+With the `unsafe_pub` feature enabled, `client.backend()` returns the `&'static VelocityClientBackend` that owns the maps. That is how a DLOB is bootstrapped, because `DLOBBuilder::new` takes the backend's `AccountMap`. The same feature exposes `spot_market_map()`, `perp_market_map()` and `oracle_map()` as raw concurrent maps. These are internals: they are not covered by any stability promise, and code that reaches them should expect to be adjusted when the crate moves.

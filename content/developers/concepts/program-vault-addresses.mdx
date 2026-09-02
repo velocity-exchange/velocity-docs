@@ -1,12 +1,49 @@
-# Program & Vault Addresses
+---
+title: "Program and Vault Addresses"
+---
 
-Below are the mainnet instances of Velocity and Velocity Vaults. Velocity is an entirely new program deployment with its own program ID, PDAs, and account layouts.
+Velocity is two deployed Solana programs: the exchange program, which owns markets, user accounts, orders, and the insurance fund, and the vaults program, which owns delegated trading pools built on top of it. This page is the reference for their addresses and for the other program IDs an integration has to point at.
 
-| Program | Address
-|---------|--------
-| Velocity | vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P
-| Velocity Vaults | vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR
+## Deployed programs
 
-<Callout type="important">
-Every PDA address (state, users, markets, vaults, …) is specific to this program ID, so addresses must be derived against it directly, and no on-chain state carries over from a prior deployment. If you're porting an integration from an earlier program ID, see the [migration guide](/developers/migrate-from-drift) for the legacy address and PDA-reuse pitfalls.
+| Program | Address | What it owns |
+|---|---|---|
+| Velocity | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` | `State`, perp and spot markets, user accounts and stats, orders, spot market vaults, insurance fund vaults |
+| Velocity Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` | Vault and vault-depositor accounts, which trade through a Velocity user account as delegate |
+
+The Velocity program ID is the same string on devnet and on mainnet-beta. The SDK still keeps two named constants, `VELOCITY_PROGRAM_ID` and `VELOCITY_DEVNET_PROGRAM_ID`, so that they can diverge without a code change; do not collapse them in a client config. What differs between the two environments is state, not the program ID: separate `State` accounts, separate markets, and a different quote mint (USDT on mainnet-beta, dUSDT on devnet).
+
+## Supporting program IDs
+
+An integration usually needs three more addresses, all of which the SDK carries so none of them has to be pasted by hand:
+
+| Constant | Address | Used for |
+|---|---|---|
+| `VELOCITY_ORACLE_RECEIVER_ID` | `G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha` | Receiving and verifying pushed oracle updates. Same on both environments. |
+| `PYTH_LAZER_PROGRAM_ID` | `pytd2yyk641x7ak7mkaasSJVXh6YYZnC7wTmtgAyxPt` | Pyth Lazer, the supported Pyth oracle path. |
+| `JIT_PROXY_PROGRAM_ID` | `J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ` | The JIT proxy, for bidding in [JIT auctions](/developers/market-makers/jit-auctions). Same on both environments. |
+
+## Read them from the config, not from this page
+
+`getConfig()` returns the active environment's `VelocityConfig`, which carries every address above plus the quote mint and the market lookup tables. Reading from it means an address change reaches an integration through an SDK bump rather than through a find-and-replace:
+
+```ts
+import { initialize, getConfig } from "@velocity-exchange/sdk";
+
+initialize({ env: "mainnet-beta" });
+const config = getConfig();
+
+config.VELOCITY_PROGRAM_ID;   // vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P
+config.QUOTE_MINT_ADDRESS;    // USDT on mainnet-beta, dUSDT on devnet
+config.MARKET_LOOKUP_TABLES;  // address lookup tables for versioned transactions
+```
+
+`initialize()` mutates process-wide module state, so call it once at startup. Without it the SDK defaults to the devnet preset, which is a common cause of a mainnet integration deriving devnet addresses. See [Setup](/developers/velocity-sdk/setup) for the rest of the client bootstrap.
+
+## Every PDA is derived against the program ID
+
+No account address on Velocity is a constant that can be hardcoded. `State`, user accounts, markets, market vaults, and insurance fund vaults are all program-derived addresses, so each one is a function of the program ID above and its seeds. The seed list is in [Account Model](/developers/concepts/account-model#pdas-program-derived-addresses), and the SDK derives them offchain with `getUserAccountPublicKey()`, `getPerpMarketPublicKey()`, and `getSpotMarketPublicKey()`.
+
+<Callout type="warning">
+No onchain state carries over from a prior deployment, and no address does either. An address derived under a different program ID points at an account this program does not own, and instructions that take it fail account validation rather than doing something subtly wrong. When porting an integration, delete every cached or hardcoded account address and re-derive it. The [migration guide](/developers/migrate-from-drift) lists the specific seed that was also renamed.
 </Callout>

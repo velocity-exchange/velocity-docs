@@ -1,0 +1,70 @@
+---
+title: "How fills work"
+description: "What happens between sending an order and holding a position: who fills it, in what order, and against what."
+---
+
+Velocity has no central matching engine. Orders live onchain as accounts, each keeper builds its own copy of the book offchain, and anyone can submit a transaction that fills an order. Execution is therefore best-effort rather than guaranteed. What the program owns is not the matching but the rules: given an order and the counterparties someone brought to it, it decides who fills, in what order, and at what price. See [Decentralized orderbook](/protocol/how-it-works/orderbook-and-keepers).
+
+## The order, as the program sees it
+
+An order carries an auction duration, an auction start and end price, a limit price, and an expiry. The first three define a line the price walks along; the limit price is what the order accepts once the walk is over. See [Auctions](/protocol/trading/auction-parameters).
+
+During a limit order's auction it can only take liquidity. Once the auction ends it is **resting**, and can take or provide. A post-only order skips the auction and only ever provides.
+
+## Getting the order to somebody who can fill it
+
+Once the transaction lands, the order exists onchain and propagates to keepers and market makers, who race to fill it, because filling pays. That race takes three shapes, differing only in who submits the fill:
+
+- **A keeper fills it against resting liquidity.** Keepers build their own orderbooks offchain, find a resting order on the other side of the taker's, and submit a transaction naming both.
+- **The order's owner fills it.** Nothing about the fill is privileged, so a trader can run a filler for its own orders. That removes the dependence on someone else's bot; it does not make a fill guaranteed.
+- **A market maker fills it with just-in-time liquidity.** The maker places an immediate-or-cancel post-only order solely to fill the taker's, fills it, and cancels the rest, in one transaction. A JIT order never rests on the orderbook.
+
+<JitAuctionSequence />
+
+Filling is permissionless and first-come first-served. The filler is paid the lesser of 10% of the fee and a time-based reward that grows with the fourth root of the order's age from a base of \$0.01, which is why old orders get filled before large ones. A keeper who cancels an expired or reduce-only order is paid a flat \$0.01; an account cancelling its own order pays only the Solana network fee.
+
+## How the program builds a fill plan
+
+The program takes the order, the makers the fill transaction brought along, and its own AMM, and turns them into an ordered list of steps.
+
+<LiquidityRoutingFlow />
+
+Makers arrive best-price-first from the taker's point of view, and the program stops at the first one the taker's limit price does not cross, since everything after it is priced worse. Wherever the AMM quotes better than the next maker, an AMM step is slotted in ahead of that maker and bounded at the maker's price. The plan therefore alternates in strict price order, and one order can fill partly against makers and partly against the AMM in a single transaction.
+
+Each AMM step is capped at roughly 1% of the AMM's reserves, per transaction rather than per order, so a larger order can still fill against the AMM across several transactions.
+
+<Callout type="important">
+There is no router pass, no liquidity source quoting a ladder, no routing priority between sources, and no last look for the AMM. Those describe a design that was never deployed.
+</Callout>
+
+### Self-trade prevention
+
+An account cannot fill against itself. Its own resting orders are skipped before prices are compared, so they never enter the plan. A skipped order is not cancelled or modified; it stays open for somebody else to match.
+
+### Who counts as a maker
+
+A maker must be a resting limit order, meaning its own auction is over. When both sides are resting, the one whose auction ended first is the maker, which is how the program preserves time priority without an onchain book.
+
+## What this means for takers
+
+Liquidity looks deeper than the AMM's curve because most of it is not on the curve. JIT liquidity is not constrained by the AMM's virtual reserves; it is whatever external makers bring to the auction. Every order runs its own auction, so there is no queue between traders, and an account can have as many open as it has order slots, which is 32.
+
+Partial fills are normal and are not a failure mode. There is no fill-or-kill on Velocity: an auction fills up to the order's slippage tolerance and leaves the rest working, and the remainder can be cancelled at any time. An order is left partly filled because its slippage tolerance was never crossed, because it expired, because the per-transaction AMM cap was reached, or because no filler was watching when the price was right.
+
+That last one is the honest cost of a permissionless orderbook, and it is why the filler reward grows with order age.
+
+<Callout type="warning">
+The price the app shows before an order is sent is the AMM's quote for that size. It is not the worst case. The worst case is the order's own auction end price or limit price, and a resting maker priced worse than the AMM can still fill part of the order once the AMM's liquidity at the better price is consumed. Read the limit, not the estimate.
+</Callout>
+
+## What this means for makers
+
+Resting orders are placed once and left. JIT liquidity means answering individual auctions inside their window, which needs low-latency infrastructure and captures flow that never reaches the book. Both earn the same flat 0.25 bps maker rebate on filled notional. A JIT maker is its own filler: fill and placement are one transaction, so a partially filled JIT order cannot be pulled.
+
+<Callout type="important">
+Whether the AMM competes with JIT makers inside a match step is governed by the market's just-in-time intensity, an admin-set per-market dial. While that intensity is zero the match step is the orderbook maker alone; above zero the AMM can co-fill beside the maker at the maker's price. Read the live `PerpMarket` account for the value.
+</Callout>
+
+Liquidations do not run through this path at all. A liquidator either takes over the position directly or closes it against resting liquidity or the AMM's curve. See [Liquidations](/protocol/trading/liquidations).
+
+For running a maker or filler in practice, see [JIT auctions](/developers/market-makers/jit-auctions), [JIT-only market making](/developers/market-makers/jit-only), and the [JIT maker bot](/developers/trading-automation/keeper-bots/jit-maker-bot) tutorial. Error codes and RPC problems are covered in [Trading automation troubleshooting](/developers/trading-automation/troubleshooting).

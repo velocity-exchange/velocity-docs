@@ -1,54 +1,61 @@
-# Velocity for Developers
+---
+title: "Velocity for Developers"
+---
 
-Velocity Protocol is an [open-sourced](https://github.com/velocity-exchange/velocity-v1), decentralised exchange built on the Solana blockchain, enabling transparent and non-custodial trading on cryptocurrencies. Velocity ships its own program deployment, a reduced feature set, and its own SDK. If you're porting an existing integration, see the [migration guide](/developers/migrate-from-drift) for the full list of differences.
+Velocity is a perpetual futures exchange that runs as a Solana program. Trading is non-custodial: an account is an onchain PDA, orders are accounts the program owns, and nothing sits between the trader and the chain except an RPC node. Building on it means reading those accounts and sending those instructions, which is what the TypeScript SDK exists to make bearable.
 
-<Cards.Card
-title="Understand the key concepts of Velocity Protocol ↗"
-href="/developers/concepts"
-/>
-
-## SDK
-
-The Velocity SDK is used to build trading apps and bots: placing/canceling orders, managing accounts and positions, subscribing to onchain updates, and integrating protocol logic directly in your backend or client app.
-
-| SDK | Package | Source |
-|---|---|---|
-| TypeScript (`@velocity-exchange/sdk`) | [npm](https://www.npmjs.com/package/@velocity-exchange/sdk) | [velocity-v1/packages/sdk](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/sdk) |
-
-<Callout type="info">
-Velocity does not currently ship a Python SDK. A Rust client (`velocity-rs`) exists in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1/tree/master/rust/velocity-rs) but is source-only and not published to crates.io.
-</Callout>
-
-<Cards.Card
-title="Setup and start trading with the Velocity SDK ↗"
-href="/developers/velocity-sdk/setup"
-/>
-
-
-## Data API
-
-The Data API is used for read-heavy workloads such as analytics, dashboards, historical queries, and offchain data access without running your own indexer. It complements the SDK by providing convenient HTTP endpoints over indexed Velocity data.
-
-<Cards.Card
-title="Interact with and understand the Velocity Data API ↗"
-href="/developers/data-api"
-/>
-
-
-## Guides
-
-These guides are organized by builder workflow so you can jump directly to the implementation path you need.
-
-| Section | Description |
-|---|---|
-| [Market Makers](/developers/market-makers) | Liquidity provision strategies, JIT flow, and production bot patterns |
-| [Vault Managers](/developers/vault-managers) | Building and operating managed vault strategies on Velocity |
-| [Trading Automation](/developers/trading-automation) | Automated execution workflows, keeper bots, and ops troubleshooting |
-| [Ecosystem Builders](/developers/ecosystem-builders) | Reading data, integrating orderbook streams, and sending protocol actions |
-
+Velocity forked Drift and then diverged: its own deployment, its own SDK package, and a deliberately reduced feature set. An integration being ported from upstream should start with the [migration guide](/developers/migrate-from-drift), which lists every behavioral and API difference rather than leaving them to be found.
 
 <Callout type="important">
-This documentation site is open-sourced. Feel free to submit questions/comments in [Issues](https://github.com/velocity-exchange/velocity-docs/issues) or suggest changes as a [PR](https://github.com/velocity-exchange/velocity-docs/pulls).
+The Velocity program is not open source yet. It will be published once the post-fork audit report is final. These docs are the reference until then, and the docs site itself is public: file a correction as an [issue](https://github.com/velocity-exchange/velocity-docs/issues) or a [pull request](https://github.com/velocity-exchange/velocity-docs/pulls). See [Contributing](/developers/contributing-to-velocity).
 </Callout>
 
-For any help or setup questions, feel free to ask in [#research-and-dev-chat](https://discord.com/invite/95kByNnDy5) on Discord!
+## Start here
+
+<Cards>
+  <Card
+    title="Concepts"
+    href="/developers/concepts"
+    description="The onchain model: what accounts exist, how positions and orders are stored, and why a slot is not a fixed amount of time."
+  />
+  <Card
+    title="SDK setup"
+    href="/developers/velocity-sdk/setup"
+    description="Install the package, build a VelocityClient, subscribe, and place a first order."
+  />
+  <Card
+    title="Migrate from Drift"
+    href="/developers/migrate-from-drift"
+    description="Every difference from upstream, for an integration that already works against Drift."
+  />
+</Cards>
+
+## The two interfaces
+
+**The SDK** is the write path. `@velocity-exchange/sdk` wraps the program: placing and canceling orders, managing subaccounts and positions, computing margin, subscribing to account and event streams, and building the transactions that carry all of it. It reads live state from the chain, so it is the right tool for anything that has to be current.
+
+| Package | Version | Where the source lives |
+| --- | --- | --- |
+| [`@velocity-exchange/sdk`](https://www.npmjs.com/package/@velocity-exchange/sdk) | 0.20.0 | `velocity-v1/packages/sdk` |
+| [`@velocity-exchange/vaults-sdk`](https://www.npmjs.com/package/@velocity-exchange/vaults-sdk) | Published, trails the monorepo | `velocity-v1/packages/vaults-sdk` |
+
+<Callout type="info">
+There is no Python SDK. A Rust client (`velocity-rs`) exists in the `velocity-v1` monorepo but is source-only and not on crates.io. The monorepo itself is not public yet, so those paths name locations that cannot be browsed from outside the team.
+</Callout>
+
+**The [Data API](/developers/data-api)** is the read path for history. It serves indexed events over HTTP, fills, funding payments, liquidations, settlements, candles, leaderboards, so an analytics or portfolio surface does not have to run an indexer. It is the wrong tool for live order state and the right one for anything older than the current block.
+
+## Guides by integration type
+
+| Integration | Go to |
+| --- | --- |
+| An app, dashboard, or analytics surface over Velocity data | [Ecosystem builders](/developers/ecosystem-builders) |
+| A quoting strategy or a maker bot | [Market makers](/developers/market-makers) |
+| A keeper bot, or automated execution from an existing service | [Trading automation](/developers/trading-automation) |
+| A managed vault that trades depositor capital | [Vault managers](/developers/vault-managers) |
+| A frontend on top of someone else's vault | [Vault depositors](/developers/vault-depositors) |
+| A frontend that earns a per-order fee on the flow it routes | [Builder codes](/developers/builder-codes) |
+
+## Getting help
+
+Ask in [#research-and-dev-chat](https://discord.com/invite/95kByNnDy5) on Discord. If a page here disagrees with what the program does, that is a bug: report it against the [docs repository](https://github.com/velocity-exchange/velocity-docs/issues).

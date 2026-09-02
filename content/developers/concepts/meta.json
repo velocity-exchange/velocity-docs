@@ -1,0 +1,13 @@
+{
+  "title": "Concepts",
+  "pages": [
+    "index",
+    "program-structure",
+    "account-model",
+    "propamm-and-clob-order-flow",
+    "slot-duration",
+    "amm-spread",
+    "optimizations",
+    "program-vault-addresses"
+  ]
+}

@@ -1,8 +1,11 @@
-# Manager Operations
+---
+title: "Manager Operations"
+description: "The Quickstart covers creating a vault and changing its parameters."
+---
 
-The [Quickstart](/developers/vault-managers/quickstart) covers creating a vault and changing its parameters. This page covers the rest of the manager surface on `VaultClient` from [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk): profit share, rebases, the queued fee update, manager borrow and repay, and the vault's own insurance-fund stake.
+The [Quickstart](/developers/vault-managers/quickstart) covers creating a vault and changing its parameters. This page covers the rest of the manager surface on `VaultClient` from `@velocity-exchange/vaults-sdk`: profit share, rebases, the queued fee update, manager borrow and repay, and the vault's own insurance-fund stake.
 
-Every method listed here has a matching `get...Ix` (or `create...Ix`) variant that returns instructions instead of sending a transaction, so you can batch operations or route them through a multisig. See [Multisig manager](/developers/vault-managers/multisig-ops).
+Every method listed here has a matching `get...Ix` (or `create...Ix`) variant that returns instructions instead of sending a transaction, for batching operations or routing them through a multisig. See [Multisig manager](/developers/vault-managers/multisig-ops).
 
 ## Profit share and rebase
 
@@ -14,7 +17,7 @@ Every method listed here has a matching `get...Ix` (or `create...Ix`) variant th
 await vaultClient.applyProfitShare(vault, vaultDepositor);
 ```
 
-This matters when you have queued a fee change. Each depositor keeps the profit share and hurdle rate that were in force when its high-water mark was last set, so a raised profit share does not price gain earned before the raise. The depositor moves onto the new policy only after that gain is realized. Applying profit share is what realizes it. See [Grandfathering](/developers/vault-managers#grandfathering).
+This matters when a fee change is queued. Each depositor keeps the profit share and hurdle rate that were in force when its high-water mark was last set, so a raised profit share does not price gain earned before the raise. The depositor moves onto the new policy only after that gain is realized. Applying profit share is what realizes it. See [Grandfathering](/developers/vault-managers#grandfathering).
 
 The CLI equivalents are `manager-apply-profit-share` for one depositor and `apply-profit-share-all` for every depositor of a vault.
 
@@ -91,7 +94,7 @@ await vaultClient.managerRepay(vault, 0, new BN(10_000_000), null);
 await vaultClient.managerUpdateBorrow(vault, new BN(9_500_000));
 ```
 
-The borrowed amount stays in vault equity as `manager_borrowed_value`, so depositor share price reflects the full claim on the vault. `managerRepay` requires a repay amount greater than 0 (`InvalidRepayAmount`); use `managerUpdateBorrow` when you want to change the tracked value without a transfer. `managerRepay` returns several instructions from `getManagerRepayIxs`, including token-wrapping instructions when the repay asset is SOL.
+The borrowed amount stays in vault equity as `manager_borrowed_value`, so depositor share price reflects the full claim on the vault. `managerRepay` requires a repay amount greater than 0 (`InvalidRepayAmount`); use `managerUpdateBorrow` to change the tracked value without a transfer. `managerRepay` returns several instructions from `getManagerRepayIxs`, including token-wrapping instructions when the repay asset is SOL.
 
 ## Vault-level insurance-fund staking
 
@@ -105,7 +108,13 @@ await vaultClient.cancelRequestRemoveInsuranceFundStake(vault, 0);
 await vaultClient.removeInsuranceFundStake(vault, 0);
 ```
 
-The lifecycle rules are the protocol's, not the vault program's: staking prices shares off the fund's balance, requesting an unstake freezes an exit value and starts a 13-day escrow, and cancelling forfeits any appreciation earned during escrow. Read [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) before staking vault capital, and note that staked capital is at risk of absorbing protocol deficits.
+The lifecycle rules are the protocol's, not the vault program's: staking prices shares off the fund's balance, requesting an unstake freezes an exit value and starts an escrow for the spot market's configured unstaking period, and canceling forfeits any appreciation earned during escrow. Read [Insurance Fund Staking](/protocol/insurance-fund/insurance-fund-staking) before staking vault capital, and note that staked capital is at risk of absorbing protocol deficits.
+
+Three protocol errors reach the caller through the CPI, and none of them are the vault program's:
+
+- **`InvalidIFForNewStakes`** on `addToInsuranceFundStake`. A fund that has shares outstanding but a zero vault balance refuses new stakes, because there is no balance to price the new shares against. The reverse case is fine: a funded vault with no shares outstanding bootstraps the first staker one-to-one.
+- **`InvalidIFDetected`** on `removeInsuranceFundStake`. The insurance vault's token balance is re-read after the transfer and must still be above zero, so the last staker cannot take the fund to empty. Size the unstake to leave a remainder.
+- **`NoIFWithdrawRequestInProgress`** on `cancelRequestRemoveInsuranceFundStake` when no request is pending. The guard reads the stake's recorded request before any share rebase, so a pending request that a rebase has since floored to zero shares still cancels successfully rather than stranding the stake.
 
 ## Other manager and admin operations
 
@@ -114,7 +123,7 @@ The lifecycle rules are the protocol's, not the vault program's: staking prices 
 | `updateDelegate(vault, delegate)` | Change the account that trades for the vault. |
 | `updateMarginTradingEnabled(vault, enabled)` | Allow or block margin trading on the vault's user account. |
 | `updateUserPoolId(vault, poolId)` | Move the vault's user account to another pool. |
-| `managerDeposit`, `managerRequestWithdraw`, `managerCancelWithdrawRequest`, `managerWithdraw` | The manager's own capital in the vault, with the same request-then-withdraw shape as a depositor. |
+| `managerDeposit`, `managerRequestWithdraw`, `managerCancelWithdrawRequest`, `managerWithdraw` | The manager's own capital in the vault, with the same request-then-withdraw shape as a depositor. Note the onchain instruction behind `managerCancelWithdrawRequest` is declared `manger_cancel_withdraw_request`, missing the `a`. That typo is what the IDL carries, so the IDL entry is `mangerCancelWithdrawRequest` and the discriminator is derived from the misspelled name. The SDK method spells it correctly, but anything that builds the instruction from the IDL by name, or recomputes the discriminator itself, must use the misspelled form. |
 | `transferVaultDepositorShares(from, to, amount, unit)` | Move shares between two depositor accounts of the same vault. |
 | `adminUpdateVaultClass(vault, class)` | Admin only. Promotes a vault to Trusted. |
 | `liquidate(vaultDepositor)` | Admin only. Takes temporary delegate control to close positions in reduce-only mode so a matured withdrawal can settle. |
@@ -129,7 +138,7 @@ const sharePrice = await vaultClient.calcVaultSharePrice({ vault });
 const depositors = await vaultClient.getAllVaultDepositors(vaultAddress);
 ```
 
-`getAllVaultDepositorsWithNoWithdrawRequest` filters to depositors with no pending request, which is the set you can safely apply profit share to without touching a frozen withdrawal value.
+`getAllVaultDepositorsWithNoWithdrawRequest` filters to depositors with no pending request, which is the set profit share can be applied to without touching a frozen withdrawal value.
 
 ## Related resources
 

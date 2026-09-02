@@ -1,4 +1,6 @@
-# DLOB MM
+---
+title: "DLOB MM"
+---
 
 <Callout type="warning">
 The DLOB is to be removed. An order will rest in one CLOB market account instead
@@ -8,30 +10,25 @@ page describes the DLOB as it works now. New work belongs on the CLOB book. See
 [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow).
 </Callout>
 
-DLOB market making on Velocity means placing **resting** two sided quotes on the decentralized orderbook (orderbook / DLOB) and earning maker rebates when takers trade against you. You can also participate in JIT when relevant.
+DLOB market making on Velocity means resting two-sided quotes on the decentralized orderbook and earning a maker rebate when takers trade against them. A maker provides liquidity with a resting order and earns the rebate; a taker removes liquidity by crossing the spread and pays the fee. Nothing stops a maker from doing both: resting quotes and JIT auction participation run side by side.
 
-### Maker vs taker
+## Always use post-only for maker quotes
 
-- **Maker**: provides liquidity (resting order), earns rebate.
-- **Taker**: removes liquidity (crosses spread), pays fee.
-
-### Always use post-only for maker quotes
-
-Post-only flags ensure your order is never executed as a taker (which would cost fees instead of earning rebates). Velocity offers three post-only modes:
+The whole strategy depends on staying on the maker side of every fill. A quote that crosses and executes as a taker pays a fee instead of earning a rebate, which inverts the economics of the intended trade. Post-only flags are what prevent that, and Velocity offers three of them:
 
 | Flag | Behavior | Use case |
 |---|---|---|
 | `MUST_POST_ONLY` | **Reverts the transaction** if the order would cross the spread and fill as taker | Default for MM, guarantees maker-only execution (or a clear failure to react to) |
-| `TRY_POST_ONLY` | Transaction still succeeds, but the order is **silently not placed** if it would cross | Useful when you'd rather skip a stale quote than fail the whole tx |
+| `TRY_POST_ONLY` | Transaction still succeeds, but the order is **silently not placed** if it would cross | Useful when skipping a stale quote beats failing the whole transaction |
 | `SLIDE` | **Amends the price** to the best non-crossing price if it would cross | Ensures placement at the top of book without crossing, at whatever price that requires |
 
-**Recommendation:** Use `MUST_POST_ONLY` for all quotes. If the order would cross (e.g., oracle moved), you'd rather cancel and re quote at the new price than accidentally take.
+Use `MUST_POST_ONLY` for all quotes. If the oracle moves and an order would cross, cancelling and requoting at the new price is a better outcome than taking by accident, and a reverted transaction makes that visible.
 
-### Quoting basics
+## Quoting basics
 
-A two-sided quote means placing a bid (buy) and an ask (sell) simultaneously. The spread is the difference between your bid and ask prices, and that gap is where you earn. The tighter the spread, the more competitive you are but the less you earn per fill. Wider spreads earn more per fill but attract less flow.
+A two-sided quote is a bid and an ask placed at the same time. The gap between them is the spread, and that gap is where the strategy earns. A tighter spread attracts more flow and earns less per fill; a wider one earns more per fill and sees less flow.
 
-Each quote is an `OrderParams` object passed to a placement method. Key fields are `direction` (long for bid, short for ask), `price` or `oraclePriceOffset`, `baseAssetAmount`, and `postOnly`. The examples below show the most common patterns.
+Each quote is an `OrderParams` object passed to a placement method. The fields that matter are `direction` (long for the bid, short for the ask), `price` or `oraclePriceOffset`, `baseAssetAmount`, and `postOnly`.
 
 <SDKDoc>
   <TypeScript name="placePerpOrder" type="method" owner="VelocityClient">
@@ -50,7 +47,7 @@ await velocityClient.placePerpOrder({
   </TypeScript>
 </SDKDoc>
 
-### Two sided quotes (place in one tx)
+### Placing both sides in one transaction
 
 <SDKDoc>
   <TypeScript name="placeOrders" type="method" owner="VelocityClient">
@@ -81,7 +78,7 @@ await velocityClient.placeOrders([
   </TypeScript>
 </SDKDoc>
 
-### Quote around oracle
+### Reading the oracle price
 
 <SDKDoc>
   <TypeScript name="getOracleDataForPerpMarket" type="method" owner="VelocityClient">
@@ -95,21 +92,21 @@ console.log(oraclePrice);
   </TypeScript>
 </SDKDoc>
 
-### Oracle offset orders
+## Oracle offset orders
 
-Oracle offset orders are the **most efficient way to quote on Velocity**. Instead of specifying a fixed price, you set an offset from the oracle price. The order automatically floats with the oracle, so when the oracle moves, your order's effective price moves with it.
+A fixed-price limit order goes stale the moment the oracle moves, so quoting with fixed prices means cancelling and replacing on every oracle tick: thousands of transactions a day, each one a chance to be late.
 
-**Why this matters:** With fixed price limit orders, you need to cancel and replace every time the oracle moves (thousands of transactions per day). With oracle offset orders, you place them once and they track the oracle automatically. A typical MM using oracle offsets sends **~30 transactions per day** (just to adjust spread or size) vs **thousands** with cancel-replace.
+An **oracle offset order** carries an offset from the oracle price instead of a price. Its effective price moves with the oracle, so a single placement keeps tracking. A desk quoting this way sends roughly 30 transactions per day, and only to change spread or size.
 
-**How it works:**
+How it works:
 - Keep `orderType: OrderType.LIMIT`: oracle tracking comes from `oraclePriceOffset`, not from the order type
 - Set `oraclePriceOffset` instead of `price`, this is the offset in PRICE_PRECISION units
 - Positive offset = above oracle, negative = below oracle
 - The onchain program evaluates `oracle_price + offset` at fill time
 
-> **Don't use `OrderType.ORACLE` for maker quotes.** On-chain, `OrderType::Oracle` is classified as a market/auction (taker-style) order, not a restable maker order: it's for takers who want to execute immediately at a price relative to the oracle, not for resting liquidity. Oracle-tracking for resting orders is controlled entirely by `oraclePriceOffset`, which works on a `LIMIT` order just as well. The examples below correctly use `OrderType.LIMIT` with `oraclePriceOffset` set.
+> **Don't use `OrderType.ORACLE` for maker quotes.** Onchain, `OrderType::Oracle` is classified as a market/auction (taker-style) order, not a restable maker order: it's for takers who want to execute immediately at a price relative to the oracle, not for resting liquidity. Oracle-tracking for resting orders is controlled entirely by `oraclePriceOffset`, which works on a `LIMIT` order just as well. The examples below correctly use `OrderType.LIMIT` with `oraclePriceOffset` set.
 
-> **`oraclePriceOffset` is a `BN`, not a `number`.** It's stored on-chain as an `i64`, so the SDK's `OrderParams.oraclePriceOffset` type is `BN`. Pass the `BN` directly (don't call `.toNumber()` on it). The examples below do this correctly.
+> **`oraclePriceOffset` is a `BN`, not a `number`.** It's stored onchain as an `i64`, so the SDK's `OrderParams.oraclePriceOffset` type is `BN`. Pass the `BN` directly (don't call `.toNumber()` on it). The examples below do this correctly.
 
 <SDKDoc>
   <TypeScript name="placeOrders" type="method" owner="VelocityClient">
@@ -152,11 +149,11 @@ console.log("Placed oracle offset quotes, these float with the oracle automatica
   </TypeScript>
 </SDKDoc>
 
-> **Tip:** You only need to update oracle offset orders when you want to change your spread or size. The oracle tracking is handled by the protocol at fill time.
+> **Tip:** oracle offset orders need an update only to change spread or size. The oracle tracking is handled by the protocol at fill time.
 
-### Atomic cancel-and-replace with `cancelAndPlaceOrders`
+## Atomic cancel-and-replace with `cancelAndPlaceOrders`
 
-When you do need to update quotes (e.g., changing spread or size based on inventory), use `cancelAndPlaceOrders` to atomically cancel existing orders and place new ones in a single transaction. This avoids the risk window where you have no orders on the book (between a cancel and a separate place).
+When quotes do need updating (e.g., changing spread or size based on inventory), `cancelAndPlaceOrders` atomically cancels existing orders and places new ones in a single transaction. That avoids the window with no orders on the book that a cancel followed by a separate place leaves open.
 
 <SDKDoc>
   <TypeScript name="cancelAndPlaceOrders" type="method" owner="VelocityClient">
@@ -201,9 +198,9 @@ const txSig = await velocityClient.cancelAndPlaceOrders(
   </TypeScript>
 </SDKDoc>
 
-### Inventory aware quoting (basic)
+## Inventory-aware quoting
 
-You can widen/tighten one side of your spread based on current inventory to reduce drift. For example, if you're long, widen the bid (less eager to buy more) and tighten the ask (more eager to sell).
+Widening or tightening one side of the spread against current inventory reduces drift. A long position calls for a wider bid (less eager to buy more) and a tighter ask (more eager to sell).
 
 <SDKDoc>
   <TypeScript name="getPerpPosition" type="method" owner="User">
@@ -226,25 +223,25 @@ if (position) {
   </TypeScript>
 </SDKDoc>
 
-### JIT maker (onchain "place-and-make")
+## JIT maker (onchain place-and-make)
 
-If you're reacting to onchain taker auctions, Velocity exposes a helper that "places a maker order and fills against a taker" atomically. This lets you participate in JIT auctions even while running resting orders, a hybrid approach.
+For a bot reacting to onchain taker auctions, Velocity exposes a helper that places a maker order and fills against a taker atomically. A maker can run this alongside resting orders, a hybrid approach.
 
 <SDKDoc>
   <TypeScript name="placeAndMakePerpOrder" type="method" owner="VelocityClient">
 ```js
-// `takerInfo` comes from your taker discovery / order intake logic.
+// `takerInfo` comes from the bot's taker discovery / order intake logic.
 await velocityClient.placeAndMakePerpOrder(makerOrderParams, takerInfo);
 ```
   </TypeScript>
 </SDKDoc>
 
-### Risk management basics
+## Risk management basics
 
 Common MM guardrails:
 
 - **Position limits:** max long/short size to cap directional exposure
-- **Minimum free collateral:** ensure you can absorb adverse moves
+- **Minimum free collateral:** keep enough headroom to absorb adverse moves
 - **Health / leverage checks:** cancel all if leverage exceeds threshold
 - **Emergency cancel:** cancel all orders on errors, volatility spikes, or stale oracle
 
@@ -264,22 +261,24 @@ await velocityClient.cancelOrders();
 
 ## Reference implementation
 
-Resting orders you place are picked up by the hosted DLOB server ([`apps/dlob-server`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/dlob-server) in the [velocity-v1 monorepo](https://github.com/velocity-exchange/velocity-v1)), which is what backs the REST/WebSocket orderbook described in [Orderbook & Matching](./orderbook-and-matching#accessing-the-dlob). You don't need to run it yourself to make markets; it's listed here in case you want to run your own instance or read its source for how order filtering/aggregation works.
+Resting orders are picked up by the hosted DLOB server, which is what backs the REST and WebSocket orderbook described in [Orderbook & Matching](./orderbook-and-matching#accessing-the-dlob). Making markets does not require running one.
 
-The [`FloatingPerpMaker`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/floatingMaker.ts) in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
+Its source lives at `apps/dlob-server` in the `velocity-v1` monorepo, which is not public yet. Read it to run a private instance, or to see exactly how order filtering and aggregation work.
 
-- **Wall-clock cooldown:** waits `MARKET_UPDATE_COOLDOWN_MS` (12 seconds), converted to slots at the live slot duration, before re quoting a market, avoiding excessive transactions
-- **Mutex guarded periodic tasks:** uses `async mutex` to prevent overlapping quote updates
-- **Position aware sizing:** adjusts order size based on `MAX_POSITION_EXPOSURE` (percentage of account collateral)
+The `FloatingPerpMaker` in keeper-bots-v2 is a production example of oracle offset quoting. Key patterns it demonstrates:
+
+- **Wall-clock cooldown:** waits `MARKET_UPDATE_COOLDOWN_MS` (12 seconds), converted to slots at the live slot duration, before requoting a market, which keeps the transaction count down
+- **Mutex-guarded periodic tasks:** uses `async-mutex` to prevent overlapping quote updates
+- **Position-aware sizing:** adjusts order size based on `MAX_POSITION_EXPOSURE` (percentage of account collateral)
 - **Watchdog timer:** tracks last successful update to detect stale bot state
 
 ## Gotchas and production tips
 
-- **Oracle offset precision:** `oraclePriceOffset` is in raw `PRICE_PRECISION` units (1e6). An offset of `500000` = \$0.50, not \$500,000. Double check your math.
-- **Oracle offset orders still need updates:** while they track the oracle automatically, you must cancel and re place when changing spread width, order size, or the number of levels. The `cancelAndPlaceOrders` method handles this atomically.
-- **32 order limit per subaccount:** if you quote 5 markets x 2 sides x 3 levels = 30 orders, you're near the limit. Use multiple subaccounts for multi market strategies (see `JitMaker` config for subaccount per market pattern).
-- **`MUST_POST_ONLY` rejection:** if the oracle moves sharply and your offset order would cross the spread, it's rejected (not silently filled as taker). This is the desired behavior; catch the error and re quote.
-- **No spot DLOB trading:** Velocity removed spot order-book trading entirely (`place_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist on-chain). Spot markets still exist for collateral and borrow-lend, but everything in this guide (`placeOrders`, `MarketType.PERP`, etc.) only applies to perp markets. There's no spot equivalent to quote against.
-- **Tick size:** limit and oracle-offset prices are standardized to the market's `orderTickSize` on-chain, and the DLOB does the same when computing effective/auction prices client-side. See [Orderbook & Matching: tick size](/developers/market-makers/orderbook-and-matching#tick-size) if you compute prices manually instead of letting the program clamp them.
+- **Oracle offset precision:** `oraclePriceOffset` is in raw `PRICE_PRECISION` units (1e6). An offset of `500000` = \$0.50, not \$500,000. Double check the math.
+- **Oracle offset orders still need updates:** while they track the oracle automatically, changing spread width, order size, or the number of levels still takes a cancel and replace. The `cancelAndPlaceOrders` method handles this atomically.
+- **32 order limit per subaccount:** quoting 5 markets x 2 sides x 3 levels = 30 orders sits near the limit. Use multiple subaccounts for multi-market strategies (see `JitMaker` config for subaccount per market pattern).
+- **`MUST_POST_ONLY` rejection:** if the oracle moves sharply and an offset order would cross the spread, the order is rejected rather than silently filled as taker. This is the desired behavior; catch the error and requote.
+- **No spot DLOB trading:** Velocity removed spot order-book trading entirely (`place_spot_order`, `place_and_make_spot_order`, and `fill_spot_order` no longer exist onchain). Spot markets still exist for collateral and borrow-lend, but everything in this guide (`placeOrders`, `MarketType.PERP`, etc.) only applies to perp markets. There's no spot equivalent to quote against.
+- **Tick size:** limit and oracle-offset prices are standardized to the market's `orderTickSize` onchain, and the DLOB does the same when computing effective/auction prices client-side. See [Orderbook & Matching: tick size](/developers/market-makers/orderbook-and-matching#tick-size) if prices are computed manually rather than left for the program to clamp.
 
 For production patterns (subscription loops, throttling, priority fees, graceful shutdown), see [Bot architecture patterns](/developers/market-makers/bot-architecture).

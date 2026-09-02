@@ -1,16 +1,19 @@
-# Transactions
+---
+title: "Transactions"
+---
 
 Every write the SDK performs goes through two injectable pieces:
 
-- **`TxHandler`** builds and signs transactions. It resolves the blockhash, injects the compute-budget instructions, compiles address lookup tables, and calls the wallet.
-- **A `TxSender`** broadcasts and confirms them. Four implementations ship with the SDK, each with a different retry and confirmation model.
+**`TxHandler`**: builds and signs. It resolves the blockhash, injects the compute-budget instructions, compiles address lookup tables, and calls the wallet.
 
-`VelocityClient` creates both for you, and you can replace either through its config:
+**`TxSender`**: broadcasts and confirms. Four implementations ship with the SDK, each with a different retry and confirmation model.
+
+`VelocityClient` creates both, and either can be replaced through its config:
 
 <SDKDoc>
   <TypeScript name="VelocityClient" type="class">
 ```js
-import { VelocityClient, WhileValidTxSender, TxHandler } from "@velocity-exchange/sdk";
+import { TxHandler, VelocityClient, WhileValidTxSender } from "@velocity-exchange/sdk";
 
 const txHandler = new TxHandler({
   connection,
@@ -30,7 +33,7 @@ const velocityClient = new VelocityClient({
   </TypeScript>
 </SDKDoc>
 
-If you pass nothing, `VelocityClient` builds a `TxHandler` from its own connection and wallet, then wraps it in a `RetryTxSender`. Default `txParams` are `computeUnits: 600_000` and `computeUnitsPrice: 0`, so by default you pay no priority fee.
+With neither passed, `VelocityClient` builds a `TxHandler` from its own connection and wallet, then wraps it in a `RetryTxSender`. Default `txParams` are `computeUnits: 600_000` and `computeUnitsPrice: 0`, so the default pays no priority fee.
 
 ## Choosing a tx sender
 
@@ -39,9 +42,9 @@ All four senders share the same `TxSender` interface (`send`, `sendVersionedTran
 | Sender | Broadcast behavior | Default `retrySleep` | Default `timeout` | Pick it when |
 |---|---|---|---|---|
 | `RetryTxSender` | Sends once, then resends the same signed bytes to `connection` and every `additionalConnections` entry on a fixed interval | 2,000 ms | 35,000 ms | General purpose. This is the default `VelocityClient` builds. |
-| `WhileValidTxSender` | Same resend loop as `RetryTxSender`, and additionally records each in-flight signature's blockhash and `lastValidBlockHeight` in its `untilValid` map | 2,000 ms | 35,000 ms (inherited from `BaseTxSender`; not a constructor option) | You want per-transaction blockhash validity bookkeeping available to your own code, for example a UI that reports "expired" separately from "dropped". |
+| `WhileValidTxSender` | Same resend loop as `RetryTxSender`, and additionally records each in-flight signature's blockhash and `lastValidBlockHeight` in its `untilValid` map | 2,000 ms | 35,000 ms (inherited from `BaseTxSender`; not a constructor option) | Per-transaction blockhash validity bookkeeping has to be available to the calling code, for example a UI that reports "expired" separately from "dropped". |
 | `FastSingleTxSender` | Sends exactly once and relies on the RPC node's own forwarding. Can skip confirmation, or confirm in the background so the call returns right after the send | not applicable (no resend loop) | 35,000 ms | Latency-sensitive keepers that would rather fire again with fresh inputs than pay for a resend loop. |
-| `ForwardOnlyTxSender` | Never calls `sendRawTransaction` on `connection`. Hands the base58 transaction to `additionalTxSenderCallbacks` and re-invokes them on an interval. `connection` is used only to confirm | 5,000 ms | 35,000 ms | Submission is delegated to a relay or bundler (for example a Jito bundle submitter) and you still want the SDK's confirmation and land-rate machinery. |
+| `ForwardOnlyTxSender` | Never calls `sendRawTransaction` on `connection`. Hands the base58 transaction to `additionalTxSenderCallbacks` and re-invokes them on an interval. `connection` is used only to confirm | 5,000 ms | 35,000 ms | Submission is delegated to a relay or bundler (for example a Jito bundle submitter) while the SDK still handles confirmation and land-rate tracking. |
 
 Shared constructor options:
 
@@ -65,9 +68,9 @@ Shared constructor options:
 <SDKDoc>
   <TypeScript name="FastSingleTxSender" type="class">
 ```js
-import { FastSingleTxSender } from "@velocity-exchange/sdk";
+import { FastSingleTxSender, VelocityClient } from "@velocity-exchange/sdk";
 
-// Fire-and-forget: return as soon as the send lands, confirm in the background.
+// Fire and forget: return as soon as the send lands, confirm in the background.
 const txSender = new FastSingleTxSender({
   connection,
   wallet,
@@ -76,7 +79,12 @@ const txSender = new FastSingleTxSender({
   trackTxLandRate: true,
 });
 
-const velocityClient = new VelocityClient({ connection, wallet, txSender });
+const velocityClient = new VelocityClient({
+  connection,
+  wallet,
+  env: "mainnet-beta",
+  txSender,
+});
 ```
   </TypeScript>
 </SDKDoc>
@@ -105,7 +113,7 @@ const txSender = new ForwardOnlyTxSender({
 
 ## Blockhash handling in TxHandler
 
-`TxHandler` owns blockhash resolution. By default it uses a caching fetcher that reuses a recent blockhash for 2,000 ms, which collapses per-build `getLatestBlockhash` calls during bursts. Blockhashes stay valid on-chain far longer than that window, so this is safe.
+`TxHandler` owns blockhash resolution. By default it uses a caching fetcher that reuses a recent blockhash for 2,000 ms, which collapses per-build `getLatestBlockhash` calls during bursts. Blockhashes stay valid onchain far longer than that window, so this is safe.
 
 | `txHandlerConfig` field | Meaning | Default |
 |---|---|---|
@@ -170,19 +178,21 @@ Simulation failure is not fatal. `getTxSimComputeUnits` catches every error and 
 <SDKDoc>
   <TypeScript name="TransactionParamProcessor" type="class">
 ```js
-import { TransactionParamProcessor } from "@velocity-exchange/sdk";
+import { TransactionParamProcessor, VelocityClient } from "@velocity-exchange/sdk";
 
 // Size the limit from a simulation and derive the price from the result.
+// `priorityFeeSubscriber` is a subscribed PriorityFeeSubscriber; see below.
 const velocityClient = new VelocityClient({
   connection,
   wallet,
+  env: "mainnet-beta",
   txParams: {
-    computeUnits: 600_000,          // fallback if the simulation fails
+    computeUnits: 600_000, // fallback if the simulation fails
     useSimulatedComputeUnits: true,
     computeUnitsBufferMultiplier: 1.2,
     lowerBoundCu: 100_000,
     useSimulatedComputeUnitsForCUPriceCalculation: true,
-    getCUPriceFromComputeUnits: (computeUnits) =>
+    getCUPriceFromComputeUnits: () =>
       Math.floor(priorityFeeSubscriber.getCustomStrategyResult()),
   },
 });
@@ -191,8 +201,8 @@ const velocityClient = new VelocityClient({
 const { success, computeUnits } = await TransactionParamProcessor.getTxSimComputeUnits(
   tx,
   connection,
-  1.2,            // buffer multiplier, mandatory
-  100_000         // optional lower bound
+  1.2,    // buffer multiplier, mandatory
+  100_000 // optional lower bound
 );
 ```
   </TypeScript>
@@ -233,13 +243,13 @@ For a live fee estimate rather than a reactive switch, use the `priorityFee` mod
 
 | Method | Upstream call | Required config | Notes |
 |---|---|---|---|
-| `SOLANA` | `getRecentPrioritizationFees` on your RPC | `connection` | Samples are filtered to the most recent `slotsToCheck` slots (default 50) relative to the newest returned slot, then sorted descending by slot. Override the call itself with `fetchSolanaPriorityFee` to route through your own cache. |
+| `SOLANA` | `getRecentPrioritizationFees` on the configured RPC | `connection` | Samples are filtered to the most recent `slotsToCheck` slots (default 50) relative to the newest returned slot, then sorted descending by slot. Override the call itself with `fetchSolanaPriorityFee` to route through a local cache. |
 | `HELIUS` | Helius `getPriorityFeeEstimate` with `includeAllPriorityFeeLevels: true` | `heliusRpcUrl`, or a `connection` whose endpoint contains `helius` | Returns percentile buckets: `min`, `low` (25th), `medium` (50th), `high` (75th), `veryHigh` (95th), `unsafeMax` (100th). Read them with `getHeliusPriorityFeeLevel(level)`, which defaults to `MEDIUM`. |
 | `VELOCITY` | Velocity's hosted `/batchPriorityFees` endpoint | `velocityPriorityFeeEndpoint`, `velocityMarkets` | Per-market fee levels, same percentile buckets. See [`/batchPriorityFees`](/developers/ecosystem-builders/orderbook-and-ws). |
 
-The constructor throws if you select `HELIUS` without a resolvable Helius URL, or `SOLANA` without a `connection`.
+The constructor throws when `HELIUS` is selected without a resolvable Helius URL, or `SOLANA` without a `connection`.
 
-`addresses` scopes SOLANA and HELIUS sampling to the accounts your transaction will write-lock, which is what you want: it measures congestion on the markets you are trading, not the whole cluster.
+`addresses` scopes SOLANA and HELIUS sampling to the accounts the transaction will write-lock, so it measures congestion on the markets being traded rather than on the whole cluster.
 
 ### Strategies
 
@@ -253,17 +263,17 @@ The constructor throws if you select `HELIUS` without a resolvable Helius URL, o
 | `MaxStrategy` | Highest fee across all samples, without the empty guard | `-Infinity` |
 | `EwmaStrategy` | Exponentially weighted moving average over slots, so recent samples dominate and larger slot gaps decay older samples faster. Half life defaults to 25 slots (roughly 10 seconds) | `0` |
 
-Prefer the `...OverSlots` variants unless you handle the empty case yourself.
+Prefer the `...OverSlots` variants unless the caller handles the empty case.
 
-Every getter (`getCustomStrategyResult`, `getAvgStrategyResult`, `getMaxStrategyResult`) multiplies by `priorityFeeMultiplier` (default `1.0`) and then clamps to `maxFeeMicroLamports` if you set one. All three return `0` before the first successful `load()`. `getHeliusPriorityFeeLevel` clamps but does not apply the multiplier. Both the multiplier and the clamp can be changed at runtime with `updatePriorityFeeMultiplier()` and `updateMaxPriorityFee()`.
+Every getter (`getCustomStrategyResult`, `getAvgStrategyResult`, `getMaxStrategyResult`) multiplies by `priorityFeeMultiplier` (default `1.0`) and then clamps to `maxFeeMicroLamports` when one is set. All three return `0` before the first successful `load()`. `getHeliusPriorityFeeLevel` clamps but does not apply the multiplier. Both the multiplier and the clamp can be changed at runtime with `updatePriorityFeeMultiplier()` and `updateMaxPriorityFee()`.
 
 <SDKDoc>
   <TypeScript name="PriorityFeeSubscriber" type="class">
 ```js
 import {
-  PriorityFeeSubscriber,
-  PriorityFeeMethod,
   EwmaStrategy,
+  PriorityFeeMethod,
+  PriorityFeeSubscriber,
 } from "@velocity-exchange/sdk";
 
 const priorityFeeSubscriber = new PriorityFeeSubscriber({
@@ -299,7 +309,7 @@ await priorityFeeSubscriber.unsubscribe();
 import { PriorityFeeSubscriberMap } from "@velocity-exchange/sdk";
 
 const subscriberMap = new PriorityFeeSubscriberMap({
-  velocityPriorityFeeEndpoint: "https://dlob.velocity.exchange",
+  velocityPriorityFeeEndpoint: "<DLOB_ENDPOINT>", // e.g. https://dlob.velocity.exchange
   frequencyMs: 5_000,
   velocityMarkets: [
     { marketType: "perp", marketIndex: 0 },
@@ -319,11 +329,13 @@ console.log(fees?.medium, fees?.veryHigh);
 
 ## Reacting to poor landing
 
-With `trackTxLandRate: true`, the sender records each signature and computes a rolling land rate. Feed the suggested multiplier into your compute-unit price to back off automatically under congestion:
+With `trackTxLandRate: true`, the sender records each signature and computes a rolling land rate. Feed the suggested multiplier into the compute-unit price to back off automatically under congestion:
 
 <SDKDoc>
   <TypeScript name="TxSender" type="type">
 ```js
+import { RetryTxSender } from "@velocity-exchange/sdk";
+
 const txSender = new RetryTxSender({
   connection,
   wallet,
@@ -344,7 +356,7 @@ const computeUnitsPrice = Math.floor(
 
 ## Related
 
-- [Setup](/developers/velocity-sdk/setup) - creating the client and its config
-- [SDK Internals](/developers/velocity-sdk/sdk-internals) - subscription modes and instruction building
-- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) - the hosted `/priorityFees` and `/batchPriorityFees` endpoints
-- [Bot Architecture](/developers/market-makers/bot-architecture) - production bot patterns
+- [Setup](/developers/velocity-sdk/setup): creating the client and its config
+- [SDK Internals](/developers/velocity-sdk/sdk-internals): subscription modes, instruction building, and error handling
+- [Orderbook and DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws): the hosted `/priorityFees` and `/batchPriorityFees` endpoints
+- [Bot Architecture](/developers/market-makers/bot-architecture): production bot patterns

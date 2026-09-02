@@ -1,0 +1,11 @@
+{
+  "title": "Mechanics",
+  "pages": [
+    "velocity-amm",
+    "orderbook-and-keepers",
+    "keepers",
+    "oracles",
+    "where-the-money-sits",
+    "revenue-pool"
+  ]
+}

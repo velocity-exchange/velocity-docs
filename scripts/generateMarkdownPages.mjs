@@ -26,6 +26,7 @@ import {
   isExcludedDir,
   isHidden,
   findMdxFiles,
+  frontmatterTitle,
   stripFrontmatter,
   toRoute,
   loadSiteUrl,
@@ -165,11 +166,16 @@ function transformBody(rawBody) {
   return restoreCode(out, store).trim();
 }
 
-// Insert the canonical-URL line right after the first H1.
-function withCanonical(body, route) {
+// Insert the canonical-URL line right after the H1. Titles live in
+// frontmatter now, so the H1 is synthesised from it when the body has none.
+function withCanonical(body, route, title) {
   const lines = body.split(/\r?\n/);
-  const h1Idx = lines.findIndex((l) => /^#\s+\S/.test(l));
-  if (h1Idx === -1) return null; // no H1 - not a page we can emit confidently
+  let h1Idx = lines.findIndex((l) => /^#\s+\S/.test(l));
+  if (h1Idx === -1) {
+    if (!title) return null;
+    lines.unshift(`# ${title}`, "");
+    h1Idx = 0;
+  }
 
   const canonicalLine = `> Canonical: ${siteUrl}${route}`;
   const before = lines.slice(0, h1Idx + 1);
@@ -193,7 +199,7 @@ for (const file of files) {
 
   const raw = readFileSync(file, "utf8");
   const body = transformBody(stripFrontmatter(raw));
-  const finalText = withCanonical(body, route);
+  const finalText = withCanonical(body, route, frontmatterTitle(raw));
   if (finalText === null) {
     skippedNoH1++;
     continue;

@@ -1,42 +1,34 @@
-# SWIFT API
+---
+title: "SWIFT API"
+---
 
-**SWIFT** is Velocity's offchain signed-order protocol: it lets market makers receive signed taker orders over WebSocket before they hit the onchain JIT auction. This enables ultra-low-latency market making. In the SDK, SWIFT orders are called "signed-message" orders (`SignedMsgOrderParams`, `isSignedMsgOrder`, `SwiftOrderSubscriber`). The "SWIFT" name is the product-facing term for the same feature.
+**SWIFT** is Velocity's offchain signed-order protocol: it lets market makers receive signed taker orders over WebSocket before they hit the onchain JIT auction. In the SDK, SWIFT orders are called signed-message orders (`SignedMsgOrderParams`, `isSignedMsgOrder`, `SwiftOrderSubscriber`). The "SWIFT" name is the product-facing term for the same feature.
 
-This page covers the maker side: receiving and filling signed orders. For the taker side (how these orders are signed and submitted), see [Swift in the SDK docs](/developers/velocity-sdk/swift).
+This page covers the maker side: receiving and filling signed orders. For the taker side, how these orders are signed and submitted, see [Swift in the SDK docs](/developers/velocity-sdk/swift).
 
 ## How SWIFT works
 
-### Flow overview
+In the standard onchain flow, the taker submits a transaction to Solana, it lands, the maker's RPC or gRPC subscription fires, and only then is a fill computed and submitted. That is 2 to 4 seconds from taker intent to maker fill, of which the first 1 to 2 seconds are pure waiting.
 
-<Steps>
-### Taker signs order offchain
-Order is signed with the user's private key and broadcast to the SWIFT WebSocket feed.
+SWIFT removes that wait. The taker signs the order offchain and broadcasts it to the SWIFT WebSocket at the same time as submitting it onchain. A subscribed maker receives it in 100 to 500 ms, before the taker's own transaction lands, inspects direction, size, and auction parameters, then submits a place-and-make transaction carrying an ed25519 verification of the taker's signature, which fills the taker atomically.
 
-### Makers receive order via WebSocket
-Order arrives before hitting onchain auction, and makers inspect direction, size, and auction params.
+Three things that head start buys:
 
-### Makers submit place-and-make
-Maker order is submitted onchain with ed25519 verification and atomically fills the taker.
-</Steps>
+- **More accurate pricing.** The order arrives while the oracle behind the quote is fresher.
+- **Better auction position.** The fill transaction can land in the same slot as the taker's, or ahead of makers who only watch onchain feeds.
+- **Faster flow reaction.** Inventory management and toxic-flow avoidance both improve when the order arrives earlier.
 
-**Key benefit:** Market makers see orders 100-500ms before they land onchain, allowing faster response times and better fills.
+The tradeoff is infrastructure. The advantage is perishable: it exists only in the window between the WebSocket message and the taker's transaction landing, so a slow RPC node spends the whole head start on transaction submission and the edge is gone. A dedicated RPC node with staked connections and a persistent, auto-reconnecting WebSocket are the price of entry.
 
-### SWIFT vs standard JIT: why the latency matters
-
-In the standard JIT flow, the taker submits a transaction to Solana → it lands onchain → your RPC/gRPC subscription fires → you compute and submit your fill. This takes 1-2 seconds minimum.
-
-With SWIFT, the taker broadcasts the signed order offchain to the SWIFT WebSocket *simultaneously* with submitting it onchain. You receive it over WebSocket in 100-500ms, before it even lands onchain. This head start lets you:
-- **Price more accurately:** you see the order while the oracle is fresher
-- **Win more auctions:** your fill tx can land at the same slot or even before other makers who rely on onchain feeds
-- **React to flow faster:** critical for inventory management and toxic flow avoidance
-
-The tradeoff: you need fast infrastructure (dedicated RPC node, low-latency WebSocket connection) to capitalize on this advantage. If your fill tx doesn't land quickly, the latency edge is wasted.
+SWIFT is also not guaranteed flow. Takers using the standard SDK path submit directly onchain and never touch SWIFT. Subscribing to both SWIFT and `AuctionSubscriber` gives full coverage, deduplicated with `isSignedMsgOrder()` as described in [Detecting SWIFT orders in onchain feeds](#detecting-swift-orders-in-onchain-feeds).
 
 ## Subscribing to SWIFT orders
 
-### Basic subscription
+`SwiftOrderSubscriber` connects to the feed, authenticates with the maker's keypair, and invokes a callback for each signed order on the subscribed markets.
 
-> **Endpoint is provisional.** `SwiftOrderSubscriber` defaults `endpoint` based on `velocityEnv` when you don't pass one explicitly: `wss://swift.velocity.exchange/ws` for `mainnet-beta`, `wss://swift.master.velocity.exchange/ws` for `devnet` (both hardcoded in `sdk/src/swift/swiftOrderSubscriber.ts`). These are real values shipped in the SDK today, but the hostnames haven't been confirmed as final/DNS-live production endpoints. Check with the team before depending on them in production.
+<Callout type="warning">
+**Endpoint is provisional.** `SwiftOrderSubscriber` defaults `endpoint` based on `velocityEnv` when none is passed explicitly: `wss://swift.velocity.exchange/ws` for `mainnet-beta`, `wss://swift.master.velocity.exchange/ws` for `devnet`. Neither hostname has been confirmed as a final production endpoint. Check with the team before depending on them in production.
+</Callout>
 
 <SDKDoc>
   <TypeScript name="SwiftOrderSubscriber" type="class">
@@ -46,10 +38,9 @@ import { SwiftOrderSubscriber, loadKeypair } from "@velocity-exchange/sdk";
 const swiftSubscriber = new SwiftOrderSubscriber({
   velocityClient,
   velocityEnv: "mainnet-beta",
-  marketIndexes: [0, 1, 2], // SOL, BTC, ETH perp markets to listen to
+  marketIndexes: [0, 1, 2], // perp market indexes to listen to
   keypair: loadKeypair("<KEYPAIR_PATH>"), // used for WebSocket auth
-  // endpoint: "wss://swift.velocity.exchange/ws", // optional -- defaults based on velocityEnv:
-  // mainnet-beta -> wss://swift.velocity.exchange/ws, devnet -> wss://swift.master.velocity.exchange/ws
+  // endpoint: "wss://swift.velocity.exchange/ws", // optional, defaults from velocityEnv
 });
 
 await swiftSubscriber.subscribe(
@@ -63,7 +54,7 @@ await swiftSubscriber.subscribe(
     console.log("Auction start:", orderParams.auctionStartPrice);
     console.log("Auction end:", orderParams.auctionEndPrice);
 
-    // Decide if you want to fill it
+    // Decide whether to fill it
     if (shouldFill(orderParams)) {
       await fillSwiftOrder(signedMessage);
     }
@@ -73,9 +64,7 @@ await swiftSubscriber.subscribe(
   </TypeScript>
 </SDKDoc>
 
-### With UserAccount getter
-
-Optionally provide a `userAccountGetter` to resolve taker UserAccount details. This lets you inspect the taker's positions, collateral, and health before deciding to fill, which is useful for toxic flow filtering.
+Pass an optional `userAccountGetter` to resolve taker `UserAccount` details inside the callback, which makes the taker's positions, collateral, and health available before the fill decision. A subscribed `UserMap` satisfies the interface. Keep it in-memory: a getter that makes an RPC call per order spends the very latency advantage SWIFT exists to provide.
 
 <SDKDoc>
   <TypeScript name="UserMap" type="class">
@@ -103,11 +92,7 @@ const swiftSubscriber = new SwiftOrderSubscriber({
 
 ## Place-and-make with SWIFT
 
-SWIFT fills use a special instruction (`placeAndMakeSignedMsgPerpOrder`) that includes an ed25519 signature verification, proving the taker actually signed this order offchain. The SDK handles building this instruction for you.
-
-For the standard onchain place-and-make pattern, see [JIT Auctions - Place-and-make](./jit-auctions#place-and-make-pattern). The SWIFT variant adds the signature verification step.
-
-### Using VelocityClient (recommended)
+SWIFT fills use `placeAndMakeSignedMsgPerpOrder`, which includes an ed25519 signature verification proving the taker actually signed this order offchain. It is the standard onchain place-and-make pattern, described in [JIT Auctions](./jit-auctions#place-and-make-pattern), plus that verification step. The SDK builds the instruction.
 
 <SDKDoc>
   <TypeScript name="placeAndMakeSignedMsgPerpOrder" type="method" owner="VelocityClient">
@@ -146,7 +131,7 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
     velocityClient.program.programId, takerAuthority
   );
 
-  // Build your maker order params (opposite direction of taker)
+  // Build the maker order params (opposite direction of taker)
   const takerIsLong = isVariant(signedMessage.signedMsgOrderParams.direction, "long");
   const makerOrderParams = getLimitOrderParams({
     marketIndex: signedMessage.signedMsgOrderParams.marketIndex,
@@ -172,7 +157,7 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
       takerUserAccount,
       signingAuthority,
     },
-    makerOrderParams,           // your maker order
+    makerOrderParams,           // the maker order
   );
 
   console.log("Filled SWIFT order:", txSig);
@@ -181,9 +166,7 @@ async function fillSwiftOrder(orderMessageRaw, signedMessage, isDelegateSigner) 
   </TypeScript>
 </SDKDoc>
 
-### Build instructions manually
-
-If you need more control over transaction construction (e.g., custom priority fees, specific ALTs, or bundling multiple instructions):
+For control over transaction construction, custom priority fees, specific ALTs, or bundling with other instructions, `getPlaceAndMakeSignedMsgPerpOrderIxs` takes the same arguments and returns the instruction array instead of sending it.
 
 <SDKDoc>
   <TypeScript name="getPlaceAndMakeSignedMsgPerpOrderIxs" type="method" owner="VelocityClient">
@@ -201,108 +184,33 @@ const ixs = await velocityClient.getPlaceAndMakeSignedMsgPerpOrderIxs(
 // Returns [ed25519VerifyIx, placeSignedMsgTakerOrderIx, placeAndMakeSignedMsgPerpOrderIx]:
 // 1. ed25519 verification instruction (proves taker signature)
 // 2. registers the taker's signed order onchain (same as placeSignedMsgTakerOrder)
-// 3. places your maker order and fills the taker atomically
+// 3. places the maker order and fills the taker atomically
 
-// Send transaction with your preferred method
+// Send the transaction by any preferred method
 const tx = new Transaction().add(...ixs);
 const txSig = await connection.sendTransaction(tx, [wallet.payer]);
 ```
   </TypeScript>
 </SDKDoc>
 
-## SWIFT vs onchain auction flow
-
-### SWIFT flow
-
-**Timeline:**
-<Steps>
-### Taker signs order offchain
-Taker signs and prepares the order message.
-
-### Broadcast to SWIFT WebSocket
-The signed message is broadcast to SWIFT (~50ms).
-
-### Maker receives order
-Maker gets the order before it lands onchain (~100-500ms total).
-
-### Maker submits place-and-make
-Maker submits a place-and-make transaction.
-
-### Taker order lands onchain
-Taker transaction lands onchain (~1-2s total).
-
-### Maker fill lands
-Maker fill transaction lands (ideally same slot).
-</Steps>
-
-**Latency advantage:**
-- Makers see orders 100-500ms before onchain
-- Faster reaction time → better auction slot
-- Competitive edge for pricing and flow selection
-
-**Requirements:**
-- Subscribe to SWIFT WebSocket
-- Handle ed25519 verification (SDK does this)
-- Fast infrastructure to capitalize on latency advantage
-- Dedicated RPC node recommended
-
-### Standard onchain auction
-
-**Timeline:**
-<Steps>
-### Taker submits tx to Solana
-Order transaction is sent directly onchain.
-
-### Transaction lands onchain
-The taker tx lands (~1-2s).
-
-### RPC/gRPC subscription fires
-Makers receive the auction event from onchain subscriptions.
-
-### Maker computes fill
-Maker processes pricing and risk checks.
-
-### Maker submits place-and-make
-Maker sends the fill transaction.
-
-### Fill lands
-Fill lands onchain (~1-2s later).
-</Steps>
-
-**Total latency:** 2-4 seconds from taker intent to maker fill
-
-See [JIT Auctions](./jit-auctions) for full auction mechanics.
-
-## Filtering and risk management
-
-Use the same filters as other JIT flows: oracle validation, position limits, and toxic-flow detection. See [Bot Architecture - Risk and filtering](./bot-architecture#risk-and-filtering) for shared patterns and code.
+The ed25519 verification instruction must sit at the index the place instruction references, which is not necessarily first. Both methods accept `precedingIxs`, the instructions that will come before these in the final transaction, used only to compute the verify instruction's sysvar index, and `overrideCustomIxIndex` for an explicit override. Any prepended instruction, compute-budget instructions included, has to be passed in `precedingIxs`. Getting this wrong causes silent verification failures.
 
 ## Detecting SWIFT orders in onchain feeds
 
-When subscribed to both SWIFT and onchain feeds, you may see the same order twice:
-
-<Steps>
-### First via SWIFT WebSocket (offchain)
-You receive the signed order from SWIFT before onchain landing.
-
-### Again when it lands onchain
-The same order appears in your onchain subscription stream later.
-</Steps>
-
-Use `isSignedMsgOrder()` to identify SWIFT-origin orders and avoid double-handling:
+Subscribing to both SWIFT and onchain feeds surfaces the same order twice: once over the SWIFT WebSocket before it lands, and again in the onchain subscription stream when it does. Use `isSignedMsgOrder()` in the onchain loop to skip the ones already handled, so no duplicate fill goes out.
 
 <SDKDoc>
   <TypeScript name="isSignedMsgOrder" type="function">
 ```typescript
 import { isSignedMsgOrder } from "@velocity-exchange/sdk";
 
-// In your AuctionSubscriber callback
+// In the AuctionSubscriber callback
 auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey, slot) => {
   for (const order of userAccount.orders) {
     if (order.baseAssetAmount.isZero()) continue;
 
     if (isSignedMsgOrder(order)) {
-      // This came from SWIFT, you already saw it via WebSocket
+      // This came from SWIFT, already seen via WebSocket
       // Skip to avoid submitting a duplicate fill
       continue;
     }
@@ -315,38 +223,26 @@ auctionSubscriber.eventEmitter.on("onAccountUpdate", async (userAccount, pubkey,
   </TypeScript>
 </SDKDoc>
 
-## Performance considerations
+## Running SWIFT in production
 
-**Latency optimization:**
-- Use dedicated RPC nodes for fastest transaction submission
-- Pre-compute oracle prices and risk checks
-- Keep WebSocket connection persistent (auto-reconnect on disconnect)
-- Use `commitment: "processed"` for fastest confirmations
+Filtering is the same as any other JIT flow: oracle validation, position limits, and toxic-flow detection. See [Bot Architecture](./bot-architecture#risk-and-filtering) for the shared patterns and code.
 
-**Reliability:**
-- Handle WebSocket reconnections gracefully
-- Have fallback to standard auction participation (via `AuctionSubscriber`)
-- Monitor fill rates and adjust strategy
-- Track SWIFT vs onchain fill success rates separately
+The operational differences are about latency and failure modes. Submit through a dedicated RPC node, pre-compute oracle prices and risk checks so the callback does no work it could have done earlier, keep the WebSocket persistent with automatic reconnection, and use `commitment: "processed"` for the fastest confirmations. Track fill rates for SWIFT and onchain separately, because a SWIFT fill rate that falls while the onchain rate holds points at latency rather than pricing.
 
-**Cost:**
-- SWIFT fills pay same maker rebates as regular fills
-- No additional fees for SWIFT participation
-- Transaction costs same as place-and-make
+Plan for the feed being unavailable. If the SWIFT WebSocket disconnects, fall back to standard `AuctionSubscriber` participation rather than stopping. Fills through SWIFT pay the same maker rebates and the same transaction costs as any other place-and-make, so the fallback costs the latency edge and nothing else.
 
 ## Gotchas
 
-- **SWIFT is not guaranteed flow:** not all taker orders go through SWIFT. Takers using the standard SDK flow submit directly onchain. You should subscribe to both SWIFT and `AuctionSubscriber` for complete coverage, using `isSignedMsgOrder()` to deduplicate.
-- **ed25519 instruction ordering:** the ed25519 verification instruction must sit at the index the place instruction references, not necessarily first. `placeAndMakeSignedMsgPerpOrder`/`getPlaceAndMakeSignedMsgPerpOrderIxs` accept `precedingIxs` (instructions that will come before these in the final transaction, used only to compute the verify instruction's sysvar index) and `overrideCustomIxIndex` for an explicit override. If you're prepending anything yourself, such as compute-budget instructions, pass `precedingIxs` so the SDK computes the right index; getting this wrong causes silent verification failures.
-- **Latency advantage is perishable:** the 100-500ms head start from SWIFT only helps if your fill transaction lands quickly. With a slow RPC node, the advantage is wasted. Use a dedicated RPC node with staked connections for fastest landing.
-- **UserAccount resolution:** the `userAccountGetter` callback should return quickly. If it requires an RPC call per order, you'll negate the latency advantage. Pre-load user accounts via `UserMap` subscription.
-- **Order expiry:** SWIFT signed orders have a `maxTs` field. If your fill transaction lands after this timestamp, it will fail. Check remaining time before submitting.
-- **Fallback strategy:** if the SWIFT WebSocket disconnects, your bot should seamlessly fall back to standard `AuctionSubscriber` flow. Don't let a SWIFT outage stop you from filling auctions.
+- **Latency advantage is perishable:** the 100 to 500 ms head start only helps if the fill transaction lands quickly. On a slow RPC node it is spent entirely on submission.
+- **`userAccountGetter` must return fast:** an RPC call per order negates the head start. Pre-load accounts through a subscribed `UserMap`.
+- **Order expiry:** SWIFT signed orders carry a `maxTs`. A fill transaction that lands after that timestamp fails. Check the remaining time before submitting.
+- **ed25519 instruction ordering:** pass `precedingIxs` whenever other instructions are prepended, or the verify instruction's sysvar index is wrong and verification fails silently.
+- **SWIFT is not guaranteed flow:** subscribe to `AuctionSubscriber` as well, and deduplicate with `isSignedMsgOrder()`.
 
 ## Related
 
-- [JIT Auctions](./jit-auctions) - Understanding auction mechanics and pricing
-- [JIT-only MM](./jit-only) - JIT market making strategy
-- [Orderbook & Matching](./orderbook-and-matching) - How orders are matched
-- [Bot Architecture](./bot-architecture) - Reconnection, error handling, and production patterns
-- [Indicative Quotes](./indicative-quotes) - Signal liquidity offchain alongside SWIFT fills
+- [JIT Auctions](./jit-auctions): auction mechanics and pricing
+- [JIT-only MM](./jit-only): JIT market making strategy
+- [Orderbook & Matching](./orderbook-and-matching): how orders are matched
+- [Bot Architecture](./bot-architecture): reconnection, error handling, and production patterns
+- [Indicative Quotes](./indicative-quotes): signal liquidity offchain alongside SWIFT fills

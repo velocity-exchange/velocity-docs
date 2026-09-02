@@ -1,312 +1,182 @@
-# Program Structure
+---
+title: "Program Structure"
+---
 
-This page dives deep into how Velocity tracks positions, manages orders, and calculates collateral onchain.
+This page covers how Velocity tracks a position, what an order looks like between placement and fill, and how collateral and margin are computed from the two. It is the mechanics layer; [Account Model](/developers/concepts/account-model) is the field-level layout those mechanics are stored in.
 
-## Overview
+Five design choices explain most of what follows:
 
-Velocity's account model is built around a few key principles:
-
-
-**Key Design Principles**
-
-- **Cross-margin** - All positions within a single subaccount share that subaccount's collateral
-- **Subaccounts** - Each wallet can have multiple independent trading accounts (0, 1, 2...), each with its own margin and its own liquidation risk
-- **Interest-bearing** - Spot balances accrue interest via scaled balance mechanism
-- **Inline orders** - Orders are stored directly in UserAccount (no separate order accounts)
-- **Account size limits** - Fixed limits (8 perp, 8 spot, 32 orders) keep transactions predictable
+- **Cross-margin within a subaccount**: every position in one subaccount shares that subaccount's collateral, and nothing is shared across subaccounts.
+- **Subaccounts**: one wallet can hold many, numbered 0, 1, 2, and so on, each with its own margin and its own liquidation risk.
+- **Interest-bearing spot balances**: a spot balance is a scaled balance against a cumulative index, so interest accrues without touching each account.
+- **Inline orders**: orders live in the `UserAccount` itself, not in separate order accounts.
+- **Fixed array sizes**: 8 perp positions, 8 spot positions, 32 orders. Every account is the same size, so every instruction's compute cost is bounded.
 
 ## Position accounting
 
 ### PerpPosition
 
-Tracks long/short exposure in perpetual futures markets.
+A perp position is a signed base-asset amount plus the quote it was opened against. `baseAssetAmount` is positive for a long and negative for a short, in `BASE_PRECISION` (1e9). Entry price is `quoteEntryAmount / baseAssetAmount`, unrealized P&L is `(oraclePrice - entryPrice) x baseAssetAmount`, and funding owed since the last settlement is derived from `lastCumulativeFundingRate` against the market's current cumulative rate.
 
-**Key mechanics:**
-- Position size: `baseAssetAmount` (positive = long, negative = short)
-- Entry price: `quoteEntryAmount / baseAssetAmount`
-- Unrealized PnL: `(oraclePrice - entryPrice) x baseAssetAmount`
-- Funding payments: Tracked via `lastCumulativeFundingRate`
-
-**Order locking:**
-- `openBids` - Base-asset size (BASE_PRECISION, 1e9) of non-reduce-only bids resting or triggering against this position. Multiply by price to get notional.
-- `openAsks` - Base-asset size (BASE_PRECISION, 1e9) of non-reduce-only asks resting or triggering against this position. Multiply by price to get notional.
-
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
-**Isolated margin:**
-- `isolatedPositionScaledBalance` - When the `IsolatedPosition` position flag is set, this position is backed by its own ring-fenced collateral instead of drawing on the account's shared cross-margin pool
-*/}
+Two more fields on the position exist so that a margin check does not have to walk the order array. `openBids` and `openAsks` hold the base-asset size (`BASE_PRECISION`, 1e9) of non-reduce-only bids and asks that are resting or triggering against this position. They are sizes, not notionals: multiply by price to get notional. Reduce-only orders are excluded because they cannot increase risk.
 
 <Callout type="info">
-Velocity has no vAMM LP shares. `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp`/`perLpBase` fields do not exist. Liquidity provision against a market now happens through the separate [VLP module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), not through per-user LP shares on the position itself.
+Velocity has no vAMM LP shares. `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp` and `perLpBase` fields do not exist. Liquidity provision against a market happens through the separate [Velocity liquidity pool module](/developers/vault-managers), a hedge-pool architecture configured per market through `PerpMarketAccount.hedgeConfig`, not through per-user LP shares on the position.
 </Callout>
-
 
 ### SpotPosition
 
-Represents deposits (positive) or borrows (negative) in spot markets.
+A spot position is a single balance that is a deposit when positive and a borrow when negative. It is stored as `scaledBalance` rather than as a token amount: the real balance is `scaledBalance x cumulativeIndex`, where the market holds one cumulative index for deposits and one for borrows. Interest therefore accrues by moving a market-level index rather than by touching every account, and it compounds without any per-user instruction.
 
-**Interest accrual:**
-- Uses `scaledBalance` mechanism
-- Real balance = `scaledBalance x cumulativeIndex`
-- Avoids per-user interest calculations onchain
-- Interest compounds automatically
-
-**Balance types:**
-- `DepositBalance` - You've deposited/lent tokens
-- `BorrowBalance` - You've borrowed tokens
-
-**Order locking:**
-- Tokens locked in open spot orders tracked separately
+The consequence for a reader is that a raw `scaledBalance` is not a token amount and two positions with the same `scaledBalance` opened at different times are worth different amounts. Convert through the market's cumulative index before displaying or comparing anything.
 
 <Callout type="warning">
-Spot markets exist for collateral and borrow/lend on Velocity, but the spot DLOB is disabled: `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` were removed. You cannot trade spot on the order book; deposit/withdraw/borrow/repay still work normally.
+Spot markets exist for collateral and borrow/lend on Velocity, but the spot DLOB is disabled. `placeSpotOrder`, `placeAndTakeSpotOrder`, `placeAndMakeSpotOrder`, and `fillSpotOrder` are still public methods on `VelocityClient`, kept as stubs that throw client-side before building a transaction, so calls fail fast rather than at the compiler. The onchain instructions themselves are gone from the program, and the shared order instructions reject `MarketType::Spot` with `SpotDlobTradingDisabled`. Spot cannot be traded on the orderbook; deposit, withdraw, borrow, and repay still work normally.
 </Callout>
 
 ## Order mechanics
 
-
-Orders are stored inline in UserAccount (no separate order accounts). Up to **32 orders per user** including both resting orders and trigger orders.
+Orders are stored inline in the `UserAccount`, up to 32 per subaccount counting resting and trigger orders together.
 
 ### Order types
 
-**Limit orders** - Resting orders at a specific price
-- `postOnly` - Only execute as maker (reject if would take)
-- `immediateOrCancel` - Fill immediately or cancel
-
-**Market orders** - Execute immediately at best available price
-
-**Oracle orders** - Price moves with oracle: `oraclePrice + oraclePriceOffset`
-- Useful for market makers who want to maintain a spread without constant updates
-- Price automatically adjusts as oracle updates
-- `oraclePriceOffset` is a `BN` (i64) on both `Order` and `OrderParams`
-
-**Trigger orders** - Activate when oracle price crosses trigger price
-- `triggerMarket` - Becomes market order when triggered
-- `triggerLimit` - Becomes limit order when triggered
+| Type | How it prices | Notes |
+|---|---|---|
+| Limit | Fixed `price` | `postOnly` rejects it if it would take; `immediateOrCancel` fills what it can and cancels the rest |
+| Market | Best available, bounded by the auction | Always goes through a JIT auction |
+| Oracle | `oraclePrice + oraclePriceOffset`, repriced as the oracle moves | For makers holding a spread without resending orders. `oraclePriceOffset` is a `BN` (i64) on both `Order` and `OrderParams` |
+| Trigger market | Becomes a market order when the oracle crosses `triggerPrice` | |
+| Trigger limit | Becomes a limit order when the oracle crosses `triggerPrice` | |
 
 ### JIT auctions
 
-Market and oracle orders (and limit orders given auction params) go through a **Just-In-Time (JIT) auction** to improve price:
-- `auctionStartPrice` - Most aggressive price
-- `auctionEndPrice` - Least aggressive price (limit price)
-- `auctionDuration` - Slots for auction to run
-- Price linearly improves from start to end over the duration
+Market and oracle orders, and limit orders given auction parameters, run a Just-In-Time auction before they can fill at their limit price. The auction walks the fillable price from `auctionStartPrice`, the most aggressive price, to `auctionEndPrice`, the least aggressive, linearly over `auctionDuration`. A maker who wants the fill takes it early and pays the better price; nobody has to, and the order ends up at its limit either way.
 
 <AuctionPriceRamp />
 
-The figure uses the worked example of a 10-slot auction from $100.00 to $100.10. Slot counts are wall-clock time only at today's slot time; see [Slot duration and wall-clock time](/developers/concepts/slot-duration).
+The figure works a 10-unit auction from \$100.00 to \$100.10. Ten units is 4 seconds, because `auctionDuration` counts wall-clock units of 400ms and is **not** a slot count: the window does not move as Solana's slot time steps down. See [Slot duration and wall-clock time](/developers/concepts/slot-duration).
 
-Post-only limit orders, and any order with `auctionDuration == 0`, skip the auction and rest immediately at their limit price.
-
-This gives better prices while maintaining MEV resistance. See [JIT Auctions](/developers/market-makers/jit-auctions) for details.
+Post-only limit orders, and any order with `auctionDuration == 0`, skip the auction and rest immediately at their limit price. For how a maker bids into one, see [JIT Auctions](/developers/market-makers/jit-auctions).
 
 ### Order flags
 
-- `reduceOnly` - Order can only reduce position size, not increase or flip it
-- `postOnly` - Order must be maker, rejected if would match immediately
-- `immediateOrCancel` - Fill what you can immediately, cancel the rest
-- `bitFlags` (`OrderBitFlag`) also carries `HasBuilder` (order attaches a builder fee){/* HIDDEN:  and `IsIsolatedPosition` (order trades against an isolated-margin position) */}
+`postOnly`, `reduceOnly`, and `immediateOrCancel` are their own boolean fields on `Order`, not bits in a mask:
+
+- `reduceOnly`: the order can only reduce the position, never increase or flip it.
+- `postOnly`: the order must be a maker, and is rejected if it would match immediately.
+- `immediateOrCancel`: fill what is available now, cancel the remainder.
+
+`bitFlags` is a separate `u8` bitmask, and it holds a different set of things: the `OrderBitFlag` values `SignedMessage` (1), `OracleTriggerMarket` (2), `SafeTriggerOrder` (4), `NewTriggerReduceOnly` (8), and `HasBuilder` (16, the order attaches a builder fee){/* HIDDEN: , `IsIsolatedPosition` (32, order trades against an isolated-margin position) */}. Do not look for `postOnly` or `reduceOnly` in it.
 
 ## Collateral and margin
 
-### Total collateral calculation
+### Total collateral
 
-Your collateral is calculated across all spot positions:
+Collateral is summed across every spot position in the subaccount, then adjusted by unrealized perp P&L:
 
 ```
 Total Collateral =
   Σ (spot deposits x asset weight)
   - Σ (spot borrows x liability weight)
-  + unrealized perp PnL
+  + unrealized perp P&L
 ```
 
-**Asset weights** (< 1.0)
-- Safety buffer for deposits used as collateral
-- Example: SOL might have 0.9 weight (90% of value counts)
-- Protects against price volatility
+The two weights are the risk haircut, applied in opposite directions. **Asset weights** are below 1.0, so a deposit counts for less than its market value: a token at a 0.9 weight contributes 90% of its value, which absorbs a price move between the last oracle update and a liquidation. **Liability weights** are above 1.0, so a borrow counts for more than it is: a borrow at a 1.1 weight counts as 110% of the debt.
 
-**Liability weights** (> 1.0)
-- Extra buffer for borrowed funds
-- Example: Borrowed SOL might have 1.1 weight (110% of debt counts)
-- Accounts for repayment risk
+Both weights live on `SpotMarketAccount`, per market, and both come in an initial and a maintenance flavour.
 
 ### Margin requirement
 
-Two separate margin requirements sum across all positions **within one subaccount**, and gate different things:
+Two requirements are summed across all positions **within one subaccount**, and they gate different things:
 
 ```
-Initial Margin Requirement = Σ (position notional x initial margin ratio)
+Initial Margin Requirement     = Σ (position notional x initial margin ratio)
 Maintenance Margin Requirement = Σ (position notional x maintenance margin ratio)
 ```
 
-**Initial margin ratio**
-- Gates opening or increasing risk (new positions, larger positions)
-- Set per market via `PerpMarketAccount.marginRatioInitial` (e.g. 500 = 5% = 20x max leverage)
-- Higher for riskier/less liquid markets
-
-**Maintenance margin ratio**
-- The threshold that actually triggers liquidation (`PerpMarketAccount.marginRatioMaintenance`, plus `State.liquidationMarginBufferRatio`)
-- Typically ~half of initial margin
-- Example: 2.5% maintenance if 5% initial
+The **initial** margin ratio gates opening or increasing risk. It is set per market by `PerpMarketAccount.marginRatioInitial` in `MARGIN_PRECISION` (1e4), so a stored 500 is 5%, which is 20x maximum leverage. The **maintenance** ratio is what actually triggers liquidation: `PerpMarketAccount.marginRatioMaintenance`, plus `State.liquidationMarginBufferRatio` as a buffer above it. Both ratios are per-market admin-set values, so read them off the market account rather than assuming a level or a fixed relationship between the two.
 
 <Callout type="warning">
-Velocity removed high leverage mode: there is no per-user `marginMode` override or `enableUserHighLeverageMode` instruction. `User.marginMode` was replaced in place by padding, and the `MarginMode` enum no longer exists. Leverage is governed solely by each market's `marginRatioInitial`/`marginRatioMaintenance`.
+Velocity removed high leverage mode: there is no per-user `marginMode` override and no `enableUserHighLeverageMode` instruction. `User.marginMode` was replaced in place by padding, and the onchain `MarginMode` enum is gone. The TypeScript `MarginMode` class is still exported from the SDK, reduced to `DEFAULT` only, so existing imports do not break. Leverage is governed solely by each market's `marginRatioInitial` and `marginRatioMaintenance`.
 </Callout>
 
 ### Account health
 
-Liquidation is gated on the **maintenance** margin requirement, not the initial one:
+Liquidation is gated on the **maintenance** requirement, not the initial one:
 
 ```
 Maintenance Health Ratio = Total Collateral / Maintenance Margin Requirement
 ```
 
-**Health states:**
-- **> 1.0** - Above maintenance requirement, not liquidatable
-- **< 1.0** - Liquidation eligible (subject to `State.liquidationMarginBufferRatio`)
-- **< 0.0** - Underwater (negative collateral)
+Above 1.0 the account is above its maintenance requirement and cannot be liquidated. Below 1.0 it is liquidatable, subject to `State.liquidationMarginBufferRatio`. Below 0.0 it is underwater: collateral has gone negative and the insurance fund is in scope.
 
-Opening or increasing a position is gated separately, on the **initial** margin requirement: you need enough total collateral to cover `Σ (position notional x initial margin ratio)` before the new risk is added.
-
-When maintenance health drops below 1.0, liquidators can close your positions to bring the account back to health.
+Opening or increasing a position is gated separately and earlier, on the **initial** requirement: the account needs enough total collateral to cover `Σ (position notional x initial margin ratio)` before the new risk is added. That is why an account can be nowhere near liquidation and still be refused a new order.
 
 <Callout type="info">
-The SDK's `user.getHealth()` does not return this ratio directly. It computes maintenance margin internally and returns an integer score in `[0, 100]`, where 100 is fully healthy and 0 means the account is already being liquidated or has non-positive collateral.
+The SDK's `user.getHealth()` does not return this ratio. It computes the maintenance margin internally and returns an integer in the range 0 to 100, where 100 means no maintenance requirement or a fully healthy account and 0 means the account is already being liquidated or has non-positive collateral. Do not compare it against 1.0.
 </Callout>
+
+### The third margin type: Fill
+
+Initial and maintenance are not the only two. `MarginRequirementType` has a third variant, `Fill`, and a taker's margin is re-checked against it once the fill has been applied. Its margin ratio is the **midpoint** of the market's initial and maintenance ratios, `(marginRatioInitial + marginRatioMaintenance) / 2`, so a market at 5% initial and 2.5% maintenance checks the post-fill state at 3.75%. Predicting whether an order will survive its own fill means modeling that midpoint, not the initial ratio the placement check used.
+
+Three details decide whether the check runs at all and at what ratio:
+
+- **The direction of the fill picks the type.** A fill that increases the taker's position is checked at `Fill`; one that decreases it is checked at `Maintenance`.
+- **Liquidation fills skip the check entirely.** The whole post-fill margin block is gated on the fill not being a liquidation, so a `liquidatePerpWithFill` leg never runs it.
+- **A market in `Settlement` status contributes a margin ratio of 0.** `get_margin_ratio` returns zero before it reads any of the three types, so a settling market adds nothing to the requirement.
+
+Per-account margin overrides do not apply here. `User.maxMarginRatio` (set with `updateUserCustomMarginRatio`) and `PerpPosition.maxMarginRatio` (set with `updateUserPerpPositionCustomMarginRatio`) are read only under `MarginRequirementType::Initial` and zeroed under `Fill` and `Maintenance`. A self-imposed leverage cap therefore tightens what the account can open and leaves both the post-fill check and the liquidation price where they were.
 
 ## Cross-margin and subaccounts
 
-Each subaccount is its own independent margin silo. Cross-margin means all positions **within one subaccount** share that subaccount's collateral, not that collateral is shared across subaccounts.
+Each subaccount is its own margin silo. Cross-margin means every position **within one subaccount** shares that subaccount's collateral; it does not mean collateral is shared across the wallet. Total collateral, margin requirement, and health are all computed per subaccount from that subaccount's own spot and perp positions, and liquidation is evaluated the same way. A deposit in subaccount 0 does not back a position in subaccount 1, and a losing position in one cannot draw down another.
 
-**How it works:**
-- Each wallet can create multiple subaccounts (0, 1, 2, ...)
-- Deposits in subaccount 0 do **not** back positions in subaccount 1
-- Total collateral and margin requirement are calculated per subaccount, from that subaccount's own spot and perp positions
-- Liquidation is evaluated independently for each subaccount, on its own health
+That gives separation between strategies for free, at the cost of having to move collateral deliberately. There is no implicit sweep: moving collateral between two subaccounts under the same authority is an explicit `transferDeposit` call.
 
-**Benefits:**
-- **Flexible organization** - Separate strategies in different subaccounts
-- **Isolation** - A losing position in one subaccount cannot draw down the collateral of another
-- **Explicit transfers** - Moving collateral between subaccounts requires an explicit `transferDeposit` call, so exposure between strategies stays intentional
-
-**SDK usage (TypeScript, `@velocity-exchange/sdk`):**
 ```typescript
-// Switch between subaccounts
-await velocityClient.switchActiveUser(1); // Switch to subaccount 1
-await velocityClient.placePerpOrder(/* order params */); // Order goes to subaccount 1
+import { VelocityClient } from "@velocity-exchange/sdk";
+
+await velocityClient.switchActiveUser(1);              // subaccount 1 is now active
+await velocityClient.placePerpOrder(/* order params */); // order lands in subaccount 1
 ```
 
-**Important:**
-- Each subaccount has its own positions, orders, and collateral/margin pool
-- Liquidation only affects the specific subaccount whose health drops below 1.0, not the wallet's other subaccounts
-- To move collateral between subaccounts, call `transferDeposit` explicitly
+Each subaccount also carries its own 8 perp / 8 spot / 32 order limits, which is the usual reason to open a second one.
 
-**Delegated transfers:** an authority can opt a delegate into moving deposits between the authority's own subaccounts by calling `updateUserAllowDelegateTransfer(true)` once; the delegate can then call `transferDepositByDelegate(...)`. This does not grant the delegate any withdrawal rights outside the authority's own subaccounts.
-
+**Delegated transfers.** An authority can let a delegate move deposits between the authority's own subaccounts by calling `updateUserAllowDelegateTransfer(true)` once; the delegate then calls `transferDepositByDelegate(...)`. This grants no withdrawal rights and no ability to move funds outside the authority's own subaccounts.
 
 ## State transitions
 
-### Deposit
+Six instructions account for nearly every state change an integration will observe. Each row is what actually changes onchain, and the constraint that most often makes the call fail.
 
-Adds collateral to your account:
+| Action | What changes | The catch |
+|---|---|---|
+| **Deposit** | Tokens move from the caller's token account to the spot market vault; the subaccount's `scaledBalance` rises; cumulative deposit tracking updates | Interest accrues from the moment of deposit. The per-market `Deposit` pause bit and `maxTokenDeposits` cap are both enforced |
+| **Withdraw** | Health is checked, `scaledBalance` falls, tokens move from the vault to the caller's token account | Rejected if it would push health below 1.0. Perp profit is not withdrawable until it is settled |
+| **Place order** | The order is written into the first free slot of the 32, `openBids` or `openAsks` on the position rises, collateral is locked, the initial margin check runs, the auction starts | Fails with `MaxNumberOfOrders` when all 32 slots hold an `Open` order. Where `PerpMarketAccount.maxOpenInterest` is non-zero, a risk-increasing order also fails with `MaxOpenInterest`. The order reaches the DLOB as soon as the account update propagates |
+| **Order fill** | Position `baseAssetAmount` and quote update, `openBids` or `openAsks` falls, the order is marked `Filled`, an `OrderActionRecord` event is emitted | The order is marked, not removed. Its slot is reusable, but the entry stays readable until a later order overwrites it. The fill is re-checked against `maxOpenInterest`, on a different quantity than placement was, see below |
+| **Settle P&L** | Unrealized perp P&L becomes realized: quote moves between the perp market's P&L pool and the subaccount's spot balance, and `settledPerpPnl` updates | Required before withdrawing perp profit. A profit can only be settled to the extent the market's P&L pool can fund it, see [P&L](/protocol/trading/profit-loss) |
+| **Liquidation** | A liquidator closes perp positions at the oracle price or seizes collateral against borrows, until the account is back above its maintenance requirement | Partial by design: the liquidator takes `liquidatorFee`, with separate `ifLiquidationFee` and `protocolLiquidationFee` cuts taken from the liquidatee, and positions that are not needed to restore health stay open |
 
-1. Transfers tokens from wallet to Velocity vault
-2. Increases spot position `scaledBalance`
-3. Updates cumulative deposit tracking
-4. Improves account health
+### The two `maxOpenInterest` checks measure different things
 
-*Interest starts accruing immediately on deposits*
+`PerpMarketAccount.maxOpenInterest` is in `BASE_PRECISION` (1e9), and `0` disables it. It is checked twice per order, and the two checks do not agree, so an order can clear placement and still revert on the fill.
 
-### Withdraw
+- **At placement**, the order is measured against its own side only: the market's `baseAssetAmountLong` (or `baseAssetAmountShort`) plus the order's base amount, and it passes at `<= maxOpenInterest`. On a market capped at 100,000 SOL carrying 98,000 long and 99,200 short, a 2,000 SOL short is checked against the 98,000 short total, not the 99,200 long total, and is accepted.
+- **After the fill**, the market's open interest is `get_open_interest`, the **larger** of the two sides' absolute totals, and it must be **strictly** below the cap. A fill that leaves the market at exactly 100,000 reverts, whereas placement at exactly the cap would have been fine.
 
-Removes collateral from your account:
-
-1. Checks account health allows withdrawal
-2. Decreases spot position `scaledBalance`
-3. Transfers tokens from vault to wallet
-4. May require settling PnL first
-
-*Can't withdraw if it would make health < 1.0*
-
-
-### Place order
-
-Adds a new order to your account:
-
-1. Adds Order to orders array (max 32)
-2. Increases `openBids` or `openAsks` on position
-3. Locks collateral for the order
-4. Checks account health
-5. Starts JIT auction
-
-*Order appears on DLOB immediately*
-
-
-### Order fill
-
-When an order matches:
-
-1. Updates position `baseAssetAmount` and `quoteAssetAmount`
-2. Reduces `openBids` or `openAsks`
-3. Marks order as filled (not removed)
-4. Emits `OrderActionRecord` event
-5. Updates account health
-
-*Filled orders remain for history tracking*
-
-### Settle PnL
-
-Converts unrealized perp PnL to realized:
-
-1. Calculates unrealized PnL from perp positions
-2. Moves quote from perp to spot balance
-3. Updates `settledPerpPnl` tracking
-4. Makes profit/loss withdrawable
-
-*Required before withdrawing perp profits*
-
-
-### Liquidation
-
-When health < 1.0, liquidators can:
-
-1. Close perp positions at oracle price
-2. Reduce borrows by seizing collateral
-3. Earn a liquidator fee (`PerpMarketAccount.liquidatorFee`, plus a separate insurance-fund cut and a protocol cut taken from the liquidatee, see `ifLiquidationFee` / `protocolLiquidationFee`)
-4. Bring account back to health
-5. Remaining positions stay open
-
-*Partial liquidations are common*
+Both reject with `MaxOpenInterest`. Size orders against the larger side and leave at least one step size of headroom under the cap.
 
 ## Account size limits
 
-Velocity enforces fixed limits to keep account size manageable and transaction costs predictable:
+Every `UserAccount` is the same fixed size, because the arrays inside it are fixed:
 
+| Array | Limit | Counts |
+|---|---|---|
+| `perpPositions` | 8 | One entry per perp market with exposure. A 9th market fails until one is closed |
+| `spotPositions` | 8 | Deposits and borrows together, one entry per spot market |
+| `orders` | 32 | Resting and trigger orders together, counting only entries with `status == Open` |
 
-**Perp positions**
+The limits are not arbitrary. A margin check has to price every position in the account inside one transaction, so an unbounded array would mean an unbounded compute cost and, past some account size, a liquidation that no longer fits in a Solana transaction and therefore cannot happen. Fixing the arrays fixes the worst case for both.
 
-Maximum: **8 positions**
-
-Opening a 9th market fails unless you close an existing position first.
-
-**Spot positions**
-
-Maximum: **8 positions**
-
-Includes both deposits and borrows across all spot markets.
-
-**Orders**
-
-Maximum: **32 orders**
-
-Includes both resting orders and trigger orders combined.
-
-**Why limits?**
-- Keeps account data size predictable
-- Ensures transaction compute fits in Solana limits
-- Makes liquidation calculations feasible
-- Prevents account bloat
-
-**Workaround:**
-- Use multiple subaccounts for more positions
-- Each subaccount has its own 8/8/32 limits, and its own independent collateral/margin pool
+When one set of those limits is not enough, open another subaccount. Each one gets its own 8 / 8 / 32 and its own independent collateral and margin pool.

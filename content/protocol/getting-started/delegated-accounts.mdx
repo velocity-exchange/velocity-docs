@@ -1,51 +1,51 @@
-# Delegated Accounts
+---
+title: "Delegated accounts"
+description: "A second address that can trade a subaccount but cannot move money out of it, and why a hardware wallet needs one."
+---
 
-## What is a Delegated Account?  
+A delegate is a second Solana address the owner authorizes to act on one subaccount. It can place, modify and cancel orders, deposit, and swap, and that is the whole of what it can do. It cannot withdraw, borrow, close the account, or change any of the account's settings, including the delegation itself, so the worst a compromised delegate can do is trade the position badly. It cannot take the money. Delegation is set per subaccount, so a delegate reaches only the one it was assigned to, and full control stays with the owner throughout.
 
-This feature allows users to grant another Solana account limited access to their account on Velocity. Users using Velocity's account delegation feature may wish to delegate trading execution to a professional trading team. Each subaccount on Velocity has its own delegate parameter.
+Two situations call for one. The first is a hardware wallet, which cannot reliably sign the payloads Velocity's order path uses, so orders fail at the signing step rather than at the exchange. The second is handing execution to somebody else, a trading team or a bot, without handing over the ability to move funds.
 
-### What can a Delegated Account do?  
+## Why a hardware wallet needs a delegate
 
-Delegated authorities on Velocity can **ONLY**:  
+A Ledger or another hardware wallet connected through Phantom, Solflare or Backpack hits errors signing certain orders. The cause is not Velocity rejecting the order and it is not a connectivity problem: the order never gets signed in the first place. Hardware wallet firmware will only sign a payload it can parse and render on the device, and part of Velocity's order flow is not a plain Solana transaction. A [signed-message order](/protocol/trading/auction-parameters) is signed as a raw message and relayed offchain before it is verified onchain, and firmware that has no way to display it declines to sign it.
 
--   deposit funds;
+Which order types trip on this depends on the wallet and its firmware version, which is why the failure looks intermittent. The practical rule: a hardware wallet is dependable for deposits and withdrawals, and undependable for order flow. A delegate splits the two jobs. The delegate address, a hot keypair in a browser wallet, signs the orders. The hardware wallet keeps the authority, which is what controls withdrawals and account deletion, and it only has to sign when money moves.
 
--   swap assets;
+## What a delegate can and cannot do
 
--   place, modify and cancel orders.
+A delegate can:
 
-Delegation is set per subaccount, so a delegate only has access to the specific subaccount it's assigned to. It's important to note that full control over the account remains with the owner.
+- Deposit funds into the subaccount
+- Swap assets held by the subaccount
+- Place, modify and cancel orders, including maker orders
 
-A delegated party can **NOT**:  
+A delegate cannot:
 
--   borrow/withdraw funds;  
-
--   close the account; and/or
-
--   change or remove existing account delegation parameters.
-
--   change any settings
+- Withdraw or borrow, which is the same instruction and is gated on the owner's authority
+- Close the subaccount or reclaim its rent
+- Change or remove the delegation, including delegating to someone else
+- Change any other account setting, such as a margin cap or a referrer
 
 <Callout type="info">
-**Transfers between subaccounts** are an exception: a delegate can call `transferDepositByDelegate` to move spot deposits between the owner's subaccounts, but only after the owner explicitly opts in with `updateUserAllowDelegateTransfer(true)` (sets the `AllowDelegateTransfer` bit in `UserStats.delegatePermissions`). A delegate can also call `transferPerpPosition` to move perp position value between the owner's own subaccounts at any time, without that opt-in. Without the opt-in, a delegate still cannot move spot deposits out to an external wallet, and no opt-in ever allows moving funds to a subaccount the owner doesn't control.
+**Transfers between subaccounts** are the one exception worth knowing about. A delegate can move perp position value between two of the owner's own subaccounts at any time, and can move spot deposits between them once the owner has opted in to that. Both require the same delegate on both subaccounts and the same owner behind both, so neither can move funds to an account the owner does not control, and no opt-in ever lets a delegate withdraw to an external wallet.
 </Callout>
 
-### How do I delegate access to my account?  
+## Setting a delegate
 
-To delegate access to another Solana account using Velocity's UI, go to the the [Accounts Page](https://velocity.exchange/portfolio/accounts) in your portfolio. In this section, you'll find the option to set up a delegate account, as shown in the image below.
+<Steps>
+### Open the accounts page
+
+Go to the [accounts page](https://velocity.exchange/portfolio/accounts) in your portfolio and find the delegate control on the subaccount you want to delegate. Delegation is per subaccount, so pick the right one before you continue.
 
 <img src="/assets/delegated-accounts-1.png" alt="" width="800" height="auto"></img>
 
-Afterwards, you will need to enter the Solana address or account to which you want to delegate access, and then select "confirm."
+### Enter the delegate address and confirm
+
+Paste the Solana address you want to delegate to and select "confirm". Sign the transaction with the owner wallet, the hardware wallet included, since setting a delegate is an ordinary transaction that hardware firmware signs without trouble.
 
 <img src="/assets/delegated-accounts-2.png" alt="" width="800" height="auto"></img>
+</Steps>
 
-### Hardware Wallets
-
-If you are using a hardware wallet such as Ledger to connect to Velocity via a wallet provider (Phantom, Solflare, Backpack), you may encounter errors when signing certain orders.
-
-To ensure a seamless trading experience, we recommend creating a **delegate account**. This allows you to continue trading on Velocity, while maintaining the security benefits of using your hardware wallet.
-
-Please follow the guide above to set up a delegate account from your hardware wallet.
-
-  
+To remove or change a delegate, come back to the same screen and sign again with the owner wallet. A delegate can never do this for itself, which is what keeps a compromised delegate from locking the owner out of the account.

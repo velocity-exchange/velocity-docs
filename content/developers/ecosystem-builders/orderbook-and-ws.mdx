@@ -1,8 +1,10 @@
-# Orderbook + DLOB websocket
+---
+title: "Orderbook + DLOB websocket"
+---
 
 <Callout type="warning">
 The DLOB is to be removed. An order will rest in one CLOB market account instead
-of in the `User` account of its owner, so the on-chain source of this feed
+of in the `User` account of its owner, so the onchain source of this feed
 changes. The endpoints on this page describe the feed as it works now. See
 [PropAMM and CLOB Order Flow](/developers/concepts/propamm-and-clob-order-flow).
 </Callout>
@@ -32,7 +34,7 @@ Most read endpoints are served from a Redis cache that the DLOB publishers keep 
 
 ## REST endpoints (recommended starting point)
 
-Before wiring up websockets, you can fetch orderbook snapshots via simple HTTP requests. This is useful for polling-based UIs or quick prototyping.
+Before wiring up websockets, orderbook snapshots are available over plain HTTP requests. This is useful for polling-based UIs or quick prototyping.
 
 ### L2 orderbook (aggregated by price level)
 
@@ -84,7 +86,7 @@ Response shape (from a live response, trimmed):
 ```
 
 <Callout type="warning">
-Prices and sizes are **raw fixed-precision integer strings**, not decimals: prices are in `PRICE_PRECISION` (1e6, so `"81114210"` = $81.11) and sizes in `BASE_PRECISION` (1e9). Each level's `sources` field splits the size by origin (`dlob`, `vamm`, `indicative`), and it is an object, not a string. See [Precision & Types](/developers/velocity-sdk/precision-and-types) for conversions.
+Prices and sizes are **raw fixed-precision integer strings**, not decimals: prices are in `PRICE_PRECISION` (1e6, so `"81114210"` = \$81.11) and sizes in `BASE_PRECISION` (1e9). Each level's `sources` field splits the size by origin (`dlob`, `vamm`, `indicative`), and it is an object, not a string. See [Precision & Types](/developers/velocity-sdk/precision-and-types) for conversions.
 </Callout>
 
 ### Batch L2 orderbooks
@@ -108,7 +110,7 @@ Response is a single object wrapping the per-market books, in request order:
 <Callout type="warning">
 All lists must have the same length. If they do not, the server responds `400` with `Bad Request: all params for batch request must be the same length`.
 
-If a market has no cached book, the entry is not an error: you get an empty `bids`/`asks` book carrying the live oracle data and the current slot. Check for `bids.length === 0` rather than assuming a non-empty book.
+If a market has no cached book, the entry is not an error: the response carries an empty `bids`/`asks` book with the live oracle data and the current slot. Check for `bids.length === 0` rather than assuming a non-empty book.
 </Callout>
 
 `depth` defaults to `100` and is capped at `100` per market, as on `/l2`.
@@ -143,7 +145,7 @@ The response is a bare JSON array. Served from the cached best-makers snapshot w
 GET https://dlob.velocity.exchange/priorityFees?marketType=perp&marketIndex=0
 ```
 
-Returns the cached priority fee levels for that market, plus the `marketType` and `marketIndex` you asked for. Levels use the same percentile buckets as Helius (`min`, `low`, `medium`, `high`, `veryHigh`, `unsafeMax`), in micro-lamports per compute unit. If nothing is cached for the market, the server responds `404` with `Not found`.
+Returns the cached priority fee levels for that market, plus the requested `marketType` and `marketIndex`. Levels use the same percentile buckets as Helius (`min`, `low`, `medium`, `high`, `veryHigh`, `unsafeMax`), in micro-lamports per compute unit. If nothing is cached for the market, the server responds `404` with `Not found`.
 
 ```
 GET https://dlob.velocity.exchange/batchPriorityFees?marketType=perp,perp,spot&marketIndex=0,1,2
@@ -151,7 +153,7 @@ GET https://dlob.velocity.exchange/batchPriorityFees?marketType=perp,perp,spot&m
 
 The batch form takes the same comma-separated, position-matched lists as `/batchL2` and returns an array with one entry per requested market. Mismatched list lengths respond `400` with `Bad Request: all params for batch request must be the same length`.
 
-This is the endpoint behind the SDK's `PriorityFeeMethod.VELOCITY` and `PriorityFeeSubscriberMap`. See [Transactions](/developers/velocity-sdk/transactions) if you would rather let the SDK poll it for you.
+This is the endpoint behind the SDK's `PriorityFeeMethod.VELOCITY` and `PriorityFeeSubscriberMap`. See [Transactions](/developers/velocity-sdk/transactions) for letting the SDK poll it instead.
 
 ### Unsettled PnL users
 
@@ -173,7 +175,7 @@ Returns the top 20 unsettled gainers and the top 20 unsettled losers on a perp m
 GET https://dlob.velocity.exchange/auctionParams?marketIndex=0&marketType=perp&direction=long&amount=1000000000&assetType=base
 ```
 
-This is the hosted equivalent of the SDK's auction-parameter construction: you describe the market order you want, and the server returns concrete order params plus the price estimates it derived them from. Use it when you do not want to reimplement auction-price derivation client side. See [Auction parameters](/protocol/trading/auction-parameters) for what the program does with these values.
+This is the hosted equivalent of the SDK's auction-parameter construction: the request describes the market order, and the server returns concrete order params plus the price estimates it derived them from. Use it instead of reimplementing auction-price derivation client side. See [Auction parameters](/protocol/trading/auction-parameters) for what the program does with these values.
 
 Required parameters:
 
@@ -194,7 +196,7 @@ Optional parameters:
 | `allowInfSlippage` | Boolean. Skip the slippage bound entirely. |
 | `forceUpToSlippage` | Boolean. Push the auction end price out to the full slippage tolerance. |
 | `isOracleOrder` | Boolean. Derive an oracle-offset order instead of a fixed-price one. |
-| `auctionDuration` | Requested auction duration in slots. |
+| `auctionDuration` | Requested auction duration, in wall-clock units of 400ms. |
 | `auctionStartPriceOffset` | Number, or the literal `marketBased` to derive the offset from current book conditions. |
 | `auctionEndPriceOffset` | Number. |
 | `auctionStartPriceOffsetFrom` | Reference price the start offset is measured from. Also accepts `marketBased`. |
@@ -220,7 +222,7 @@ Successful responses wrap everything under `data`:
 | `generatedAt` | Server timestamp in milliseconds |
 
 <Callout type="warning">
-Auction params go stale. `generatedAt` exists so you can decide to re-fetch before signing: prices, spreads, and the derived auction start and end move with the book. Treat a quote you have held for more than a few slots as unusable.
+Auction params go stale. `generatedAt` exists so a caller can decide to re-fetch before signing: prices, spreads, and the derived auction start and end move with the book. Treat a quote held for more than a few slots as unusable.
 </Callout>
 
 Derivation failures respond `400` with a JSON body of the form `{ "error": "..." }`, unlike the plain-text `400`s from the parameter checks above.
@@ -254,7 +256,7 @@ Supported channels: `orderbook`, `orderbook_indicative`, `trades`, `priorityfees
 Every subscribe and unsubscribe message needs `channel`, `market` (the symbol, matched case-insensitively), and `marketType` (`perp` or `spot`). The orderbook channels also accept `grouping`, which must be one of `1`, `10`, `100`, `500`, or `1000`. An absent or unrecognized grouping falls back to `1`.
 
 <SDKDoc>
-  <TypeScript name="WebSocket" type="class">
+  <TypeScript name="WebSocket" type="example">
 ```js
 const ws = new WebSocket("wss://dlob.velocity.exchange/ws");
 
@@ -306,7 +308,7 @@ ws.onmessage = (event) => {
   const channel = message.channel;
 
   // IMPORTANT: The `data` field is often a double-encoded JSON string.
-  // You need a second JSON.parse() to get the actual object.
+  // A second JSON.parse() is needed to get the actual object.
   const data = typeof message.data === "string"
     ? JSON.parse(message.data)
     : message.data;
@@ -334,7 +336,7 @@ To stop a stream, send the same message with `type: "unsubscribe"`.
 
 ### Response channel format
 
-The `channel` field in websocket responses is **not** the same as the channel you subscribed to. It includes the market type, market index, and grouping:
+The `channel` field in websocket responses is **not** the same as the channel name in the subscribe message. It includes the market type, market index, and grouping:
 
 | Subscribed channel | Response channel format |
 |---|---|
@@ -352,11 +354,11 @@ Besides data messages, the server sends:
 | Message | Meaning |
 |---|---|
 | `{ "message": "Subscribe received for channel: ..., market: ..., marketType: ..." }` | Subscribe acknowledgement. It confirms the request was parsed, not that data is flowing yet. |
-| `{ "channel": "heartbeat" }` | Sent every 5 seconds while the socket is open. Use it as your liveness signal. |
-| The latest cached snapshot | On subscribing to an orderbook channel, the server immediately replays the most recent cached book so you do not have to wait for the next update. |
+| `{ "channel": "heartbeat" }` | Sent every 5 seconds while the socket is open. Use it as the liveness signal. |
+| The latest cached snapshot | On subscribing to an orderbook channel, the server immediately replays the most recent cached book, so there is no wait for the next update. |
 | `{ "channel": "...", "error": "Error subscribing to channel" }` | The market or market type could not be resolved, but the channel name was recognizable. The socket stays open. |
 | Close code `1003` | Same failure with an unrecognizable channel name. The server closes the connection. |
-| Close code `1008` with reason `Buffer overflow` | Your client fell more than 300,000 buffered bytes behind. Read faster, or subscribe to fewer channels. |
+| Close code `1008` with reason `Buffer overflow` | The client fell more than 300,000 buffered bytes behind. Read faster, or subscribe to fewer channels. |
 
 Messages that are not valid JSON, or that carry no `type`, are ignored silently.
 
@@ -376,4 +378,4 @@ const book = typeof parsed.data === "string"
 
 ## Map symbols consistently
 
-Market symbols (e.g. `SOL-PERP`) match the UI. The market index in response channels corresponds to the SDK's `marketIndex`, keep your market list in sync with the SDK's market metadata to avoid mismatches.
+Market symbols (e.g. `SOL-PERP`) match the UI. The market index in response channels corresponds to the SDK's `marketIndex`. Keep the market list in sync with the SDK's market metadata to avoid mismatches.

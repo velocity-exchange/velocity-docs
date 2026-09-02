@@ -1,0 +1,115 @@
+---
+title: "Setup"
+---
+
+This page walks through getting from an empty crate to a compiling dependency on `velocity-rs`. Three of the steps below are the ones people lose an afternoon to: the crate is not on crates.io, an Apple Silicon host needs an x86_64 toolchain, and the Solana crate family it builds on is the 3.x line.
+
+## Adding the dependency
+
+`velocity-rs` is not published. There is no crates.io release and no `docs.rs` page, so `cargo add velocity-rs` fails and any published-crate instructions found elsewhere do not apply. It is consumed as a git dependency on the `velocity-v1` monorepo, and Cargo locates the package inside that repository on its own.
+
+```toml
+[dependencies]
+velocity-rs = { git = "https://github.com/velocity-exchange/velocity-v1", rev = "<commit-sha>" }
+```
+
+Pin a `rev`, or a `tag` once tagged releases exist. Depending on the default branch means every `cargo update` can pull a breaking change into a running bot.
+
+<Callout type="warning">
+The `velocity-v1` monorepo is private until after the audit. The URL above is the dependency line to use, not a repository available to clone today. Inside the monorepo, the crate is at `rust/velocity-rs` and its examples depend on it by relative path instead.
+</Callout>
+
+The crate version is 1.0.1. Because there is no registry release, the version number is informational: what a build actually resolves is the pinned commit.
+
+## Toolchain requirements
+
+**Rust 1.89 or newer**: this is the Anchor 1.0 minimum supported version, and the monorepo's CI builds on recent stable.
+
+**An x86_64 toolchain on Apple Silicon**: native `aarch64` toolchains are not supported. The program's accounts are zero-copy, so their Rust structs must match the memory layout the onchain (x86_64 or SBF) build produced. An `aarch64` host build can compile and then fail at runtime with deserialization errors such as `InvalidSize`. Install Rosetta and override the toolchain for the project.
+
+```bash
+softwareupdate --install-rosetta
+
+rustup toolchain install stable-x86_64-apple-darwin --force-non-host
+rustup override set stable-x86_64-apple-darwin
+```
+
+On x86_64 Linux with stable Rust 1.89 or newer there is nothing extra to do.
+
+**The Solana 3.x crate family**: `velocity-rs` depends on `solana-rpc-client` 3.1, and on `solana-pubkey`, `solana-account`, `solana-instruction`, `solana-message`, `solana-transaction`, `solana-keypair`, `solana-signature` and friends at 3.x. An application pinned to the legacy `solana-sdk` 1.x or 2.x types hits type mismatches the moment it passes a `Pubkey` or a `CommitmentLevel` across the SDK boundary, because Cargo treats the 2.x and 3.x versions of those crates as distinct types. Take the Solana types from `velocity_rs` re-exports rather than declaring separate copies:
+
+```rust
+use velocity_rs::{Pubkey, RpcClient, VelocityClient, Wallet};
+use velocity_rs::types::{CommitmentConfig, Context, RpcSendTransactionConfig};
+```
+
+## Cargo features
+
+Every feature is off by default.
+
+| Feature | What it does |
+|---|---|
+| `unsafe_pub` | Exposes internals that are otherwise private: `VelocityClient::backend`, and the raw `spot_market_map`, `perp_market_map` and `oracle_map` handles. Required for anything that drives a DLOB, because `DLOBBuilder` is constructed from the backend's `AccountMap`. |
+| `titan` | Pulls in `titan-swap-api-client` and enables the Titan swap instruction builders alongside the Jupiter ones. |
+| `dlob_dbg` | Records order events inside the DLOB for debugging a book that disagrees with chain. Costs memory and work on the hot path. |
+| `rpc_tests` | Enables the integration tests that talk to real RPC nodes. Test-only. |
+
+```toml
+velocity-rs = { git = "...", rev = "...", features = ["unsafe_pub"] }
+```
+
+The name `unsafe_pub` is about API stability, not memory safety: the items it exposes are internal and can change between commits. Everything in these pages that reaches through `client.backend()` needs it.
+
+## Building inside the monorepo
+
+The `rust/` directory is its own Cargo workspace, separate from the program workspace at the repository root. It carries its own `Cargo.lock` and its own `rust/target/` build directory, which keeps the `solana-sdk` 3.x dependency tree away from the program's SBF build.
+
+```bash
+cd velocity-v1/rust/velocity-rs
+cargo check
+```
+
+There is no FFI layer, no git submodule, and no build-time codegen for consumers. `velocity-rs` depends on the `velocity` program crate as a plain host-library path dependency at `../../programs/velocity`, which is why it can re-export it as `velocity_rs::program`.
+
+## IDL-derived types
+
+The account, instruction and error types generated from the IDL live in `crates/src/velocity_idl.rs` and are reachable as `velocity_rs::velocity_idl`. That file is committed to the repository, not generated at consumer build time.
+
+`build.rs` regenerates it only when the canonical IDL at `packages/sdk/src/idl/velocity.json` is present, which is to say only inside the monorepo, and it rewrites the file only when the content actually changed. A vendored or read-only checkout (`cargo vendor`, a Nix store path) therefore builds without needing write access or the IDL. CI fails if the committed file has drifted from the IDL.
+
+To refresh it after a program change, from the monorepo root:
+
+```bash
+bun run program:idl
+cargo check --manifest-path rust/Cargo.toml
+```
+
+Commit both the regenerated `packages/sdk/src/idl/velocity.json` and `rust/velocity-rs/crates/src/velocity_idl.rs`. The same IDL file feeds the TypeScript SDK, so the two clients cannot describe different accounts.
+
+## Verifying the install
+
+A client that constructs and reads one market config proves the toolchain, the dependency and the program re-export are all wired up. It makes one RPC call and needs no keypair.
+
+<SDKDoc>
+  <Rust name="VelocityClient" type="struct">
+```rust
+use velocity_rs::{Context, RpcClient, VelocityClient, Wallet};
+use velocity_rs::constants::DEFAULT_PUBKEY;
+
+#[tokio::main]
+async fn main() {
+    let client = VelocityClient::new(
+        Context::MainNet,
+        RpcClient::new(std::env::var("RPC_URL").expect("RPC_URL set")),
+        Wallet::read_only(DEFAULT_PUBKEY),
+    )
+    .await
+    .expect("initialized client");
+
+    println!("perp markets: {}", client.get_all_perp_market_ids().len());
+}
+```
+  </Rust>
+</SDKDoc>
+
+`Wallet::read_only` takes an authority pubkey and disables signing, which suits anything that only reads. [The client](/developers/velocity-rs/client) covers the other two wallet modes.

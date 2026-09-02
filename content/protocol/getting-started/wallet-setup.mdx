@@ -1,0 +1,77 @@
+---
+title: "Wallet setup"
+description: "Connecting a Solana wallet, what the SOL in it pays for, and what auto-confirm gives up."
+---
+
+Velocity is self-custodial, so there is no account to register and no balance held on a trader's behalf. A Solana wallet connects to the app, and every deposit, order, borrow and withdrawal is a transaction that wallet signs. The keys never leave it, which also means nobody at Velocity can move those funds, recover a lost seed phrase, or reverse a transaction that has already been signed.
+
+[Phantom](https://phantom.com/download), [Backpack](https://backpack.app/download) and [Solflare](https://www.solflare.com/download/) all connect and all work the same way. The walkthrough below uses Phantom because the auto-confirm setting at the end of this page lives in Phantom's connected-apps menu; the connect, deposit and withdraw steps are identical in the other two.
+
+Keys held on a hardware wallet need [Delegated accounts](/protocol/getting-started/delegated-accounts) first, because a hardware wallet cannot sign every payload the order path uses. For a bot rather than manual trading, [Trading automation](/developers/trading-automation#bot-wallet) covers the bot wallet instead.
+
+## What the SOL in the wallet pays for
+
+A small SOL balance is required even for an account that never trades SOL, and it covers two separate costs.
+
+The first is the Solana network fee on every transaction sent: a base fee of 5,000 lamports plus whatever priority fee the wallet attaches to get the transaction landed. That is consumed and does not come back.
+
+The second is rent, which is not a fee. A Velocity subaccount is an onchain account, and Solana requires an account to hold a SOL balance proportional to its size in order to stay allocated. That balance is a deposit: it sits with the account for as long as the account exists, and deleting the subaccount returns it in full to the wallet that paid it. [Withdraw and close an account](/protocol/getting-started/withdraw-and-close-account) covers the conditions a subaccount has to meet before it can be deleted.
+
+## Connecting and depositing
+
+<Steps>
+### Install the browser extension
+
+[Install Phantom](https://phantom.app/) in Chrome, Brave, Firefox or Edge, then create a new wallet or import an existing seed phrase. Write the seed phrase down offline before you fund anything, because it is the only recovery path that exists.
+
+<img src="/assets/3Ms0a5cuUqfXG93pIRDkK_image.png" alt="" width="600" height="auto"></img>
+
+### Fund your wallet
+
+Your wallet needs SOL for network fees and rent, plus whatever asset you intend to post as collateral. Buy SOL on an exchange and withdraw it to the Phantom address, or swap into it inside Phantom or on [Jupiter](https://jup.ag/swap/SOL-USDT).
+
+Which assets count as cross-collateral is a per-market setting: an asset is usable as collateral while its spot market is listed and carries a non-zero collateral weight, and that weight is what it counts for against margin. [Collateral and margin](/protocol/trading/margin) covers the weights and where to read the live list.
+
+### Connect your wallet
+
+Open the trading page and select "Connect Wallet" at the top right. Velocity has no login, so this is the whole of signing in.
+
+<img src="/assets/phantom-setup-1.png" alt="" width="800" height="auto"></img>
+
+Choose Phantom and approve the connection in the wallet popup. Connecting only lets the site read your address and propose transactions to you; it does not authorize any transfer on its own.
+
+<img src="/assets/phantom-setup-2.png" alt="" width="800" height="auto"></img>
+
+### Deposit
+
+Click "Deposit" next to the button you connected with, pick the asset from the dropdown, and enter an amount. The dropdown is how you deposit something other than USDT.
+
+<img src="/assets/phantom-setup-3.png" alt="" width="800" height="auto"></img>
+
+Click "Deposit" and sign the transaction in your wallet. Your first deposit also creates the subaccount, so it costs the rent deposit described above on top of the network fee.
+
+<img src="/assets/phantom-setup-4.png" alt="" width="800" height="auto"></img>
+
+### Withdraw
+
+To take collateral back out, select "Withdraw" in the same window you deposited from. It is the same modal, on the other tab.
+
+<img src="/assets/phantom-setup-5.png" alt="" width="800" height="auto"></img>
+
+Enter the amount and confirm the transaction. You can withdraw while positions are open as long as the account stays above its initial margin requirement, and a market's rolling limits can throttle a large withdrawal independently of the account's own margin.
+
+<img src="/assets/phantom-setup-6.png" alt="" width="800" height="auto"></img>
+</Steps>
+
+## Auto-confirm, and what it gives up
+
+Phantom's auto-confirm setting tells the wallet to sign transactions from one connected site without showing the approval popup. Deposits, orders, borrows and withdrawals then go through in a single click, which matters most while orders are being managed actively.
+
+The approval prompt is the last point at which a transaction can be read and refused before it is signed, and auto-confirm removes exactly that. The site is approved once, in advance, instead of each transaction being approved as it is proposed. The grant is scoped to the one connected app and is revoked from the same menu, so enabling it for a session of active trading and disabling it afterwards keeps the exposure to that session.
+
+<Steps>
+### Open Phantom settings
+### Click "Connected Apps"
+### Select Velocity
+### Toggle "Auto-Confirm" to "Active"
+</Steps>

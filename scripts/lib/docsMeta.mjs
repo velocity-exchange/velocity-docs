@@ -1,19 +1,17 @@
 // Shared route-mapping and exclusion helpers for the machine-readability
 // build scripts (llms.txt and the per-page markdown mirror).
 //
-// Source of truth for grouping/section titles and for excluding hidden/WIP
-// pages is app/_meta.global.tsx (the sidebar). Legal/regulatory content is
-// excluded on purpose (out of scope for LLM-facing output).
+// Source of truth for grouping and section titles is the Fumadocs meta.json
+// tree under content/, with page titles read from each file's frontmatter.
+// Legal content is excluded on purpose, being out of scope for LLM output.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, "..", "..");
 export const CONTENT_DIR = path.join(ROOT, "content");
-export const META_FILE = path.join(ROOT, "app", "_meta.global.tsx");
 
 // Directories excluded outright, regardless of what the sidebar says.
 export const EXCLUDED_DIRS = new Set(["protocol/legal-and-regulations"]);
@@ -33,59 +31,54 @@ export function loadSiteUrl() {
   return siteUrl;
 }
 
-// --- Load the sidebar structure out of app/_meta.global.tsx -----------------
-// The file is plain JS (a nested object literal) with one TS-only bit: a type
-// import and an `as MetaRecord` cast. Strip those and evaluate the rest so
-// section titles/ordering/hidden-flags stay in sync with the real sidebar
-// instead of being hand-duplicated here.
-function loadMeta() {
-  const src = readFileSync(META_FILE, "utf8")
-    .replace(/^import\s+\{[^}]*\}\s+from\s+["']nextra["'];?\s*$/m, "")
-    .replace(/\s+as\s+MetaRecord\b/, "")
-    .replace(/^export\s+default\s+META;?\s*$/m, "");
-
-  const context = { process, module: { exports: {} }, exports: {} };
-  vm.createContext(context);
-  const script = new vm.Script(`${src}\nmodule.exports = META;`);
-  script.runInContext(context);
-  return context.module.exports;
-}
-
-// Force the same "hidden in production" semantics the live site uses, so a
-// WIP page (e.g. the SDK autogen reference) is excluded here too.
-process.env.NODE_ENV = "production";
-const META = loadMeta();
-
-// Walk the meta tree and collect: (a) which content paths are hidden, and
-// (b) a title for every path that has one, for section-header lookups.
+// --- Load the sidebar structure out of the Fumadocs meta.json tree ---------
+// Each content folder carries a meta.json with { title, pages }. Reading those
+// keeps section titles and ordering in sync with the real sidebar instead of
+// being hand-duplicated here. Nothing is hidden any more: the nextra-era
+// "display: hidden" flag has no Fumadocs equivalent, and the pages that used
+// it have been deleted.
 const hiddenPaths = new Set();
 const titleByPath = new Map();
 
-function walkMeta(node, segments) {
-  if (node == null) return;
-  if (typeof node === "string") return;
-  if (typeof node !== "object") return;
-
-  const currentPath = segments.join("/");
-  if (node.display === "hidden") hiddenPaths.add(currentPath);
-  if (typeof node.title === "string") titleByPath.set(currentPath, node.title);
-
-  const items = node.items;
-  if (items && typeof items === "object") {
-    for (const [key, child] of Object.entries(items)) {
-      if (key.startsWith("---")) continue; // separators, not real pages
-      const childKey = key === "index" ? currentPath : [...segments, key].join("/");
-      if (typeof child === "string") {
-        if (child) titleByPath.set(childKey, child);
-        continue;
-      }
-      walkMeta(child, key === "index" ? segments : [...segments, key]);
+function loadMetaTree(dir, segments) {
+  const metaFile = path.join(dir, "meta.json");
+  let meta;
+  try {
+    meta = JSON.parse(readFileSync(metaFile, "utf8"));
+  } catch {
+    return;
+  }
+  if (typeof meta.title === "string" && segments.length) {
+    titleByPath.set(segments.join("/"), meta.title);
+  }
+  for (const entry of meta.pages ?? []) {
+    if (typeof entry !== "string" || entry.startsWith("---")) continue;
+    const child = path.join(dir, entry);
+    if (existsSync(child) && statSync(child).isDirectory()) {
+      loadMetaTree(child, [...segments, entry]);
     }
   }
 }
 
-for (const [topKey, topNode] of Object.entries(META)) {
-  walkMeta(topNode, [topKey]);
+for (const top of readdirSync(CONTENT_DIR, { withFileTypes: true })) {
+  if (top.isDirectory()) loadMetaTree(path.join(CONTENT_DIR, top.name), [top.name]);
+}
+
+// Page titles come from each file's frontmatter.
+function titleFromFrontmatter(file) {
+  const text = readFileSync(file, "utf8");
+  if (!text.startsWith("---")) return null;
+  const end = text.indexOf("\n---", 3);
+  if (end === -1) return null;
+  const m = text.slice(3, end).match(/^title:\s*(.+)$/m);
+  return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
+}
+
+for (const file of findMdxFiles()) {
+  const rel = path.relative(CONTENT_DIR, file).replace(/\.mdx$/, "");
+  const key = rel.endsWith("/index") ? rel.slice(0, -"/index".length) : rel;
+  const title = titleFromFrontmatter(file);
+  if (title && !titleByPath.has(key)) titleByPath.set(key, title);
 }
 
 export function isHidden(contentRelPath) {
@@ -143,6 +136,16 @@ export function findMdxFiles(dir = CONTENT_DIR) {
     }
   }
   return out;
+}
+
+// Titles moved from a leading H1 into frontmatter when the site migrated to
+// Fumadocs, which renders the title itself. These scripts read it from there.
+export function frontmatterTitle(text) {
+  if (!text.startsWith("---")) return null;
+  const end = text.indexOf("\n---", 3);
+  if (end === -1) return null;
+  const m = text.slice(3, end).match(/^title:\s*(.+)$/m);
+  return m ? m[1].trim().replace(/^["']|["']$/g, "") : null;
 }
 
 export function stripFrontmatter(text) {

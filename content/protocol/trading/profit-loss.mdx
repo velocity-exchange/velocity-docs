@@ -1,0 +1,66 @@
+---
+title: "Profit and loss"
+description: "The three states P&L passes through, and why settlement is a separate step."
+---
+
+P&L on a perpetual position is the difference between what it is worth now and what it cost, times its size. The number is live from the moment the position opens, but it is not a balance. Turning it into one takes two separate events: **realizing** it, which is what closing or reducing does, and **settling** it, which moves value between the market and the account.
+
+## Why one balance per user fails
+
+A perpetual is a two-sided contract, so one account's gain is another's loss. Crediting it the instant a position closes would pay the winner before the protocol has collected from the other side, and a run of unmatched winners would drain the vault holding everyone else's deposits. Gains and losses therefore pass through a per-market pool, and a claim is only paid out of value already collected. See [Where the money sits](/protocol/how-it-works/where-the-money-sits).
+
+## Three states
+
+**Unrealized P&L** is the mark-to-market on an open position. It moves every tick, it counts toward margin, and no value has changed hands.
+
+**Realized but unsettled P&L** is what closing or reducing produces. The number is fixed, but it still sits inside the market rather than in the account's balance.
+
+**Settled P&L** is the portion that has been moved out of the market and applied to the account's quote balance. This is the only one of the three that can be withdrawn.
+
+The Positions tab shows unrealized P&L. Treat it as a margin input, not a balance: it is not withdrawable until it has been through both of the other states.
+
+## Settling does not touch the position
+
+Settling moves value between the market's P&L pool and the account's quote balance. **It does not close, reduce, or otherwise change the position.** It adjusts the position's cost basis by exactly the amount settled, so exposure stays identical while part of the P&L inside it moves out. That is why a fully open position can be settled. Settlement also happens as part of ordinary protocol activity, so most accounts never trigger it directly.
+
+## What can actually be claimed
+
+Positive P&L is capped, and the cap has two terms added together.
+
+The first is **what has actually been locked in**, floored at zero. On a position that has never been reduced this is zero, which is why a fully open winner is often not claimable.
+
+The second is **the pool's excess**, the tokens the market's P&L pool holds beyond the net positive P&L it already owes across all users. When the pool holds surplus, an open winner can settle against it without reducing anything.
+
+Negative P&L has no such cap. It settles in full, and it is what funds the pool for everybody else.
+
+So withdrawing a gain means either reducing or closing the position, or waiting for the pool to carry enough surplus. A gain that is real and not yet claimable is a gain the market has not yet collected from anyone. On a **\$10,000** account holding 20 SOL long from \$100, a move to \$110 gives \$200 of unrealized P&L that counts toward margin at once but, until the position is reduced, can only settle against pool surplus. A \$200 loss settles in full and immediately.
+
+## Who can settle whose P&L, and when
+
+Settling a **negative** unrealized P&L is permissionless: anyone can do it for another account, and doing so requires that account to meet its settle-P&L maintenance margin requirement, so a position cannot push itself into liquidation territory by settling a loss. When the market's oracle is invalid for margin purposes, only the account's authority or its delegate may settle a negative P&L: a stale price must not be the instrument by which a stranger debits somebody's collateral.
+
+Settling a **positive** unrealized P&L is bounded by the claimable cap rather than by who is calling. Market state gates both directions: a market with settlement paused settles nothing, and while a base position is still held the market must be active. Settling improves account health whenever it succeeds.
+
+## The pools
+
+Two pools live on each perpetual market, and they hold accounting balances rather than segregated tokens. The tokens themselves are in the spot market vault.
+
+**The P&L pool** is the market's settled funds available for withdrawal. Settled losses raise it, settled gains lower it, and trade-fee value lands here first before the fee sweep routes it onward.
+
+**The AMM fee pool** holds only the AMM's own money: its share of the per-fill fee split plus any spread surplus it captures. The protocol's and insurance fund's cuts of the same fill never enter it. The sweep leaves a buffer behind, initialized at **\$250** per market, rather than draining it.
+
+<Callout type="important">
+The AMM fee pool can be clawed back for bankruptcy resolution, capped at the cumulative amount the AMM has ever received through the fee split. The AMM's own trading and spread capital beyond that provision is never touched. See [Liquidation and bankruptcy](/protocol/risk-and-safety/liquidation-and-bankruptcy).
+</Callout>
+
+Before fees are swept, the P&L pool holds back what it owes: users' positive unsettled P&L, the insurance fund's bankruptcy reserve, and any revenue share accrued to builders or referrers. Only the surplus above those claims is swept. See [Revenue pool](/protocol/how-it-works/revenue-pool).
+
+## Unsettled P&L as collateral
+
+Positive unsettled P&L is valued as an asset in the margin system, weighted separately for the initial and maintenance requirements. Negative P&L always carries a weight of 1: a loss counts in full against the account. A mechanism exists to discount the positive weight when a market's winners get far ahead of its losers. It never lowers maintenance weights, and it engages only once net unsettled P&L passes the market's `unrealizedPnlMaxImbalance`; read the live market account for that limit.
+
+## Withdrawals
+
+Only the lesser of free collateral and the asset balance is withdrawable without opening a borrow. Unrealized profit is not an asset balance, so realizing and then settling it is what turns it into something withdrawable. Withdrawing profit above the asset balance while staying in the position means reducing or closing, then reopening. A withdrawal that clears the account's own margin check can still be refused by the market's rolling withdrawal limits, because deposits are lent out. See [Withdrawal and borrow limits](/protocol/borrow-lend/withdrawal-limits).
+
+When a payout is waiting, the question is almost always whether the market's P&L pool has collected enough, not whether the protocol agrees the account won.

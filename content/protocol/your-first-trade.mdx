@@ -1,0 +1,71 @@
+---
+title: "A first trade, end to end"
+---
+
+One account, one position, from deposit to withdrawal. Every step here has a page of its own with the full mechanism; this page is the thread that connects them.
+
+Numbers are illustrative throughout. The account is **\$10,000** and SOL is at **\$100**.
+
+## 1. Deposit
+
+USDT arrives in a Velocity subaccount, and two things happen at once. The deposit becomes collateral, so it can back positions, and it is also lent out, so it earns the lending rate while it sits there. There is no separate step to opt into either one.
+
+Not every asset counts for its full value as collateral. USDT does. A volatile asset is weighted down, because the protocol has to survive the gap between the moment an account falls under-margined and the moment a liquidator closes it. See [Collateral and margin](/protocol/trading/margin) for the weights.
+
+The account now holds \$10,000 of collateral, all of it free.
+
+## 2. What that supports
+
+Free collateral is not the same as buying power. Each market sets an initial margin ratio, the fraction of a position's notional value that must stay backed by collateral. At an illustrative 5%, \$10,000 supports up to \$200,000 of notional. That is a ceiling rather than a recommendation: opening at the ceiling means the first adverse tick drops the account under the maintenance requirement, with no room between "open" and "liquidatable".
+
+The account opens **20 SOL long**, a notional of \$2,000.
+
+## 3. Place the order
+
+The order goes in as a market order, and it does not fill instantly against a single resting price. Instead it opens a short auction, during which the price it will accept walks from an optimistic start toward a worst-acceptable end. Market makers and the protocol's own AMM compete to fill it somewhere along that walk, and the auction ends the moment somebody does.
+
+So a market order on Velocity has a worst case that is visible before it is sent, and a best case that depends on who happens to be competing that second. See [Auctions](/protocol/trading/auction-parameters) for the parameters, or [Order types](/protocol/trading/order-types) for setting the price directly instead.
+
+## 4. The fill and the fee
+
+The order fills at \$100, leaving the account 20 SOL long at a notional of \$2,000. Crossing the spread to get filled makes this the taker side, and takers pay the taker fee: 4 bps of notional, meaning 0.04%, or **\$0.80** on this fill. That rate falls as trailing 30-day volume rises.
+
+A resting order that waited for someone else to cross into it would have been the maker side instead, earning a rebate rather than paying a fee. See [Fees](/protocol/trading/trading-fees) for the tier table.
+
+## 5. Holding the position
+
+Two things now accrue continuously, and only one of them is about price.
+
+Unrealized P&L moves with the price, so SOL at \$110 leaves the account \$200 up and SOL at \$90 leaves it \$200 down. It is unrealized because nothing has been paid to anyone yet: it is a number, not a balance. Funding is the other one, paid hourly between longs and shorts in whichever direction pulls the contract back toward the oracle price. At an illustrative 0.00125% an hour against the position, a day costs about \$0.60 here, and it accrues whether or not anyone is watching.
+
+Account health reflects both, comparing collateral against the maintenance margin the open positions require. See [Account health](/protocol/trading/margin/account-health).
+
+## 6. If it goes wrong
+
+If collateral falls below the maintenance requirement, the position becomes liquidatable, and a liquidator, which is anyone running a bot, closes part of it and takes a fee for doing so.
+
+Liquidation is neither all-or-nothing nor instant. The protocol closes only what it needs to bring the account back above the requirement and throttles that over a window, so a brief wick does not cost the entire position. See [Liquidations](/protocol/trading/liquidations) for the fee split and a worked example.
+
+## 7. Close and settle
+
+The position closes at \$110, realizing \$200 of profit and paying the taker fee again on the way out. That profit is realized but unsettled: it counts toward margin, and it is not yet a withdrawable balance.
+
+Settlement moves it from the market's P&L pool into the account. It happens on its own as part of normal protocol activity, and it can also be triggered manually. See [Profit and loss](/protocol/trading/profit-loss).
+
+## 8. Withdraw
+
+Once settled, the balance is withdrawable subject to two checks. The first is the account's own margin: collateral that an open position still needs cannot leave. The second is the market's withdrawal limits, because deposits are lent out and a market throttles how much can leave in a rolling window. If a withdrawal is refused, the second check is usually why, and it usually clears on its own. See [Withdrawal limits](/protocol/borrow-lend/withdrawal-limits).
+
+The withdrawal comes to \$10,199.20: the original \$10,000, plus \$200 of realized profit, minus \$1.60 of taker fees across the two fills, adjusted by whatever lending yield the collateral earned and whatever funding accrued along the way.
+
+## The whole thing, in order
+
+| Step | What it costs | Where it is documented |
+| --- | --- | --- |
+| Deposit | Nothing, and it starts earning lending yield | [Collateral and margin](/protocol/trading/margin) |
+| Open | Taker fee, 4 bps at base tier | [Fees](/protocol/trading/trading-fees) |
+| Hold | Funding, hourly, either direction | [Funding rates](/protocol/trading/funding-rates) |
+| Go wrong | Liquidation fee, on the closed portion | [Liquidations](/protocol/trading/liquidations) |
+| Close | Taker fee again | [Fees](/protocol/trading/trading-fees) |
+| Settle | Nothing | [Profit and loss](/protocol/trading/profit-loss) |
+| Withdraw | Nothing, subject to limits | [Withdrawal limits](/protocol/borrow-lend/withdrawal-limits) |
