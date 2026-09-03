@@ -8,7 +8,7 @@ export function RevenuePoolSankey() {
   return (
     <Diagram
       title="Where protocol fees go: revenue pool versus protocol fee pool"
-      caption="Shows where protocol fees go and what the insurance fund funds downstream. Source: programs/velocity/src, not the prose. The split numerators between the insurance fund's cut and the protocol's cut are admin-set per market and are 0 at launch, so every leg is drawn at equal width: this figure shows the routes, not the proportions. The draw into a perp market comes from the insurance fund vault, not the revenue pool, and covers a P&L deficit rather than funding."
+      caption="Shows where protocol fees go and what the insurance fund funds downstream. Source: programs/velocity/src, not the prose. The split between the insurance fund's cut and the protocol's cut is admin-set, so every leg is drawn at equal width: this figure shows the routes, not the proportions. The Trading fees page reads the live perp split from the chain. The draw into a perp market comes from the insurance fund vault, not the revenue pool, and covers a P&L deficit rather than funding."
     >
       {({ captionId }) => (
         <Sankey

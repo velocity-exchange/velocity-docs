@@ -15,6 +15,8 @@ import {
   SpotMarketAccount,
   StateAccount,
   StrictOraclePrice,
+  FeeStructure,
+  FeeTier,
   ZERO,
 } from "@velocity-exchange/sdk";
 import { getVelocityProgram } from "../../../utils/spot-markets";
@@ -22,6 +24,8 @@ import type {
   AssetWeightRow,
   LTVRow,
   OnChainData,
+  PerpFeeRow,
+  PerpFeeSplit,
   PerpMarginRow,
 } from "../../../types/onchain-data";
 
@@ -139,6 +143,99 @@ function marginCell(ratio: number): string {
   const pct = `${(ratio * 100).toFixed(2)}%`;
   const leverage = ratio > 0 ? `${(1 / ratio).toFixed(0)}x` : "N/A";
   return `${pct} / ${leverage}`;
+}
+
+// FEE_PERCENTAGE_DENOMINATOR. ammFeeNumerator and ifFeeNumerator are shares of
+// the taker-fee remainder over this, and the program requires their sum to be
+// at most 100, so the protocol's residual can never go negative.
+const FEE_PERCENTAGE_DENOMINATOR = 100;
+
+// Tier 0 is the base schedule and tiers above it are the VIP levels. The
+// program stores no names for them, so they are labelled here to match the
+// published schedule.
+function feeTierLabel(index: number): string {
+  return index === 0 ? "Regular" : `VIP ${index}`;
+}
+
+// A rate held as a numerator/denominator fraction of notional, rendered in bps.
+// Two decimals, trailing zeros dropped: the maker rebate is 0.25 bps and the
+// per-market add-on is denominated in tenths of a basis point, so rounding any
+// harder than this reports rates the protocol does not charge. The unary plus
+// is what drops the zeros, so 4 renders "4 bps" rather than "4.00 bps".
+function bps(rate: number): string {
+  return `${+(rate * 1e4).toFixed(2)} bps`;
+}
+
+// feeTiers is a fixed-length array of ten slots and the schedule occupies the
+// first few, so a raw read reports ten tiers where mainnet publishes three:
+// slots 3 and up all repeat the last real tier's 2 bps taker fee. Trailing
+// duplicates are that padding, so trim them, or the fee table renders seven
+// identical VIP columns.
+//
+// Comparison is on the two rates this table actually shows, not the whole
+// tier struct. The padding slots are not byte-identical to each other (the
+// referral numerators are live in some and zeroed in others), so a full-struct
+// compare stops early and leaves four dead columns behind. Trailing tiers that
+// charge the same taker fee and pay the same maker rebate are one column as
+// far as a fee table is concerned, whatever else differs inside them.
+function chargesSameRates(a: FeeTier, b: FeeTier): boolean {
+  return (
+    a.feeNumerator * b.feeDenominator === b.feeNumerator * a.feeDenominator &&
+    a.makerRebateNumerator * b.makerRebateDenominator ===
+      b.makerRebateNumerator * a.makerRebateDenominator
+  );
+}
+
+function configuredFeeTiers(tiers: FeeTier[]): FeeTier[] {
+  let end = tiers.length;
+  while (end > 1 && chargesSameRates(tiers[end - 1], tiers[end - 2])) end--;
+  return tiers.slice(0, end);
+}
+
+// Mirrors velocityClient.getFeeStructure / calculate_taker_fee in the program:
+// the per-market add-on is added to the tier rate first, and feeAdjustment
+// then scales the sum. The maker rebate sees feeAdjustment alone, never the
+// add-on, which is taker-only and can never be a discount.
+function effectiveTakerFee(tier: FeeTier, market: PerpMarketAccount): number {
+  const base =
+    tier.feeNumerator / tier.feeDenominator +
+    market.takerFeeAddonTenthBps / 100_000;
+  return base + (base * market.feeAdjustment) / 100;
+}
+
+function effectiveMakerRebate(
+  tier: FeeTier,
+  market: PerpMarketAccount
+): number {
+  const base = tier.makerRebateNumerator / tier.makerRebateDenominator;
+  return base + (base * market.feeAdjustment) / 100;
+}
+
+function getPerpFeeRow(
+  market: PerpMarketAccount,
+  feeTiers: FeeTier[]
+): PerpFeeRow | null {
+  if (isVariant(market.contractType, "deprecatedPrediction")) return null;
+
+  return {
+    index: market.marketIndex,
+    name: decodeName(market.name),
+    takerFees: feeTiers.map((tier) => bps(effectiveTakerFee(tier, market))),
+    // Flat across tiers in the published schedule, but read from tier 0 rather
+    // than assumed: makerRebateNumerator is per-tier onchain and nothing stops
+    // an admin from setting the tiers apart.
+    makerRebate: bps(effectiveMakerRebate(feeTiers[0], market)),
+  };
+}
+
+function getPerpFeeSplit(feeStructure: FeeStructure): PerpFeeSplit {
+  const amm = feeStructure.ammFeeNumerator;
+  const insuranceFund = feeStructure.ifFeeNumerator;
+  return {
+    amm: `${amm}%`,
+    insuranceFund: `${insuranceFund}%`,
+    protocol: `${FEE_PERCENTAGE_DENOMINATOR - amm - insuranceFund}%`,
+  };
 }
 
 function getPerpMarginRow(market: PerpMarketAccount): PerpMarginRow | null {
@@ -264,7 +361,21 @@ async function loadOnChainData(rpcUrl: string): Promise<OnChainData> {
     .map(getPerpMarginRow)
     .filter((row): row is PerpMarginRow => row !== null);
 
-  return { assetWeights, ltv, perpMargin };
+  // Fee schedule comes off the State account already fetched above, so the
+  // fee table and split cost no extra round trip.
+  const perpFeeTiers = configuredFeeTiers(state.perpFeeStructure.feeTiers);
+  const perpFees = perpMarkets
+    .map((market) => getPerpFeeRow(market, perpFeeTiers))
+    .filter((row): row is PerpFeeRow => row !== null);
+
+  return {
+    assetWeights,
+    ltv,
+    perpMargin,
+    perpFeeTiers: perpFeeTiers.map((_, index) => feeTierLabel(index)),
+    perpFees,
+    perpFeeSplit: getPerpFeeSplit(state.perpFeeStructure),
+  };
 }
 
 // Cache only successful snapshots: unstable_cache stores the resolved value
