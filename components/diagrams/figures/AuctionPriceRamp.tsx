@@ -5,11 +5,11 @@ import { PriceRamp } from "../PriceRamp";
 import { auctionPriceRampSpec } from "./auction-price-ramp.data";
 
 const CAPTION =
-  "A long market order with the oracle at $100.00, an auction start price of $100.00, an end price of $100.10 (the taker's limit), and a duration of 10 slots. " +
-  "The auction price moves in a straight line from start to end, so a maker quoting $100.05 can fill from slot 5 onward. " +
-  "After slot 10 the auction is over and any size still unfilled can fill at the limit price until the order expires, drawn as the dashed line. " +
+  "A long market order with the oracle at $100.00, an auction start price of $100.00, an end price of $100.10 (the taker's limit), and an auctionDuration of 10 (10 x 400ms = 4 seconds). " +
+  "The auction price moves in a straight line from start to end, so a maker quoting $100.05 can fill from 2 seconds in onward. " +
+  "After 4 seconds the auction is over and any size still unfilled can fill at the limit price until the order expires, drawn as the dashed line. " +
   "The numbers are the worked example on this site, not live market data. " +
-  "Slot counts are wall-clock only at today's slot time, and the program can raise a requested duration, so a real auction may run longer than 10 slots.";
+  "The unit is wall clock, not a live slot, and the program can raise a requested duration, so a real auction may run longer than 4 seconds.";
 
 export function AuctionPriceRamp() {
   return (
@@ -17,8 +17,9 @@ export function AuctionPriceRamp() {
       {({ captionId }) => (
         <PriceRamp
           spec={auctionPriceRampSpec}
-          ariaLabel="Chart of a JIT auction price rising in a straight line from the oracle price to the taker's limit price over 10 slots, then holding flat at the limit"
+          ariaLabel="Chart of a JIT auction price rising in a straight line from the oracle price to the taker's limit price over 4 seconds, then holding flat at the limit"
           describedBy={captionId}
+          width={600}
         />
       )}
     </Diagram>

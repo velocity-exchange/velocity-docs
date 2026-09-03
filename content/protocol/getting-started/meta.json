@@ -1,0 +1,9 @@
+{
+  "title": "Getting Started",
+  "pages": [
+    "wallet-setup",
+    "managing-subaccounts",
+    "delegated-accounts",
+    "withdraw-and-close-account"
+  ]
+}

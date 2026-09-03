@@ -1,29 +1,32 @@
-# Markets, Oracles, and Positions
+---
+title: "Markets, Oracles, and Positions"
+---
 
 ## How it works
 
-Velocity has two types of markets: **perp markets** (perpetual futures with funding rates) and **spot markets** (token deposits/borrows that serve as collateral). Each market has an onchain account storing configuration like oracle source, fees, funding rates, AMM parameters, and current open interest.
+Velocity has two types of markets: **perp markets**, perpetual futures with funding rates, and **spot markets**, token deposits and borrows that serve as collateral. Each market has an onchain account storing configuration like oracle source, fees, funding rates, AMM parameters, and current open interest.
 
 ### Market Indexes
 
-Markets are identified by a **numeric index** starting from 0. For example:
-- Perp market 0 is typically SOL-PERP
-- Spot market 0 is typically the quote asset (dUSDT on devnet, USDT on mainnet-beta)
-- Perp market 1 might be BTC-PERP, and so on
+Markets are identified by a **numeric index** starting from 0. Perp and spot markets are indexed separately, and the mapping from index to symbol is not fixed in the SDK: resolve it from the market accounts rather than hardcoding it.
 
 **Where to find market indexes:**
-- **State account**: Query `velocityClient.getStateAccount()` for `numberOfMarkets` and `numberOfSpotMarkets`, the counts of perp and spot markets. This gives you the index range (`0` to `count - 1`) to enumerate; it does not contain the market configurations themselves
+- **State account**: Query `velocityClient.getStateAccount()` for `numberOfMarkets` and `numberOfSpotMarkets`, the counts of perp and spot markets. This gives the index range (`0` to `count - 1`) to enumerate; it does not contain the market configurations themselves
 - **SDK methods**: Use `velocityClient.getPerpMarketAccounts()` or `velocityClient.getSpotMarketAccounts()` to get all markets and inspect their indexes
-- **Market account directly**: Each market account has a `marketIndex` field you can read
-- **Symbol lookup**: Most bots maintain their own mapping from symbol (e.g., "SOL-PERP") to market index, or query all markets and build the mapping at startup
+- **Market account directly**: Each market account has a `marketIndex` field to read
+- **Symbol lookup**: Most bots maintain their own mapping from symbol to market index, or query all markets and build the mapping at startup
 
-Each market integrates with an **oracle** that provides real-time price data, Pyth (push), Pyth Lazer, `Prelaunch` (for pre-listing markets), or (for the quote asset) `QuoteAsset`. Switchboard is deprecated (its `OracleSource` variants are retained only as `Deprecated*` stubs), and the Pyth *pull* variants (`PythPull`, `Pyth1KPull`, `Pyth1MPull`, `PythStableCoinPull`) are rejected onchain with `InvalidOracle`. Pyth push and Pyth Lazer sources remain fully supported; deployed markets currently use Pyth Lazer. The SDK lets you read oracle prices, check if they're valid/stale, and use them for quoting or risk calculations. Prices are stored in fixed-point precision (1e6 for PRICE_PRECISION).
+Each market names an **oracle** that supplies its price. The supported `OracleSource` values are Pyth push, Pyth Lazer, `Prelaunch` for pre-listing markets, and `QuoteAsset` for the quote asset itself. Which one a given market uses is a per-market setting: read `oracleSource` off the market account.
 
-Perp markets track funding rates, open interest, and AMM liquidity pools. Spot markets track total deposits, borrows, and utilization rates. When you trade, you're interacting with these market accounts, opening positions on perp markets or borrowing/depositing in spot markets. Spot markets on Velocity are collateral/borrow-lend only: spot orders cannot be placed on the DLOB (see [Orders](/developers/velocity-sdk/orders)).
+Two families are gone. Switchboard is deprecated, with its `OracleSource` variants retained only as `Deprecated*` stubs. The Pyth *pull* variants (`PythPull`, `Pyth1KPull`, `Pyth1MPull`, `PythStableCoinPull`) are rejected onchain with `InvalidOracle`. A config ported from elsewhere that names either fails at the market rather than at the client.
+
+The SDK reads oracle prices off the subscription cache, exposes their validity and staleness flags, and returns the value in `PRICE_PRECISION` (1e6) for quoting and risk math.
+
+Perp markets track funding rates, open interest, and AMM liquidity pools. Spot markets track total deposits, borrows, and utilization rates. Trading goes through these market accounts: opening positions on perp markets, or borrowing and depositing in spot markets. Spot markets on Velocity are collateral and borrow-lend only: spot orders cannot be placed on the DLOB (see [Orders](/developers/velocity-sdk/orders)).
 
 ## SDK Usage
 
-These are the most common read-path helpers you'll use to power bots, dashboards, and risk logic.
+These are the most common read-path helpers behind bots, dashboards, and risk logic.
 
 ### Market Accounts
 
@@ -75,7 +78,7 @@ console.log(perpMarkets.length);
 
 ### Reading a Market's Tier
 
-A perp market's `contractTier` and a spot market's `assetTier` are enums. The SDK converts them to an ordinal safety rank, where **lower is safer**, so you can compare and sort them. The numbering follows the on-chain enum declaration order, which is what the program compares against.
+A perp market's `contractTier` and a spot market's `assetTier` are enums. The SDK converts them to an ordinal safety rank, where **lower is safer**, so they can be compared and sorted. The numbering follows the onchain enum declaration order, which is what the program compares against.
 
 | Helper | Input | Returns |
 |---|---|---|
@@ -109,7 +112,9 @@ const ok = perpTierIsAsSafeAs(perpTier, 2, spotTier);
 
 `perpTierIsAsSafeAs` mirrors the program's own comparison. A perp tier passes when it is numerically at or below `otherPerpTier`, **and** it is as safe as the spot reference: any tier beats Unlisted spot (`4`), and against Cross or Isolated spot (`2` or `3`) the perp tier must be C or safer (`0` to `2`).
 
-Tier is not cosmetic, the program derives real limits from it: insurance-fund caps, the oracle confidence band before a price is treated as invalid, the TWAP sanitization band, the oracle/mark divergence gate on PnL settlement, and the auction duration granted per 1% of price difference (100 steps per 1% for tier B or safer, 60 otherwise). If you predict sanitized auction parameters or build a market-safety filter, read the tier with these helpers rather than reimplementing the mapping. See [Contract Tiers](/protocol/risk-and-safety/contract-tiers) for every derived limit.
+Tier is not cosmetic. The program derives real limits from it: insurance-fund caps, the oracle confidence band before a price is treated as invalid, the TWAP sanitization band, the oracle-versus-mark divergence gate on PnL settlement, and the auction duration granted per 1% of price difference (100 steps per 1% for tier B or safer, 60 steps otherwise).
+
+Code that predicts sanitized auction parameters, or builds a market-safety filter, should read the tier with these helpers rather than reimplementing the mapping. See [Contract Tiers](/protocol/risk-and-safety/contract-tiers) for every derived limit.
 
 ### Oracle Price
 
@@ -151,7 +156,7 @@ console.log(oracle.price.toString());
 
 ### Positions and Balances
 
-Get your active subaccount's spot position for a given market index (deposit or borrow state).
+Get the active subaccount's spot position for a given market index (deposit or borrow state).
 
 <SDKDoc>
   <TypeScript name="getSpotPosition" type="method" owner="VelocityClient">
@@ -162,7 +167,7 @@ console.log(spotPosition);
   </TypeScript>
 </SDKDoc>
 
-Get your active subaccount's perp position for a given perp market index, via the subaccount's `User`.
+Get the active subaccount's perp position for a given perp market index, via the subaccount's `User`.
 
 <SDKDoc>
   <TypeScript name="getPerpPosition" type="method" owner="User">

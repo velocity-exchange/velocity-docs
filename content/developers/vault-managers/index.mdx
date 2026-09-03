@@ -1,14 +1,17 @@
 ---
+title: "Vault Managers"
 asIndexPage: true
 ---
 
-# Vault Managers
+Vaults are delegated trading pools where **depositors** provide capital and a **manager** (delegate) trades with it under strict withdrawal rules. Velocity Vaults are **first-party**: the `vaults` program (`programs/vaults/`, program ID `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR`) and its TypeScript client, `@velocity-exchange/vaults-sdk`, live directly in the `velocity-v1` monorepo. This section covers the lifecycle and operations a vault manager needs. Vaults are managed either through the CLI (recommended, `packages/vaults-sdk/cli`) or programmatically with the SDK's `VaultClient`.
 
-Vaults are delegated trading pools where **depositors** provide capital and a **manager** (delegate) trades with it under strict withdrawal rules. Velocity Vaults are **first-party**: the `vaults` program (`programs/vaults/`, program ID `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR`) and its TypeScript client, [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk), live directly in the `velocity-v1` monorepo. This section covers the lifecycle and operations you need as a vault manager. You can manage vaults via the CLI (recommended, `packages/vaults-sdk/cli`) or programmatically with the SDK's `VaultClient`.
+<Callout type="warning" title="Not live yet">
+The vaults program is not deployed, and the vaults SDK is not released at the version documented here. These pages describe both ahead of launch: nothing in this section can be run against a live program today. The published `@velocity-exchange/vaults-sdk` on npm is 0.1.3, from 18 June 2026, while the monorepo is at 0.1.24, so installing from npm gets a client well behind what these pages document. The monorepo itself is published only after the audit.
+</Callout>
 
 ## How it works
 
-Each vault has its own Velocity user account that the manager trades with. The manager has **delegate authority** over this account: they can place and cancel orders and manage positions. Depositors' funds are pooled in this single account; PnL affects all share holders proportionally. Vaults use **share-based accounting**: depositors receive shares when they deposit and redeem them after a cooldown (**redeem period**).
+Each vault has its own Velocity user account that the manager trades with. The manager has **delegate authority** over this account: they can place and cancel orders and manage positions. Depositors' funds are pooled in this single account; P&L affects all share holders proportionally. Vaults use **share-based accounting**: depositors receive shares when they deposit and redeem them after a cooldown (**redeem period**).
 
 ## Roles and lifecycle
 
@@ -17,13 +20,13 @@ Each vault has its own Velocity user account that the manager trades with. The m
 
 Lifecycle: **create → deposit → trade → request withdraw → wait (redeem period) → withdraw**.
 
-<Callout type="warning" title="Get your vault listed">
-Velocity's UI/listing process is not yet finalized as public documentation. Check the [velocity-v1 repo](https://github.com/velocity-exchange/velocity-v1) or ask in the community Discord for the current process.
+<Callout type="warning" title="Getting a vault listed">
+Creating a vault is permissionless, but having it appear in the Velocity interface is not, and the listing process is not documented publicly yet. Ask in the community Discord for the current process.
 </Callout>
 
 ## Parameters and fee constraints
 
-**Parameters you set at initialization** (and how they can change later):
+**Parameters set at initialization** (and how they can change later):
 
 | Parameter | Notes |
 | --------- | ----- |
@@ -91,23 +94,39 @@ A depositor moves onto the vault's current policy only when its gain is realized
 
 ## What to monitor and risks
 
-**Liquidations:** If a depositor has waited the redeem period and their withdrawal would breach the vault's initial margin requirement (e.g. the delegate is over-leveraged), a permissioned liquidator can temporarily assume delegate control and close positions in reduce-only mode (until withdrawal is processed or for up to 1 hour), then restore the original delegate. Monitor **total outstanding withdrawal requests** (stored on the vault account) and keep margin usage in check so depositor withdrawals don't trigger takeovers; the redeem period gives you time to unwind positions.
+**Liquidations:** If a depositor has waited the redeem period and their withdrawal would breach the vault's initial margin requirement (e.g. the delegate is over-leveraged), a permissioned liquidator can temporarily assume delegate control and close positions in reduce-only mode (until withdrawal is processed or for up to 1 hour), then restore the original delegate. Monitor **total outstanding withdrawal requests** (stored on the vault account) and keep margin usage in check so depositor withdrawals don't trigger takeovers; the redeem period leaves time to unwind positions.
 
-**Trust and incentives:** The design is not trustless between depositors and managers. Without reputation or stake, incentives can be misaligned (e.g. moving value via losing trades). Depositors have no on-chain recourse, so they must trust the manager. Operate with clear terms and consider reputation or skin-in-the-game where appropriate.
+**Trust and incentives:** The design is not trustless between depositors and managers. Without reputation or stake, incentives can be misaligned (e.g. moving value via losing trades). Depositors have no onchain recourse, so they must trust the manager. Operate with clear terms and consider reputation or skin-in-the-game where appropriate.
 
 ## In this section
 
 <Cards>
-  <Cards.Card title="Quickstart: create and run a vault" href="/developers/vault-managers/quickstart" />
-  <Cards.Card title="Manager operations" href="/developers/vault-managers/manager-operations" />
-  <Cards.Card title="Trusted vaults" href="/developers/vault-managers/trusted-vaults" />
-  <Cards.Card title="Multisig manager" href="/developers/vault-managers/multisig-ops" />
+  <Card
+    title="Quickstart"
+    href="/developers/vault-managers/quickstart"
+    description="Create a vault from the CLI, set its parameters, onboard depositors, and run the day-to-day commands."
+  />
+  <Card
+    title="Manager operations"
+    href="/developers/vault-managers/manager-operations"
+    description="The rest of the VaultClient surface: profit share, rebases, the queued fee update, borrow and repay, insurance-fund staking."
+  />
+  <Card
+    title="Trusted vaults"
+    href="/developers/vault-managers/trusted-vaults"
+    description="The class that lets a manager move assets out of the vault, what the program checks, and what depositors are trusting."
+  />
+  <Card
+    title="Multisig manager"
+    href="/developers/vault-managers/multisig-ops"
+    description="Running the manager role through Squads or a Ledger, and the three places the CLI does not follow the multisig."
+  />
 </Cards>
 
 Building the depositor side of a vault instead? See [Vault Depositors](/developers/vault-depositors).
 
 ## Related Resources
 
-- [`@velocity-exchange/vaults-sdk`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/vaults-sdk), CLI and TypeScript SDK for vault operations
+- `@velocity-exchange/vaults-sdk`, the CLI and TypeScript client for vault operations. These pages are written against the in-repo version, not the older one on npm
 - [Protocol Concepts](/developers/concepts), accounts and onchain data model
 - [Velocity SDK](/developers/velocity-sdk/setup), core trading and positions SDK

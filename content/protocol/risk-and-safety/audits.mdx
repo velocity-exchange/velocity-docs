@@ -1,53 +1,32 @@
-# Audits
+---
+title: "Audits"
+description: "What the two published reports actually cover, and the status of the review of Velocity's own code."
+---
 
-<Callout type="important">
-Velocity is a fork of [Drift Protocol v2](https://github.com/velocity-exchange/velocity-v1) (fork point `0ae3e3b1d`). The audits below were performed on the pre-fork Drift Protocol v2 codebase that Velocity forked from, not on Velocity's own program deployment or its new/changed functionality (the VLP module, the fee redesign, tiered admin keys, and other features added or changed since the fork). OtterSec's post-fork review of Velocity's own program deployment has delivered a large set of High and Medium findings, and the fixes for them are already in the codebase. The final report has not been published yet. Until it is, the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) are the interim record of what OtterSec found and how each finding was fixed. The final report will be published on this page once it is finalised. See the [migration guide](/developers/migrate-from-drift) for a developer-facing summary of what changed since the fork.
-</Callout>
+The two audit reports published below were performed on the pre-fork [Drift Protocol v2](https://github.com/drift-labs/protocol-v2) codebase, at fork point `0ae3e3b1d`. They do not cover Velocity's own deployment, and they do not cover anything added or changed since the fork. OtterSec has separately reviewed Velocity's own program. **That review is complete and its findings are fixed in the deployed code; the final report is pending publication** and will be linked here as soon as it is. So the accurate reading of this page is neither "audited" nor "unaudited": the inherited base has two published reports, and the post-fork work has been reviewed by a firm whose report is not out yet.
 
-The record below is in two parts: two audits of the pre-fork Drift Protocol v2 codebase, and one review of Velocity's own post-fork program.
+Until that report lands, the [migration guide](/developers/migrate-from-drift) is the public record of what changed after the fork, and its change log lists the audit-fix work alongside the rest. [Risks](/protocol/risk-and-safety/risks) covers what that gap means for an open position, and [Bug bounty](/protocol/risk-and-safety/bug-bounty) is the disclosure route for a finding.
 
-## Pre-fork (Drift Protocol v2)
+## Pre-fork: Drift Protocol v2
 
 ### Trail of Bits
 
-**Overview**
+Drift Protocol engaged Trail of Bits to audit its decentralized exchange and its onchain program. The team conducted the security review from November 7 to December 2, 2022, with full knowledge of the target system, including source access and documentation, and using a mix of automated and manual static and dynamic testing. The focus was flaws that could compromise the confidentiality, integrity or availability of the exchange.
 
-Drift Protocol engaged Trail of Bits (TOB) to audit the security of its decentralized exchange and smart contract.
-
-From November 7 to December 2, 2022, the TOB team conducted a security audit of Drift Protocol’s decentralized exchange. TOB’s testing efforts were focused on the identification of flaws that could result in a compromise of confidentiality, integrity, or availability of Drift’s decentralized exchange and smart contract. The audit was conducted by TOB with full knowledge of the target system, including access to the source code and documentation. TOB utilized a mix of static and dynamic testing of the target system and its codebase, using both automated and manual processes.
-
-**Audit Result**
-
-The audit did not uncover any high-severity flaws that could impact system confidentiality, integrity, or availability. After the initial audit findings, between January 23 and January 25, 2023, Trail of Bits reviewed the fixes and mitigations implemented by Drift Protocol to resolve the issues described in this report.
-
-_A summary of outstanding findings is shown below._
+The audit uncovered no high-severity flaws in any of those three categories. Trail of Bits then reviewed Drift's fixes and mitigations between January 23 and January 25, 2023. A summary of the outstanding findings after that review is below.
 
 ![Audit Result](/assets/UJlUS9AzTG1yI-iSq2EOl_auditresult.png)
 
-A full listing of unresolved or partially resolved findings can be found on page 73 of the TOB Audit Report (Report). The undetermined finding relates to Testing code used in production and is described in further detail on page 77 of the Report.
-
-View the full report [here](https://github.com/velocity-exchange/audits/blob/master/protocol-v2/tob.pdf).
+The full list of unresolved and partially resolved findings is on page 73 of the report. The one finding marked undetermined concerns testing code used in production and is described on page 77. View the full report [here](https://github.com/velocity-exchange/audits/blob/master/protocol-v2/tob.pdf).
 
 ### Neodyme
 
-Scope: protocol-v2 
+Neodyme's review covers the same pre-fork protocol-v2 codebase. It was authored on May 10th 2024 and last updated on June 27th 2024. View the full report [here](https://github.com/velocity-exchange/audits/blob/master/protocol-v2/neodyme.pdf).
 
-Authored: May 10th 2024
-
-Last Updated: June 27th 2024
-
-View the full report [here](https://github.com/velocity-exchange/audits/blob/master/protocol-v2/neodyme.pdf).
-
-## Post-fork (Velocity)
+## Post-fork: Velocity
 
 ### OtterSec
 
-Scope: the Velocity program and the vaults program, as deployed by Velocity after the fork. This is the only review that covers Velocity's own changes, including the VLP module, the fee redesign, the tiered cold/warm/hot/pause admin key model, isolated pools, builder codes, and the signed-message (swift) order path.
+The scope was the Velocity program and the vaults program as they stood after the fork. This is the only review that covers Velocity's own changes, which is to say the AMM, the fee redesign, the tiered admin key model, isolated pools, builder codes, and the signed-message order path. None of that surface appears in either report above.
 
-**Status**
-
-The review delivered a large set of numbered High and Medium findings across the two programs. Every one of them is fixed in the codebase; the fixes are in the deployed program, not pending. The final report has not been published yet.
-
-**Interim record**
-
-Until the report is published, the [migration notes](https://github.com/velocity-exchange/velocity-v1/blob/master/docs/DRIFT-TO-VELOCITY.md) are the public record: their change log lists the audit-fix work alongside the rest of the fork's changes, and individual findings are cited by number in the program source next to the code that resolves them. The report will be linked from this page once it is finalised.
+The review delivered a set of numbered High and Medium findings across the two programs, and every one of them is fixed. The final report is pending publication rather than pending completion, so what is outstanding is the document, not the work. This page will carry the link the moment it is final.

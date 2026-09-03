@@ -1,8 +1,10 @@
-# JIT Maker Bot
+---
+title: "JIT Maker Bot"
+---
 
-This tutorial shows how to run a JIT Maker bot in TypeScript from [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the `velocity-v1` monorepo. Velocity has no Python SDK, so there is no Python equivalent.
+This tutorial shows how to run a JIT Maker bot in TypeScript from `apps/keeper-bots-v2` in the `velocity-v1` monorepo. Velocity has no Python SDK, so there is no Python equivalent.
 
-Market orders go through [Just-In-Time (JIT) Auctions](/protocol/how-it-works/matching-engine) where Makers fight to fill orders before the order is allowed to fill against the Velocity AMM.
+Market orders go through [Just-In-Time (JIT) Auctions](/protocol/trading/how-fills-work) where Makers fight to fill orders before the order is allowed to fill against the Velocity AMM.
 
 ## Running the bot
 
@@ -10,10 +12,14 @@ Market orders go through [Just-In-Time (JIT) Auctions](/protocol/how-it-works/ma
 
 ### 1. Clone the monorepo
 
-The JIT Maker example lives in `apps/keeper-bots-v2` inside the `velocity-v1` monorepo:
+The JIT Maker example lives in `apps/keeper-bots-v2` inside the `velocity-v1` monorepo.
+
+<Callout type="warning">
+The `velocity-v1` monorepo is not public yet. It will be published once the post-fork audit report is final. Until then, ask the team for access to run this bot.
+</Callout>
 
 ```
-git clone https://github.com/velocity-exchange/velocity-v1.git
+git clone <velocity-v1>
 cd velocity-v1
 bun install   # run once, at the repo root, this is a Bun workspace
 cd apps/keeper-bots-v2
@@ -25,14 +31,14 @@ Refer to the [bot wallet setup](/developers/trading-automation#bot-wallet) secti
 
 ### 3. Prepare the config file.
 
-The [`jit-maker-config.yaml`](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/jit-maker-config.yaml) file is a good starting point. You will need to fill in the following values:
+The `jit-maker-config.yaml` file is a good starting point. Fill in the following values:
 
-* `global.endpoint`: set this to your RPC endpoint (see [RPC Providers](/developers/trading-automation#rpc-providers))
-* `global.keeperPrivateKey`: set this to your bot private key (alternatively you can leave it blank and set the `KEEPER_PRIVATE_KEY` environment variable)
-* `botConfigs.jitMaker.aggressivenessBps`: this is how aggressive you want your jit maker to be. If set to 30, the bot will attempt to buy 30 bps above the best bid, and sell 30 bps below the best ask.
+* `global.endpoint`: the RPC endpoint (see [RPC Providers](/developers/trading-automation#rpc-providers))
+* `global.keeperPrivateKey`: the bot private key (alternatively, leave it blank and set the `KEEPER_PRIVATE_KEY` environment variable)
+* `botConfigs.jitMaker.aggressivenessBps`: how aggressively the jit maker quotes. If set to 30, the bot will attempt to buy 30 bps above the best bid, and sell 30 bps below the best ask.
 * `botConfigs.jitMaker.marketType`: use `perp`. Velocity does not support spot order matching (spot markets are collateral-only), so a `spot` config produces jit transactions that always revert with `SpotOrdersNotSupported`.
-* `botConfigs.jitMaker.marketIndexes`: this is the list of markets that we want to jit make, it
-* `botConfigs.jitMaker.subaccounts`: this is the subaccount to use for each marketIndex provided
+* `botConfigs.jitMaker.marketIndexes`: the list of markets to jit make
+* `botConfigs.jitMaker.subaccounts`: the subaccount to use for each `marketIndex` provided
 
 Note: `subaccounts` and `marketIndexes` are a direct mapping, so the below config will use subaccount 0 for marketIndex 0, and subaccount 1 for marketIndex 1:
 
@@ -50,7 +56,7 @@ botConfigs:
 
 ### 4. Run the bot
 
-Now you are ready to run the bot, start it with:
+Start the bot with:
 
 ```
 bun run dev --config-file=jit-maker-config.yaml
@@ -60,11 +66,11 @@ bun run dev --config-file=jit-maker-config.yaml
 
 ### Strategy overview
 
-This bot uses the [`JitterShotgun`](https://github.com/velocity-exchange/velocity-v1/blob/master/packages/jit-proxy/src/jitter/jitterShotgun.ts) strategy and the `jit-proxy` program (vendored in-repo at [`packages/jit-proxy`](https://github.com/velocity-exchange/velocity-v1/tree/master/packages/jit-proxy) as `@velocity-exchange/jit-proxy`, not yet published to npm, build it from source) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism. The bot runs the JIT makers lane below:
+This bot uses the `JitterShotgun` strategy and the `jit-proxy` program (vendored in-repo at `packages/jit-proxy` as `@velocity-exchange/jit-proxy`, not yet published to npm, build it from source) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism. The bot runs the JIT makers lane below:
 
 <JitAuctionSequence />
 
-The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks on-chain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is deployed under Velocity's own program ID (`J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ`), and the client is built against `@velocity-exchange/sdk`/`VelocityClient`.
+The JitterShotgun strategy continuously sends transactions in an attempt to fill orders as soon as it sees one that crosses. The `jit-proxy` program is a permissionless and stateless program that does the last-mile checks onchain to ensure the fill is within our desired bid/ask price and does not exceed min/max positions. It is deployed under Velocity's own program ID (`J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ`), and the client is built against `@velocity-exchange/sdk`/`VelocityClient`.
 
 ### JIT-able orders
 
@@ -72,10 +78,11 @@ Orders with `auctionDuration > 0` may be filled by jit makers at any time. This 
 
 ### Final notes and future optimizations
 
-This is a very simple and naiive strategy, some oppotunities for improvements:
-* allow multiple markets and spot + perp at the same time
-* asymetric bid/ask offsets, allow the different `aggressivenessBps` for bid/ask depending on how you want to skew your quotes
-* an improved `JitterShotgun` strategy that is more cognizant of time and transactions sent
+The shipped strategy quotes a fixed offset on both sides of one market and sends until something fills. Places it leaves on the table:
+
+* **Symmetric offsets.** One `aggressivenessBps` sets both the bid and the ask. Splitting it allows skewing quotes against inventory already held.
+* **One market per subaccount.** The config maps each `marketIndex` to its own subaccount rather than running a shared book across markets.
+* **Untimed sending.** `JitterShotgun` sends without regard to how much of the auction is left or how many transactions it has already spent on the same order.
 
 ## Troubleshooting
 
@@ -90,7 +97,7 @@ No ws data from perpMarket in 30000ms, resubscribing
 No ws data from spotMarket in 30000ms, resubscribing
 ```
 
-This is a notification from the Velocity SDK that it is restarting its websocket connection with the RPC due to no messages being received within the set time. This is generatlly not an error and pretty common for less active markets that don't have much activity.
+This is a notification from the Velocity SDK that it is restarting its websocket connection with the RPC due to no messages being received within the set time. This is generally not an error and pretty common for less active markets that don't have much activity.
 
 ### Running JIT periodic tasks...
 
@@ -99,7 +106,7 @@ This is a notification from the Velocity SDK that it is restarting its websocket
 [2026-02-27T00:04:31.389Z] info: (mkt index: JTO-PERP) base to market make (targetLvg=0.95): 1481.8891930588115 = 3476.551044 / 2.228725 * 0.95
 ```
 
-This is a normal status message that the bot is running its periodic tasks. If you see this message, it means the bot is running as expected.
+This is a normal status message: the bot is running its periodic tasks as expected.
 
 ###  Order does not cross params yet, retrying
 
@@ -114,7 +121,7 @@ SendTransactionError: failed to send transaction: Transaction simulation failed:
     'Program ComputeBudget111111111111111111111111111111 success',
     'Program J1TPRoXCtGuMcWiWFE6RB9eZU8U35PBMETCwNQLCNPhQ invoke [1]',
     'Program log: Instruction: Jit',
-    'Program log: slot = 250667476 auction duration = 32 slots_left = 15',
+    'Program log: slot = 250667476 auction duration = 32 ms_left = 6000',
     'Program log: taker order type Oracle auction start -12100 auction end -200 limit price 0 oracle price offset -193',
     'Program log: taker price 2220700 < worst ask 2234257',
     'Program log: AnchorError occurred. Error Code: AskNotCrossed. Error Number: 6001. Error Message: AskNotCrossed.',
@@ -130,7 +137,7 @@ This is a failed tx message from the RPC provider when a transaction is sent. It
 
 Decoding it further:
 * It is a jit fill attempt on taker `24yfkkuFv849BpCBBo49tV6i6ycfc3aEUY6wWKFsN4SS`'s orderId:`177961`
-* the current slot (that the RPC is simulating the transaction in) is 250667476, the auction lasts for 32 slots, and there are 15 slots left
+* the current slot (that the RPC is simulating the transaction in) is 250667476, the auction is 32 units long, and 6000 ms of it remain. `auction_duration` counts wall-clock 400ms units rather than slots, so 32 units is 12.8 seconds; the program computes `ms_left` itself and logs milliseconds, not a slot count
 * the taker's order is an Oracle order, with an offset of -12100 (-\$0.0121) to -200 (-\$0.0020)
 * the taker's order is a `buy` (since it is comparing with our `ask` price)
-* the taker's price at that slot is 2220700 (\$2.2207), which is below our worst ask 2234257 (\$2.2343), so the jit-proxy program threw and error to prevent us from sending a failing transaction on chain
+* the taker's price at that slot is 2220700 (\$2.2207), which is below our worst ask 2234257 (\$2.2343), so the jit-proxy program threw an error to prevent sending a failing transaction onchain

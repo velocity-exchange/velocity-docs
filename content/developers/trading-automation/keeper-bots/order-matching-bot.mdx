@@ -1,32 +1,29 @@
-# Tutorial: Order Matching Bot
+---
+title: "Tutorial: Order Matching Bot"
+---
 
 ## Introduction
 
 Order Matching Bots (Matching Bots) are responsible for matching two orders that cross or a taker order against the AMM. Specifically, this includes:
 
 -   **Market Orders**: Market Buy and Market Sell
-
 -   **Limit Orders**: Limit Buy and Limit Sell
 
 Matching Bots receive a small compensation for each order that they successfully fill.
 
-See [Keepers & Decentralised Orderbook](/protocol/how-it-works/decentralized-orderbook) for a technical explanation of how the decentralised orderbook (DLOB) and matching incentives work.
+See [Keepers and the decentralized orderbook](/protocol/how-it-works/orderbook-and-keepers) for how the decentralized orderbook (DLOB) is built and how matching incentives work.
 
 Matching Bots are similar to [Tutorial: Order Trigger Bot](/developers/trading-automation/keeper-bots/order-trigger-bot) in that they:
 
--   also maintain a local copy of the Decentralised Limit Orderbook (DLOB);
-
--   do not require the operator to manage collateral; and
-
--   receive a small reward for performing their duties.
+-   also maintain a local copy of the DLOB
+-   do not require the operator to manage collateral
+-   receive a small reward for performing their duties
 
 ## Getting Started
 
-The reference implementation of the Order Matching Bot is available [here](https://github.com/velocity-exchange/velocity-v1/blob/master/apps/keeper-bots-v2/src/bots/filler.ts) in the `velocity-v1` monorepo.
+The reference implementation is `src/bots/filler.ts` in `apps/keeper-bots-v2`, inside the `velocity-v1` monorepo, which is not public yet.
 
-Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Velocity user account.
-
-Start the Matching Bot:
+Set the environment variables and initialize a Velocity user account as described in [Trading Automation](/developers/trading-automation#running-a-reference-bot). Then start the matching bot:
 
 ```shell copy
 bun run dev:filler
@@ -39,7 +36,7 @@ The matching bot runs a continuous loop: fetch fillable orders from the DLOB, fi
 <Steps>
 ### Get nodes from the DLOB that are ready to be filled
 
-Market orders first go through [JIT Auctions](/protocol/how-it-works/matching-engine). Most orders become available to matching bots once the auction period ends, but the AMM can also skip the rest of the auction early when its inventory is low and it has been profitable since the last funding update, so a crossing DLOB maker or the AMM itself can fill an order before the auction ends. The DLOB exposes a `findNodesToFill` method that returns eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
+Market orders first go through [JIT Auctions](/protocol/trading/how-fills-work). Most orders become available to matching bots once the auction period ends, but the AMM can also skip the rest of the auction early when its inventory is low and it has been profitable since the last funding update, so a crossing DLOB maker or the AMM itself can fill an order before the auction ends. The DLOB exposes a `findNodesToFill` method that returns eligible orders, using the current virtual bid/ask and oracle price to determine which orders can be matched.
 
 ```typescript copy
 const market = this.velocityClient.getPerpMarketAccount(marketIndex)!;
@@ -68,7 +65,7 @@ Pass the live `slot` to `getMMOracleDataForPerpMarket`: omitting it falls back t
 
 ### Filter for fillable nodes
 
-Not every node returned is profitable to attempt. Skip orders below the market's minimum step size against the AMM: submitting a fill for these would waste transaction fees and fail on-chain.
+Not every node returned is profitable to attempt. Skip orders below the market's minimum step size against the AMM: submitting a fill for these would waste transaction fees and fail onchain.
 
 ```typescript copy
 if (
@@ -113,4 +110,11 @@ const { txSig } = await this.velocityClient.sendTransaction(tx);
 ```
 
 The program's fill gate rejects a fill that omits the taker's `RevenueShareEscrow` when the order carries a builder code or the taker is referred (`UserStats.referrerStatus`'s `BuilderReferral` bit). Omitting it when required reverts the transaction with `UnableToLoadRevenueShareAccount`. Pass `takerIsReferred` (via `isBuilderReferral`) so the program can find the escrow it needs; `hasBuilderFee` is otherwise derived automatically from the order.
+
+Two conditions bound that gate, and both matter to a filler:
+
+- **It only runs while the `BuilderCodes` bit is set on `State.featureBitFlags`.** An admin sets and clears that bit. While it is clear no fill path loads the escrow and passing one changes nothing; while it is set, omitting a required escrow reverts the fill. Read the bit rather than hardcoding either behavior. See [Builder Codes](/developers/builder-codes#the-rail-sits-behind-a-feature-bit).
+- **It is skipped entirely on liquidation fills.** `liquidatePerpWithFill` never loads an escrow, so a liquidation fill needs no escrow account regardless of the taker's referral status.
+
+The gate exists because the escrow is an optional account. Without it a keeper could omit the escrow and the fill would still succeed, with the referrer's reward and the referee's discount silently resolving to zero rather than failing.
 </Steps>

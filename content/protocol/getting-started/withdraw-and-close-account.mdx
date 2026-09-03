@@ -1,33 +1,34 @@
-# Withdraw and Close Account
+---
+title: "Withdraw and close an account"
+description: "What has to be true for a withdrawal to go through, and the stricter conditions on deleting a subaccount."
+---
 
-### Withdraw collateral
-
-You can withdraw collateral at any time, **including while you hold open positions or borrows**, as long as the withdrawal leaves your account above its **initial margin requirement** (`meets_withdraw_margin_requirement`). Partial withdrawals are fine. You can withdraw up to your available free collateral. To check how much is withdrawable, refer to your [account health](/protocol/trading/margin/account-health) breakdown via any [portfolio](https://velocity.exchange/portfolio) screen.
-
-If you hold a borrow in a market other than the one you're withdrawing from, that borrow's interest must have accrued recently for the withdrawal to go through (`validate_spot_borrow_interest_fresh_for_margin`); a keeper crank refreshes this automatically during normal activity.
+Collateral can be withdrawn at any time, including while positions or borrows are open. The only thing the protocol asks is that the account is still above its **initial margin requirement** once the withdrawal has been taken out (`meets_withdraw_margin_requirement`). Partial withdrawals are fine, and the amount available is the account's free collateral, which any [portfolio](https://velocity.exchange/portfolio) screen shows alongside the rest of the [account health](/protocol/trading/margin/account-health) breakdown.
 
 <img src="/assets/withdraw-and-close-account-3.png" alt="" width="800" height="auto"></img>
 
-Large withdrawals may additionally be throttled by a spot market's rolling withdrawal limits, independent of your own margin. See [Withdrawal & Borrow Limits](/protocol/borrow-lend/withdrawal-limits) and [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails#withdraw-guard-threshold).
+A large withdrawal can additionally be throttled by the spot market's own rolling withdrawal limits, which are about the market's solvency rather than the account's and apply even to an account with no positions at all. See [Withdrawal and borrow limits](/protocol/borrow-lend/withdrawal-limits) for the two bounds, the small-depositor exception, and the withdraw guard threshold that both formulas are built on.
 
-<Callout type="info">
-Fully **deleting** a subaccount is stricter than withdrawing: an account can only be deleted once it holds no open positions, no open borrows, no unsettled PnL, and no remaining balances (see [Recovering Funds](#recovering-funds) below).
-</Callout>
+One more condition applies to an account holding a borrow in a spot market other than the one being withdrawn from: that market's interest has to have been brought up to date recently. The window is an hour on most markets and shorter on a market with a very high borrow rate. Bringing it up to date is permissionless, the interface does it in the same transaction as the withdrawal, and keepers do it continuously during normal activity, so an active market rarely runs into it. If a withdrawal is rejected with `SpotMarketInterestStaleForMargin`, that is this check, and retrying is enough. The exact window and why it exists are in [Troubleshooting](/developers/trading-automation/troubleshooting#spotmarketintereststaleformargin-on-a-withdrawal).
+
+## Deleting a subaccount
+
+Deleting is considerably stricter than withdrawing. `validate_user_deletion` requires the subaccount to be completely empty and completely quiet: no open perpetual positions, no open spot positions, no open orders, no unsettled P&L, no remaining balances, not bankrupt, and not currently being liquidated. A perp position counts as open while it holds unsettled P&L even if its base amount is zero, which is the usual reason a delete button stays greyed out on an account the owner believes is flat.
 
 <Callout type="error">
-If you have referred other users (you are a referrer), your **main account (subaccount 0)** cannot be deleted, because it anchors your referral relationships (`validate_user_deletion`). Your other subaccounts can still be deleted.
+A wallet that has referred other users cannot delete its **main account (subaccount 0)** at all, because that account anchors the referral relationships. Every other subaccount under the same authority can still be deleted normally.
 
-In the other direction, if you were *referred* by someone, deleting your accounts does not free you to be referred again. Your referrer is recorded once during your first `initialize_user` and is never rewritten. See [Referral Links](/protocol/referrals).
+The reverse case does not work the way people expect. For a wallet that was referred, deleting its accounts does not make it referable again: the referrer is recorded once during the first `initialize_user` and is never rewritten. See [Referral links](/protocol/referrals).
 </Callout>
 
-### Idle Account Deletion
+## Idle account deletion
 
-A keeper holding the `UserFlag` hot-admin role periodically triggers the cleanup of idle accounts in the Velocity program. This is done to clear unused space and optimize infrastructure and keeper networks. Authorities of these accounts receive their SOL rent back to their wallets. Accounts eligible for deletion must be inactive for ~3 months and hold under ~$0.05 in notional value (`handle_force_delete_user`, `instructions/keeper.rs`). Account history is still available through the UI, and the user can create a new subaccount at any time.
+A keeper holding the `UserFlag` hot-admin role can force-delete accounts that have gone dormant, which keeps unused onchain storage from accumulating across the program and the keeper networks that index it. Two conditions both have to hold: the account must have been inactive for at least 12 weeks, and its total equity must be at most **\$0.05** (`handle_force_delete_user`). The oracle prices used for that equity check must all be valid, so a stale price cannot make a funded account look like dust.
 
-### Recovering Funds
+The rent goes back to the account's authority, as it does on a normal deletion. Whatever deposits remain, worth under \$0.05 by construction, go to the keeper's token account as the incentive for doing the cleanup. Trading history stays available through the UI, and a new subaccount can be created at any time afterwards.
 
-To reclaim your account rent, delete your Velocity account via the [Accounts Page](https://velocity.exchange/portfolio/accounts).
+## Reclaiming rent
 
-Click the trash button next to your main account. This instantly redeems your account rent, and no further steps are required.
+Rent comes back when the account is deleted, in the same transaction and to the same wallet that paid it. Go to the [accounts page](https://velocity.exchange/portfolio/accounts), click the trash icon next to the account, and sign. There is no waiting period and no second step.
 
 <img src="/assets/withdraw-and-close-account-2.png" alt="" width="800" height="auto"></img>

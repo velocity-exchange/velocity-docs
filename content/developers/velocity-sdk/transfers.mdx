@@ -1,27 +1,23 @@
-# Transfers
+---
+title: "Transfers"
+---
 
-Transfers let you move balances and positions between subaccounts owned by the same authority.
+## How it works
 
-## Why Use Subaccount Transfers?
+Transfers move balances and positions between subaccounts owned by the same authority. Each subaccount is its own cross-margin account: the deposits inside one back only that subaccount's positions. Collateral is never shared across subaccounts under the same wallet, which is why moving it between them takes an explicit instruction rather than happening implicitly when one runs short.
 
-Subaccounts let you isolate risk and organize trading strategies. Common use cases for transfers include:
+That separation is what makes subaccounts useful, and what makes transfers necessary. Integrations typically move value to isolate a market-making book from a directional one, to sweep profits into an account that is not trading, to top up a subaccount that needs more margin, or to fund a new strategy from a limited allocation.
 
-- **Strategy isolation**: Separate market making from directional trading to prevent one strategy's losses from affecting another's collateral
-- **Risk management**: Move profits from an active trading account to a safer holding account
-- **Rebalancing**: Redistribute collateral when one subaccount needs more margin
-- **Bot separation**: Isolate automated trading bots on separate subaccounts while keeping manual trades separate
-- **Experimentation**: Test new strategies on a subaccount with limited capital, then transfer funds if successful
-
-Each subaccount is its own cross-margin account: the deposits inside one subaccount back only that subaccount's positions. Collateral is not shared across subaccounts under the same wallet, which is why moving it between them requires an explicit transfer.
+Transfers between subaccounts under one authority never touch a wallet token account. For that, see [Deposits and Withdrawals](/developers/velocity-sdk/deposits-withdrawals).
 
 ## SDK Usage
 
-### Transfer a Spot Deposit Between Subaccounts
+### Transfer a spot deposit between subaccounts
 
 <SDKDoc>
   <TypeScript name="transferDeposit" type="method" owner="VelocityClient">
 ```js
-const marketIndex = 0; // e.g. USDT
+const marketIndex = 0; // the quote-asset spot market
 const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
 
 // transferDeposit(amount, marketIndex, fromSubAccountId, toSubAccountId)
@@ -30,29 +26,27 @@ await velocityClient.transferDeposit(amount, marketIndex, 0, 1);
   </TypeScript>
 </SDKDoc>
 
-### Transfer a Perp Position Between Subaccounts
+### Transfer a perp position between subaccounts
 
 <SDKDoc>
   <TypeScript name="transferPerpPosition" type="method" owner="VelocityClient">
 ```js
-import { BASE_PRECISION, BN } from "@velocity-exchange/sdk";
-
 // transferPerpPosition(fromSubAccountId, toSubAccountId, marketIndex, amount)
-const amount = new BN(1).mul(BASE_PRECISION); // 1 base unit
+const amount = velocityClient.convertToPerpPrecision(1); // 1 base unit
 await velocityClient.transferPerpPosition(0, 1, 0, amount);
 ```
   </TypeScript>
 </SDKDoc>
 
-### Transfer a Deposit and a Borrow Between Subaccounts
+### Transfer a deposit and a borrow together
 
-`transferPools` moves a deposit position and a borrow position between two of your own subaccounts in a single instruction: useful for rebalancing collateral and debt together instead of issuing two separate transfers.
+`transferPools` moves a deposit position and a borrow position between two subaccounts under the same authority in a single instruction, so collateral and debt rebalance together instead of through two separate transfers that leave the account unbalanced in between.
 
 <SDKDoc>
   <TypeScript name="transferPools" type="method" owner="VelocityClient">
 ```js
-const depositAmount = velocityClient.convertToSpotPrecision(0, 100); // 100 USDT
-const borrowAmount = velocityClient.convertToSpotPrecision(1, 1);    // 1 SOL
+const depositAmount = velocityClient.convertToSpotPrecision(0, 100); // 100 quote-asset units
+const borrowAmount = velocityClient.convertToSpotPrecision(1, 1);    // 1 unit of spot market 1
 
 // transferPools(depositFromMarketIndex, depositToMarketIndex, borrowFromMarketIndex,
 //               borrowToMarketIndex, depositAmount, borrowAmount, fromSubAccountId, toSubAccountId)
@@ -61,47 +55,28 @@ await velocityClient.transferPools(0, 0, 1, 1, depositAmount, borrowAmount, 0, 1
   </TypeScript>
 </SDKDoc>
 
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
-### Transfer Collateral Into or Out of an Isolated Perp Position
+## Delegate transfers
 
-`transferIsolatedPerpPositionDeposit` moves collateral between a subaccount's shared cross-margin pool and one perp market's dedicated isolated-position bucket: it does **not** move funds between subaccounts. Pass a positive `amount` to fund the isolated position from cross margin, or a negative amount to pull collateral back out of the isolated position into cross margin.
-
-<SDKDoc>
-  <TypeScript name="transferIsolatedPerpPositionDeposit" type="method" owner="VelocityClient">
-```js
-const perpMarketIndex = 0;
-const amount = velocityClient.convertToSpotPrecision(0, 100); // deposit 100 USDT into the isolated position
-
-// transferIsolatedPerpPositionDeposit(amount, perpMarketIndex, subAccountId?, txParams?, trySettle?, noBuffer?)
-await velocityClient.transferIsolatedPerpPositionDeposit(amount, perpMarketIndex);
-
-// Negative amount withdraws collateral from the isolated position back to cross margin
-await velocityClient.transferIsolatedPerpPositionDeposit(amount.neg(), perpMarketIndex);
-```
-  </TypeScript>
-</SDKDoc>
-*/}
-
-## Delegate Transfers
-
-By default, a delegate (an address authorized via `updateUserDelegate` to trade on your behalf) **cannot** call `transferDepositByDelegate`: internal transfers by a delegate are opt-in. Before a delegate can move deposits between your subaccounts, the account authority must explicitly enable the `allowDelegateTransfer` flag on their `UserStats` account. The flag applies to every subaccount under that authority.
+A delegate is an address authorized via `updateUserDelegate` to trade on the owner's behalf. Internal transfers by a delegate are gated separately: `transferDepositByDelegate` is rejected unless the owner has opted in. The opt-in is a single bit in `delegatePermissions` on the owner's `UserStats` account, set through `updateUserAllowDelegateTransfer`, and it applies to every subaccount under that authority at once. It does not affect direct deposits, withdrawals, or trading.
 
 <SDKDoc>
   <TypeScript name="updateUserAllowDelegateTransfer" type="method" owner="VelocityClient">
 ```js
-// Authority opts in, once, before any delegate can transfer deposits internally.
+// Run with a VelocityClient whose wallet is the account owner (authority),
+// not the delegate. Once, before any delegate transfer.
 await velocityClient.updateUserAllowDelegateTransfer(true);
 ```
   </TypeScript>
 </SDKDoc>
 
-Once opted in, a delegate can call `transferDepositByDelegate`. It takes the same first four arguments as `transferDeposit`, plus an `equityFloorDelta` (`BN | 'auto'`, defaults to zero) before the trailing `txParams`, don't pass `txParams` positionally in that fifth slot:
+Once opted in, the delegate can call `transferDepositByDelegate`. It takes the same first four arguments as `transferDeposit`, plus an `equityFloorDelta` (`BN | 'auto'`, defaulting to zero) before the trailing `txParams`. Do not pass `txParams` positionally in that fifth slot.
 
 <SDKDoc>
   <TypeScript name="transferDepositByDelegate" type="method" owner="VelocityClient">
 ```js
-// velocityClient here is subscribed with the delegate wallet, not the authority.
-const marketIndex = 0; // e.g. USDT
+// Run with a VelocityClient constructed with `authority: <OWNER_PUBKEY>` and a
+// delegate wallet, per the delegated-accounts note in Setup.
+const marketIndex = 0; // the quote-asset spot market
 const amount = velocityClient.convertToSpotPrecision(marketIndex, 100);
 
 // transferDepositByDelegate(amount, marketIndex, fromSubAccountId, toSubAccountId, equityFloorDelta?, txParams?)
@@ -110,4 +85,4 @@ await velocityClient.transferDepositByDelegate(amount, marketIndex, 0, 1);
   </TypeScript>
 </SDKDoc>
 
-If `allowDelegateTransfer` has not been enabled, the on-chain instruction rejects the transfer regardless of whether the delegate is otherwise authorized to trade on the subaccounts involved.
+If the owner has not opted in, the onchain instruction rejects the transfer regardless of which subaccounts the delegate is otherwise authorized to trade on. A delegate can never withdraw out of the protocol at all: see [Users](/developers/velocity-sdk/users#update-delegate).

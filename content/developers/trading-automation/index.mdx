@@ -1,79 +1,94 @@
 ---
+title: "Trading Automation"
 asIndexPage: true
 ---
 
-# Trading Automation
+This section is for anyone running code that trades or maintains Velocity without a person at the keyboard. Two different jobs live here, and they have different economics.
 
-Trading Automation covers both **trading workflows** (SDK-first integrations) and **bots** (automation and keepers). It's the single home for the trader/bot target group.
+**Keeper bots** perform protocol maintenance: matching crossed orders, marking triggered conditional orders, and liquidating unhealthy accounts. They are paid a per-action reward by the protocol, and most need no capital beyond transaction fees. **Trading bots** run a strategy for their own account, so they carry inventory and can lose money. Velocity ships reference implementations of both in `apps/keeper-bots-v2`.
 
-- **Keeper bots**: protocol maintenance (matching, triggers, liquidations).
-- **Trading bots**: profit-seeking strategies (e.g. JIT market making).
+Automating orders from an existing service, with no persistent process to run, is the SDK path below rather than either bot family.
 
-The reference implementation for keeper bots is [`apps/keeper-bots-v2`](https://github.com/velocity-exchange/velocity-v1/tree/master/apps/keeper-bots-v2) in the velocity-v1 monorepo, and most examples below follow that app's config + entrypoint pattern. There is no separate devnet/mainnet-beta branch split; the app's `ENV` config value selects the cluster.
+<Cards>
+  <Card title="Keeper bots" href="/developers/trading-automation/keeper-bots" description="The four reference bots, one tutorial each, with the strategy and the SDK calls each one makes." />
+  <Card title="Troubleshooting" href="/developers/trading-automation/troubleshooting" description="Error codes and RPC failures a running bot hits, and what each one actually means." />
+  <Card title="Velocity SDK" href="/developers/velocity-sdk" description="The package all of this is built on: client setup, orders, positions, subscriptions." />
+  <Card title="Market makers" href="/developers/market-makers" description="Quoting strategy, JIT auctions, and the DLOB, for providing liquidity rather than maintaining the protocol." />
+</Cards>
+
+## Which bot to run
+
+Rewards vary by bot and by the duty performed. Each tutorial states what its bot is paid, and [Keeper incentives](/protocol/how-it-works/keepers/keeper-incentives) covers how the protocol funds those payments.
+
+| Bot | Kind | Capital required | Tutorial |
+| --- | --- | --- | --- |
+| Order matching | Keeper | Transaction fees only | [Order matching bot](/developers/trading-automation/keeper-bots/order-matching-bot) |
+| Order trigger | Keeper | Transaction fees only | [Order trigger bot](/developers/trading-automation/keeper-bots/order-trigger-bot) |
+| Liquidator | Keeper | Yes, it inherits the positions it liquidates | [Liquidation bot](/developers/trading-automation/keeper-bots/liquidation-bot) |
+| JIT maker | Trading | Yes, it holds inventory | [JIT maker bot](/developers/trading-automation/keeper-bots/jit-maker-bot) |
+
+The app ships more bots than these four have tutorials for, including a spot filler, a floating maker, a P&L settler, an insurance-fund revenue settler, and several cranks. `example.config.yaml` lists every name accepted under `enabledBots`, most of them commented out.
+
+## Trading workflows without a bot
+
+A bot is one way to automate. The other is to call the SDK from an existing service. The order below is the dependency order: each step needs the one above it.
+
+1. **Connect.** Build a `VelocityClient`, point it at an RPC endpoint, and subscribe. See [SDK setup](/developers/velocity-sdk/setup), then [Precision and types](/developers/velocity-sdk/precision-and-types) before anything touches funds, because every amount is a `BN` at a fixed precision.
+2. **Read markets and oracles.** Fetch market metadata and oracle prices, and understand which of them the client caches versus fetches. See [Markets](/developers/velocity-sdk/markets).
+3. **Fund the account.** Deposit collateral and know how withdrawals are gated. See [Deposits and withdrawals](/developers/velocity-sdk/deposits-withdrawals) and [Users](/developers/velocity-sdk/users) for the subaccount model.
+4. **Place and cancel.** Limit, market, oracle, and trigger orders, plus cancels and the cancel-and-place pair. See [Orders](/developers/velocity-sdk/orders).
+5. **Watch risk.** Margin, account health, and unrealized P&L, before and after each action. See [P&L and risk](/developers/velocity-sdk/pnl-risk).
+6. **React to fills.** Subscribe to program events rather than polling for state changes. See [Events](/developers/velocity-sdk/events).
+
+The [Velocity SDK index](/developers/velocity-sdk) carries the same path with an end-to-end code example.
+
+## Running a reference bot
+
+The reference bots live in `apps/keeper-bots-v2`. There is no devnet or mainnet branch split; the `ENV` value selects the cluster at runtime.
+
+<Callout type="warning">
+The `velocity-v1` monorepo is not public yet. It will be published once the post-fork audit report is final. Until then, ask the team for access to run these bots.
+</Callout>
 
 <Steps>
-### Pick your path
+### Prepare a wallet and an RPC endpoint
 
-**Trading workflows (SDK-first)**:
+Every bot needs a funded keypair to sign with, and some need collateral on top. See [Bot wallet](#bot-wallet) to create one and [RPC providers](#rpc-providers) for what the endpoint has to support. Both are worth settling before cloning anything: a free RPC plan without websockets or `getProgramAccounts` will not run a bot at all.
 
-- [Trading workflows](/developers/trading-automation/trading-workflows)
-
-**Keeper bots** (protocol-critical):
-
-| Bot Type      | Difficulty | Capital Required | Link                                                                                           |
-| :------------ | :--------- | :---------------- | :---------------------------------------------------------------------------------------------- |
-| Matching Bot  | Basic      | No                 | [Tutorial: Order Matching Bot](/developers/trading-automation/keeper-bots/order-matching-bot) |
-| Order Trigger | Basic      | No                 | [Tutorial: Order Trigger Bot](/developers/trading-automation/keeper-bots/order-trigger-bot)   |
-| Liquidator    | Advanced   | Yes                | [Tutorial: Liquidation Bot](/developers/trading-automation/keeper-bots/liquidation-bot)       |
-
-**Trading bots** (strategy-driven):
-
-| Bot Type      | Difficulty | Capital Required | Link                                                                                |
-| :------------ | :--------- | :---------------- | -------------------------------------------------------------------------------------- |
-| JIT Maker Bot | Advanced   | Yes                | [Tutorial: JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot) |
-
-Rewards vary by bot and duty performed. See each bot's tutorial page, or [Keeper Incentives](/protocol/how-it-works/keepers/keeper-incentives) for how the protocol compensates keepers.
-
-### Prepare environment + wallet
-
-All bots require a funded wallet for fees, and some require collateral. See [Bot wallet](#bot-wallet) below to set one up, and pick an [RPC provider](#rpc-providers) that supports what bots need.
-
-### Clone the monorepo and install
+### Install the workspace
 
 ```shell copy
-git clone https://github.com/velocity-exchange/velocity-v1.git
+git clone <velocity-v1>
 cd velocity-v1
 bun install   # run once, at the repo root, this is a Bun workspace
 ```
 
-### Configure the bot
+### Configure
 
-From `apps/keeper-bots-v2`, copy the env template and set the required values:
+From `apps/keeper-bots-v2`, copy the env template:
 
 ```shell copy
 cd apps/keeper-bots-v2
 cp .env.example .env
 ```
 
-- `KEEPER_PRIVATE_KEY`: keypair array or path to `keypair.json`
-- `ENDPOINT`: RPC endpoint
-- `ENV`: `devnet` or `mainnet-beta`
+Three values are read from the environment:
 
-The app also uses a YAML config (see `example.config.yaml` in the app directory). At minimum, set:
+- `KEEPER_PRIVATE_KEY`: a keypair array, or a path to `keypair.json`.
+- `ENDPOINT`: the RPC endpoint.
+- `ENV`: `devnet` or `mainnet-beta`.
 
-- `global.endpoint` (RPC URL)
-- `global.keeperPrivateKey` (keypair or env var)
-- `enabledBots` + corresponding `botConfigs`
+The rest is a YAML config; start from `example.config.yaml`. At minimum set `global.endpoint`, `global.keeperPrivateKey` (leave it null to fall back to the env var), the list of bot names under `enabledBots`, and a matching entry under `botConfigs` for each one. Secrets that the config file should not carry, the keeper key and the Pyth Lazer token, are read from the environment only; the YAML loader does no variable interpolation.
 
-### Initialize a Velocity user (if needed)
+### Initialize a Velocity user, if the bot needs one
 
-Bots that place orders or manage positions require a Velocity user account. From `apps/keeper-bots-v2`, you can use the built-in flag:
+Bots that place orders or hold positions need a Velocity user account. The app can create one:
 
 ```shell copy
 bun run dev --init-user
 ```
 
-Or do the same from your own SDK code:
+The equivalent from SDK code:
 
 ```typescript copy
 if (!(await velocityClient.getUser().exists())) {
@@ -83,65 +98,59 @@ if (!(await velocityClient.getUser().exists())) {
 }
 ```
 
-### Deposit collateral (if needed)
+### Deposit collateral, if the bot needs it
 
-Required for liquidators and JIT makers that keep open positions:
+Liquidators and JIT makers hold positions, so they need collateral before they can do anything. The app exits after the deposit lands, so run it once and then start the bot normally:
 
 ```shell copy
-# deposit 10,000 of spot market 0's quote asset (USDT on mainnet-beta; dUSDT on devnet)
+# deposit 10,000 of spot market 0's deposit asset
 bun run dev --force-deposit 10000
 ```
 
-### Run and monitor
-
-Start the process with your config:
+### Run and watch
 
 ```shell copy
 bun run dev --config-file=example.config.yaml
 ```
 
-Monitor logs for resubscribe messages and track your RPC latency. Some deployments also expose Prometheus metrics.
+Individual bots also have their own entrypoint scripts, such as `bun run dev:filler` and `bun run dev:trigger`, which skip the config file and enable one bot.
 
-### Troubleshoot common issues
+Watch the logs for resubscribe messages, which mean the websocket went quiet and the SDK reconnected, and track RPC latency. Bot configs can expose Prometheus metrics on a `metricsPort`.
 
-Common issues (missing USDT ATA, user not initialized, RPC limits) are covered in:
+### Troubleshoot
 
-- [Troubleshooting](/developers/trading-automation/troubleshooting)
+The failures a new bot hits are usually a missing token account, an uninitialized `User`, or an RPC that ran out of credits. All three, plus the program error codes worth recognizing, are in [Troubleshooting](/developers/trading-automation/troubleshooting).
 </Steps>
 
 ## Bot wallet
 
-Bots require a private key in order to sign transactions. The private key is stored in a wallet file and can either be in base58 format, or a numbers array format.
+Bots sign their own transactions, so they need a private key on the machine. Velocity's tooling accepts it either as base58 or as a numbers array.
 
 ### Generate a fresh keypair
 
-1. Download and install the [Solana CLI](https://docs.solanalabs.com/cli/install).
-2. Create a new keypair file named `new_keypair.json`:
+1. Install the [Solana CLI](https://docs.solanalabs.com/cli/install).
+2. Create the keypair file:
 
    ```shell copy
    solana-keygen new -o new_keypair.json
    ```
 
-   This will contain a new keypair in JSON format.
+   The file holds the keypair as a JSON numbers array, the format `KEEPER_PRIVATE_KEY` expects for an inline key.
 
-### Export a keypair from a browser wallet
-
-Alternatively you may export the private key from an existing browser wallet such as [Phantom](/protocol/getting-started/wallet-setup/phantom-wallet).
+Alternatively, export the private key from a browser wallet such as [Phantom](/protocol/getting-started/wallet-setup).
 
 ### Key security
 
-Treat a bot's private key like any other production secret:
+Treat a bot's key as a production secret:
 
-- Never commit a keypair file or raw private key to version control.
-- Prefer loading the key from an environment variable or a secret manager rather than a plaintext file on disk.
-- Use a dedicated hot wallet for the bot, funded only with what it needs for fees (and collateral, if required), rather than reusing a wallet that holds other funds.
+- Never commit a keypair file or a raw private key to version control.
+- Load the key from an environment variable or a secret manager rather than a plaintext file on disk.
+- Use a dedicated hot wallet funded only with what the bot needs for fees, and collateral if it holds positions. Do not reuse a wallet that holds anything else.
 
 ## RPC providers
 
-Solana utilizes a network of [RPC Nodes](https://solana.com/rpc) to serve data to users. These nodes require a lot of resources to run and therefore can be quite expensive to operate.
+Solana serves account data through a network of [RPC nodes](https://solana.com/rpc). Running one is expensive, so most bots rent access.
 
-Some of the commonly used free RPC providers are insufficient for operating Velocity bots because we require some functions that are commonly disabled (i.e. websockets and `getProgramAccounts`). [Helius](https://www.helius.dev/) has a generous free plan that is sufficient for getting started. But consider upgrading to a paid plan as you get more serious with operating bots on Velocity or Solana in general.
+Several free tiers will not work here, because they disable exactly what a bot depends on: websocket subscriptions and `getProgramAccounts`. The JIT maker, for example, finds fillable orders with `programSubscribe` (see [JIT maker bot](/developers/trading-automation/keeper-bots/jit-maker-bot)), and the SDK's account subscriber holds open websocket subscriptions for perp markets, spot markets, users, and user stats. Confirm a provider supports both before committing to a plan.
 
-Bots also rely on `programSubscribe` and websocket subscriptions to receive timely account updates (for example, the JIT maker bot uses `programSubscribe` to find fillable orders, see [JIT Maker Bot](/developers/trading-automation/keeper-bots/jit-maker-bot)); confirm your provider supports these before committing to a plan.
-
-A more complete list of providers is available [here](https://solana.com/rpc).
+[Helius](https://www.helius.dev/) has a free plan sufficient to get started, and the bot config has Helius-specific priority-fee support (`priorityFeeMethod: helius`). Expect to move to a paid plan as throughput grows. A fuller list of providers is [here](https://solana.com/rpc).

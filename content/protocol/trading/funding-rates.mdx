@@ -1,97 +1,87 @@
-# Funding Rates
+---
+title: "Funding rates"
+description: "Why the contract tracks the oracle, and the two corrections that make it work."
+---
 
-Perpetuals futures have no expiry date, final settlement, or delivery. As such, funding rate payments are used as the incentive mechanism to bring the perpetual futures' mark price in line with the oracle price.
+A perpetual has no expiry, so nothing forces its price to converge on the underlying. Funding does that job instead: once an hour, whichever side is holding the contract away from the oracle pays the other side, in proportion to position size. If the contract trades above the oracle, longs pay shorts, which makes being long more expensive and being short more attractive until the gap closes.
 
-(For instance, a user with a long position in a market whose mark price is, on average, below the oracle price will receive a payoff proportional to their position size).
+Numbers below are illustrative, with an oracle TWAP of **\$100** and illustrative market settings.
 
-| Field               | Description                                     |
-| ------------------- | ----------------------------------------------- |
-| Funding Rate % Calc | `(1/24) × (market_twap − oracle_twap) / oracle_twap`, plus the floor and dead-zone described below |
-| TWAP Parameters     | EMA with span = 1 hour                          |
-| Mark TWAP Calc      | `(bid TWAP + ask TWAP) / 2`                       |
-| Frequency           | End of Hour\* (9:00 AM, 10:00 AM, ...)          |
+## Paying the full gap
 
-## Funding Floor and Dead Zone
+Start from the plainest rule: charge the whole divergence, as a fraction of the oracle, divided by 24 to turn a daily rate into an hourly one.
 
-Velocity always adds a baseline offset to the funding premium so funding never fully flattens to zero: the floor is **10.95% annualized** (`FUNDING_RATE_OFFSET_DENOMINATOR = 3333`). The offset is `oracle_twap / 3333`, a price-spread-sized amount added in before the `/24` hourly conversion, so `365 / 3333 ≈ 10.95%` when compounded over a year.
+```
+hourly_rate = (1/24) * (market_twap - oracle_twap) / oracle_twap
+```
 
-On top of the floor, each market has a **continuous dead zone** around zero divergence, rather than the flat per-tier clamp used elsewhere:
+Both inputs are time-weighted averages rather than spot prices, so a single print cannot move the payment; the market TWAP is the midpoint of the bid and ask TWAPs. That rule converges, and it breaks in two specific ways.
 
-- **`fundingClampThreshold`** (default 5 bps of the oracle TWAP): while `|mark_twap − oracle_twap|` stays inside this band, it's treated as noise and the premium collapses to the floor-only value.
-- **`fundingRampSlope`** (default 1.0×): once the spread exceeds the threshold, the excess is shrunk by the threshold and then scaled by the ramp slope, so the premium leaves the dead zone smoothly instead of jumping by the full threshold at the boundary.
+## What breaks
 
-Both are per-market and admin-configurable (`update_perp_market_funding_dead_zone`).
+**Small gaps are not information.** A few bps of divergence between a book's midpoint and an oracle is tick size, spread, and sampling, not a premium anybody will pay to be long. Charging on it bills every open position, hour after hour, for noise.
 
-### Example
+**A market sitting exactly on the oracle pays nothing.** At zero divergence the rule pays zero in both directions, so nothing rewards the side keeping the contract pinned there.
 
-Take `oracle_twap = $100` with the default settings (`fundingClampThreshold = 5 bps`, `fundingRampSlope = 1.0×`, floor = 10.95% annualized ≈ 0.00125% per hour).
+The two problems pull in opposite directions. The dead zone answers the first; the offset floor answers the second.
 
-**Inside the dead zone:** `market_twap = $100.03` → divergence is `$0.03`, inside the `$0.05` band (5 bps of $100). The premium collapses to the floor-only value, so the hourly funding rate is just **0.00125%**, the same as if `market_twap` matched `oracle_twap` exactly.
+## The dead zone
 
-**Outside the dead zone:** `market_twap = $100.20` → divergence is `$0.20`, past the `$0.05` band by `$0.15`.
+Each market carries a band around zero divergence inside which the premium is treated as noise and dropped, leaving only the floor. The band is an admin-set per-market value in basis points of the oracle TWAP; at a band of **5 bps** and a \$100 oracle TWAP that is plus or minus \$0.05.
 
-1. Shrink the excess: `$0.20 − $0.05 = $0.15`
-2. Scale by the ramp slope (1.0×): `$0.15 × 1.0 = $0.15`
-3. Add back the floor: `$0.15 + $0.03 = $0.18`
-4. Apply `(1/24) / oracle_twap`: `$0.18 / $100 / 24 ≈ 0.0075%` hourly funding rate
+Past the band the excess is shrunk toward zero by the threshold rather than measured from it, then scaled by a per-market ramp slope, so the premium leaves the band continuously rather than stepping. Both values are admin-set per market, so read them off the live market account.
 
-Without the dead zone, the raw formula would have given `(1/24) × $0.20 / $100 ≈ 0.00833%` hourly. The dead zone shaves off the first 5 bps of divergence (treating it as noise) before the floor is added back on top, so the effective rate is smaller than the naive calculation but still tracks the direction and size of the price gap.
+## The offset floor
 
-<Callout type="important">
-Note: this dead zone can also be delayed at large oracle divergences (see [Oracles](/protocol/how-it-works/oracles)). Individual Market TWAP updates utilize the side of the book for trade executions. Bid and Ask TWAPs in the market are calculated and/or estimated on every trade, and can also be updated by the permissionless `update_perp_bid_ask_twap`, `update_amms`, and `update_perp_market_amm_oracle_twap` cranks. The crank path caps how much weight a single sample can carry after a gap, so one crank after a long silence cannot on its own set the funding input.
-</Callout>
+Underneath the premium, funding always carries a baseline offset, so a market sitting exactly on its oracle still pays something in a fixed direction. The offset is the oracle TWAP divided by 3333, added to the premium before the hourly conversion, which works out to **10.95% annualized**.
 
-## Funding Bias Spread Widening
+Because it is added before that division it is a price-sized amount rather than a rate, which is what lets it compose with the dead zone: inside the band the premium collapses to the floor alone, and outside it the ramped excess sits on top.
 
-While the AMM is on the paying side of funding (i.e. its inventory means it owes the offset-floor funding rather than receiving it), each market can widen the AMM's quote on that paying side via `AMM.fundingBiasSensitivity` (`s`, admin-set via `update_perp_market_funding_bias_sensitivity`), up to `1 + s/100` at the funding offset floor. This makes it costlier to trade further into the side the AMM is already paying funding on. Default is `0` (off); enabling it doesn't change quotes until sensitivity is set above zero.
+## Worked examples, inside and outside the band
 
-<Callout type="warning">
-\*If no market trades and/or funding update calls occur within the first ~20 minutes of the hour, the next funding update will be delayed an additional hour.
-</Callout>
+Take an oracle TWAP of \$100 with illustrative settings: a 5 bps dead zone, a 1.0x ramp slope, and a floor of 10.95% annualized, about 0.00125% per hour.
 
-### Unrealised -> Realised Funding
+**Inside the band**, at a market TWAP of \$100.03, the premium is dropped and the hourly rate is **0.00125%**, the same as if the market matched the oracle to the cent.
 
-- Funding rates are updated _lazily_ every hour.
+**Outside the band**, at a market TWAP of \$100.20, the divergence is \$0.20, which is \$0.15 past the band.
 
-- Any time a user opens or closes a position, the exchange tries to update the funding rate.
+1. Shrink the excess by the threshold: `$0.20 - $0.05 = $0.15`
+2. Scale by the ramp slope: `$0.15 * 1.0 = $0.15`
+3. Add the floor: `$0.15 + $0.03 = $0.18`
+4. Convert to an hourly rate: `$0.18 / $100 / 24 = 0.0075%`
 
-- The funding rate will still be updated if enough time has passed and no position has been opened or closed.
+Charging the full gap would have cost **0.00833%** an hour. The dead zone shaves the first 5 bps off as noise before the floor is added back.
 
-- The update will reflect the premium or discount between the AMM’s mark price and the oracle’s price TWAP over the previous hour.
+## Boundaries
 
-- The cumulative funding rate is checked against user positions in case the off-chain funding rate bot does not trigger on the hour. This will show up as "Unrealised P&L" until your next user action within the market (such as a trade, deposit, withdraw etc.), see also [P&L](/protocol/trading/profit-loss).
+**The premium is capped** at 3% of the oracle TWAP for contract tier A or B, 5% for tier C, and 10% below that, which stops a dislocated hour from producing an unbounded payment. See [Contract tiers](/protocol/risk-and-safety/contract-tiers).
 
-- Funding payments may not pay out for markets that trade infrequently.
+**Funding is lazy, and it is hourly.** The rate updates when someone opens or closes a position, and independently when enough time has passed, so it does not depend on a bot firing precisely on the hour. An update later than **20 minutes** past the hour pushes the next one into the following period.
 
-### Capped Symmetric Funding
+**A quiet market may not pay at all.** Funding accrues against a market's cumulative rates, and a market that neither trades nor gets cranked does not advance them. Between updates, what an account owes or is owed shows as unrealized P&L and settles at its next action in that market: a trade, a deposit, a withdrawal, or an explicit settle. See [Profit and loss](/protocol/trading/profit-loss).
 
-Velocity aims to provide a symmetric funding rate to both sides of the market. When there is a long-short imbalance within the AMM, the AMM's own retained equity (`total_fee_minus_distributions`, its accumulated fees and trading PnL net of what it's already paid out) covers the cost delta between longs and shorts.
+**Extreme oracle divergence delays the whole thing.** The market TWAP updates on trades and through permissionless cranks that fold in the oracle's confidence interval, and a single sample after a long silence is weight-capped, so one crank cannot on its own set the funding input. See [Oracles](/protocol/how-it-works/oracles).
 
-Each funding period, the AMM can spend at most **1/3 of its retained equity** paying asymmetric funding. If the imbalance would cost more than that, the payout side's funding rate is capped so the AMM's retained equity never goes negative: the receipts for funding will be capped to the available amount. This budget lives entirely inside the AMM's own books; the Insurance Fund is never drawn on to cover a funding shortfall.
+## When funding cannot be symmetric
 
-As the AMM collects more fees over time, its retained equity (and therefore its funding budget) grows, so any existing predicted capped rate should move closer to being balanced.
+Velocity aims to charge longs and shorts the same rate, which is only possible when the two sides are balanced. The AMM is the counterparty to whatever imbalance is left over, so an imbalanced market means the AMM owes more than it is owed, or the reverse.
 
-### Oracle Resilience
+It covers that difference out of its own retained equity: accumulated fees and trading P&L net of what it has already paid out. Each funding period it can spend at most **one third** of that equity on asymmetric funding. Beyond that the paying side's rate is capped so the AMM's equity cannot go negative, and receipts on the other side are capped to what is available. The insurance fund is never drawn on to cover a funding shortfall.
 
-Velocity's on-chain calculation of a market's oracle TWAP is updated on trades and by the permissionless TWAP/AMM cranks (`update_perp_bid_ask_twap`, `update_amms`, `update_perp_market_amm_oracle_twap`), which incorporate the oracle's confidence interval and a few interpolations to provide the most accurate and resilient value.
+## Widening the quote on the paying side
 
-Read more about protective checks in [Oracles](/protocol/how-it-works/oracles).
+While the AMM is on the paying side of funding, a market can widen the AMM's quote on that side, making it costlier to trade further into it. The sensitivity is a per-market admin value: at zero the widening is inert, and above zero the paying side's quote widens in proportion. Read the live market account for it.
 
-### APR calculation
+## Reference
 
-Funding rates can be showcased in annual terms for easier comparison.
+| Field | Value |
+| --- | --- |
+| Premium | `(1/24) * (market_twap - oracle_twap) / oracle_twap`, with the floor and dead zone applied first |
+| Floor | oracle TWAP / 3333, giving 10.95% annualized |
+| Dead zone | A per-market band around zero divergence, in bps of the oracle TWAP |
+| Ramp slope | A per-market multiplier on the part of the spread that clears the dead zone |
+| Premium cap | 3% of the oracle TWAP for tier A and B, 5% for tier C, 10% below |
+| TWAP | EMA, one hour span; market TWAP is the midpoint of the bid and ask TWAPs |
+| Period | One hour, rounded back onto the hour when the last update was inside the first 20 minutes |
 
-- **APR (annual percentage rate)** is calculated
-  ```
-  rate x 24 x 365.25
-  ```
-
-- **APY** is calculated
-  ```
-  (1 + rate) ^ (24 x 365.25) - 1
-  ```
-
-<Callout type="important">
-One can approximately track **APY** by allocating funding receipts back into the position (excluding fees/rebates).
-</Callout>
-
+Funding is often quoted annualized for comparison. APR is `rate * 24 * 365.25`; APY is `(1 + rate) ^ (24 * 365.25) - 1`, which approximately tracks allocating funding receipts back into the position, before fees and rebates.

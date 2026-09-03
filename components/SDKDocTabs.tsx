@@ -1,6 +1,8 @@
 "use client";
 
-import { Callout, Tabs } from "nextra/components";
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Accordions, Accordion } from "fumadocs-ui/components/accordion";
 
 export type SDKTab = {
   label: string;
@@ -30,50 +32,49 @@ export function SDKDocTabs({ tabs }: SDKDocTabsProps) {
   }
 
   return (
-    <Tabs items={tabs.map((tab) => tab.label)} storageKey="sdk-tabs">
+    <Tabs items={tabs.map((tab) => tab.label)}>
       {tabs.map((tab) => (
-        <Tabs.Tab key={tab.label} title={tab.label}>
+        <Tab key={tab.label} value={tab.label}>
           {tab.example ? <div>{tab.example.content}</div> : null}
           {tab.heading || tab.description || tab.content ? (
-            <details className="x:not-first:mt-4 x:rounded x:border x:border-gray-200 x:bg-white x:p-2 x:shadow-sm x:dark:border-neutral-800 x:dark:bg-neutral-900 x:overflow-hidden">
-              {tab.heading ? (
-                <summary className="x:focus-visible:nextra-focus x:cursor-pointer x:transition-colors x:hover:bg-gray-100 x:dark:hover:bg-neutral-800 x:select-none x:rounded x:[&::-webkit-details-marker]:hidden x:flex x:items-center">
-                  <svg
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    fill="none"
-                    stroke-width="3"
-                    height="1em"
-                    className="x:motion-reduce:transition-none x:ms-2 x:me-1 x:shrink-0 x:rtl:rotate-180 x:[[data-expanded]&gt;summary:first-child&gt;&amp;]:rotate-90 x:transition"
-                  >
-                    <path
-                      d="M9 5l7 7-7 7"
-                      strokeLinecap="round"
-                      stroke-linejoin="round"
-                    ></path>
-                  </svg>
-                  <div className="x:flex x:flex-wrap x:items-center x:gap-3">
-                    <code className="nextra-code x:max-md:break-all">
-                      {tab.heading}
-                    </code>
-                    {tab.link ? (
-                      <a
-                        href={tab.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Reference ↗
-                      </a>
-                    ) : null}
-                  </div>
-                </summary>
-              ) : null}
-              {tab.description ? <i>{tab.description}</i> : null}
-              {tab.content ??
-                (tab.placeholder ? <Placeholder label={tab.label} /> : null)}
-            </details>
+            // A hand-rolled <details>/<summary> used to live here, copied from
+            // fumadocs' own rendered accordion markup with the arrow-variant
+            // class HTML-escaped in transit ("&gt;"/"&amp;" instead of ">"/"&"),
+            // so it never matched and the rotation never applied. On top of
+            // that, nothing suppressed the browser's native <summary> marker,
+            // so readers saw that plus the dead custom arrow stacked on top of
+            // each other. Real Accordion component, one icon, one owner.
+            <Accordions type="single">
+              <Accordion
+                value={tab.heading ?? tab.label}
+                title={
+                  tab.heading ? (
+                    <span className="flex flex-1 items-center justify-between gap-2">
+                      <code className="fd-code">{tab.heading}</code>
+                      {tab.link ? (
+                        <a
+                          href={tab.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-fd-muted-foreground text-xs font-normal hover:text-fd-foreground"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Reference ↗
+                        </a>
+                      ) : null}
+                    </span>
+                  ) : (
+                    tab.label
+                  )
+                }
+              >
+                {tab.description ? <i>{tab.description}</i> : null}
+                {tab.content ??
+                  (tab.placeholder ? <Placeholder label={tab.label} /> : null)}
+              </Accordion>
+            </Accordions>
           ) : null}
-        </Tabs.Tab>
+        </Tab>
       ))}
     </Tabs>
   );

@@ -1,0 +1,48 @@
+---
+title: "Where the money sits"
+---
+
+Velocity holds user funds in vaults and moves value between several internal pools. The pools are referenced across the fee, P&L, liquidation and bankruptcy pages. This is the map.
+
+## Why there are pools at all
+
+One balance per user fails on the first winning trade. A perpetual is a two-sided contract: one account's gain is another's loss. Crediting a gain the instant the position closed would pay the winner before the protocol had collected from the other side, and a run of unmatched winners would drain the vault holding everyone else's deposits.
+
+So gains and losses are not moved directly between users. They pass through pools, and a claim is only paid out of value that has actually been collected. The pools are the accounting layer that makes "the account won" and "the account has been paid" two separate events.
+
+## The vaults, which hold real tokens
+
+**Spot market vault.** One per spot market. Every deposit lives here, and it is the only place user tokens actually sit. Collateral for perpetual positions, balances being lent out, and balances being borrowed are all the same tokens in this vault, tracked by balance rather than segregated.
+
+**Insurance fund vault.** Held separately from the collateral vault. It is the backstop that absorbs bad debt before it is socialized across other users, so it is not drawable by ordinary account activity. See [Insurance Fund](/protocol/insurance-fund).
+
+## The pools, which are accounting balances
+
+These do not hold separate tokens. They are claims against the vaults above, tracked per market.
+
+| Pool | Lives on | Holds |
+| --- | --- | --- |
+| P&L pool | Each perp market | The market's realized P&L, waiting to be settled to users |
+| AMM fee pool | Each perp market's AMM | The AMM's share of trading fees, its own working capital |
+| Protocol fee pool | Each perp and spot market | The protocol's share of fees |
+| Revenue pool | Each spot market | The insurance fund's share of lending interest |
+
+## How value moves
+
+**A trade fee is split at the moment of the fill.** The taker pays, a maker rebate is carved out first if one applies, and the remainder is divided between the AMM's fee pool, the insurance fund, and the protocol's fee pool. The AMM and insurance shares are admin-set per market, and the protocol receives whatever they leave. See [Fee mechanics](/protocol/trading/trading-fees).
+
+**Lending interest is carved on accrual.** Borrowers pay interest, lenders receive most of it, and a configured fraction is carved off into the spot market's revenue pool and toward the insurance fund. See [Borrow and lend APY](/protocol/borrow-lend).
+
+**Realized P&L passes through the perp market's P&L pool.** A closing trade writes a realized gain or loss into that pool, and settlement then moves a user's share out of it and into their balance. A gain can only be settled against value the pool has actually collected, which is why settlement is a separate step from closing.
+
+**The AMM's fee pool retains a buffer.** The sweep that moves accrued fees out leaves a target amount behind, so the AMM keeps working capital rather than being drained to zero after every sweep.
+
+**Bad debt draws in a fixed order.** When a position is bankrupt, a defined sequence of sources absorbs the loss, and only what none of them can cover is socialized across remaining holders. See [Bankruptcy resolution](/protocol/risk-and-safety/liquidation-and-bankruptcy) for the order, which differs between perp and spot.
+
+## What this means in practice
+
+**As a trader.** Realized profit sits in the market's P&L pool until it is settled. That is why a closed, profitable position does not immediately increase a withdrawable balance.
+
+**As a lender.** A deposit sits in the spot market vault and is being borrowed against. That is where the yield comes from, and it is also why a market throttles withdrawals in a rolling window: the tokens are out on loan. See [Withdrawal limits](/protocol/borrow-lend/withdrawal-limits).
+
+**As someone assessing risk.** The insurance fund vault is the only pool held apart from user collateral, and it stands between a bad debt and everyone else's balance. Its size and its per-tier caps are the numbers that matter. See [Insurance Fund](/protocol/insurance-fund).

@@ -1,0 +1,107 @@
+---
+title: "AMM Spread and Quoting"
+description: "How the vAMM composes its bid and ask spread from eight terms, how the reference price offset moves the midpoint, and how it sizes its participation in a JIT auction."
+---
+
+This page is the implementation of the quote. [How the AMM works](/protocol/how-it-works/velocity-amm) describes the same machine for a trader: it quotes around a peg that tracks the oracle, widens with volatility, with how far its own price has drifted from the oracle, and with how much inventory it is carrying, and refuses to quote rather than quote a price it cannot defend once its cushion is gone. Everything below is what those sentences compile down to.
+
+This page is for modelling the AMM's quote, working out whether it will out-price a maker into a fill, or debugging a spread that is wider than expected. Every value named here is readable off the market account, so prefer reading the live value to reproducing the arithmetic.
+
+## The two sides do not compose the same way
+
+The **loaded side** is the one whose fills would grow the AMM's net position. The other side is the one that would flatten it.
+
+```
+loaded side:  min(w_max, (max(w_0/2, v, d) * sigma(q) * lambda(q) + r) * beta(f))
+other side:   max(w_0/2, v) + r/2
+```
+
+The asymmetry is the whole design. Inventory steering, leverage scaling, and funding bias apply only where a fill makes the AMM's position worse. The flattening side sees the floors and half the revenue retreat, and nothing else.
+
+## The terms
+
+| Term | Name | What it prices |
+| --- | --- | --- |
+| `w_0` | base spread | The admin's per-market floor |
+| `v` | vol spread | How uncertain the price is right now |
+| `d` | oracle retreat | A gap between the AMM's own price and the oracle |
+| `sigma(q)` | inventory scale | How much of its room its position has already used |
+| `lambda(q)` | leverage scale | How large its exposure is against its own capital |
+| `r` | revenue retreat | Whether it has been losing money since the last funding update |
+| `beta(f)` | funding bias | Whether it is currently paying funding |
+| `w_max` | dynamic ceiling | The most it is allowed to charge in total |
+
+**`w_0`, base spread.** A per-market constant, applied as `w_0/2` per side, and the floor the other terms build on. It is also the entire answer when `curve_update_intensity` is zero: the whole pipeline is skipped and both sides get exactly half the base spread.
+
+**`v`, vol spread.** Statistical padding from the oracle's own confidence interval and the standard deviations of the mark and oracle prices, scaled per side by that side's share of 24-hour volume. Confidence below 25 bps of price, the `SPREAD_CONF_FULL_WEIGHT_THRESHOLD`, is discounted on a ramp rather than counted in full, so a normally tight oracle does not widen quotes for noise.
+
+**`d`, oracle retreat.** When the AMM's own reserve price, meaning the price implied by its reserves alone before any spread is applied, has drifted from the oracle, the side facing that gap is floored at the size of the gap plus `v`. This is the term that stops the AMM being the cheapest place to buy something it is mispricing. It is clamped to 100% of price before it reaches the rest of the pipeline.
+
+**`sigma(q)`, inventory scale.** A multiplier on the loaded side only, measured as the AMM's position over the open liquidity on the thinner side. It is 1 at flat inventory and rises to at most the greater of 10x and the ratio of the ceiling to that side's current spread. At the point where the position has consumed that liquidity entirely, the loaded side reaches the ceiling exactly, which is how the spread and the reserve fences stay consistent with each other.
+
+**`lambda(q)`, leverage scale.** Also loaded side only, comparing the AMM's local exposure against `total_fee_minus_distributions`, its retained cushion, and capped at 10x. Its boundary is the important one: when that cushion is at or below zero the AMM does not compute a ratio at all, and **both** sides are multiplied by ten instead. An AMM with no cushion stops steering and starts refusing on price.
+
+**`r`, revenue retreat.** An additive widening, in effect only while the market's revenue since the last funding update is below `DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT`, which is negative \$25. It ramps from zero at that threshold up to a cap of one tenth of the ceiling, and the loaded side takes the full amount while the other side takes half.
+
+**`beta(f)`, funding bias.** A bounded multiplier on the loaded side, active only while the AMM is the one paying funding, driven by the 24-hour average funding rate and saturating at `FUNDING_RATE_OFFSET_PERCENTAGE`, the 10.95% annualized offset floor. It is 1 whenever the AMM receives funding. Because it depends on the funding rate rather than on position size, it deters the first adverse trades at low inventory, where `sigma(q)` is still near 1, and then hands over to `sigma(q)` as the position grows.
+
+**`w_max`, dynamic ceiling.** The greatest of the admin's `max_spread`, the current oracle divergence, and a volatility floor built from confidence and standard deviation, capped at 100%. The admin value is a floor of the ceiling, not a maximum: divergence and volatility can raise it above what the admin configured. Those are the conditions under which a fixed cap would force the AMM to quote a price it cannot defend.
+
+<Callout type="warn">
+Do not treat `max_spread` as the widest quote a market can show. It is the lower bound of the ceiling, not the ceiling. A market with a divergent oracle or high measured volatility will quote wider than its configured `max_spread` by design.
+</Callout>
+
+### What happens at the cap
+
+When the total exceeds `w_max` the components are cut in priority order rather than proportionally: the known oracle gap has first claim, then the base and volatility floors, then the directional inventory steering, and the generic padding yields first. That ordering exists so a burst of statistical width cannot squeeze out the part of the quote that is doing the steering.
+
+After the cap, two things still move the result. `amm_spread_adjustment`, a percentage knob set by the crank, scales both finished sides, and then the reference price offset shifts them.
+
+## The reference price offset
+
+Everything above widens the band. The offset moves it. It shifts the bid and the ask by the same amount in the same direction, so the distance between them is unchanged and only the midpoint travels.
+
+It exists to handle a persistent premium. If the market has been trading above the oracle for hours and the AMM is sitting long, widening its ask does not help, because the ask is still centred on a price the market has left behind. Moving both quotes up puts its ask where buyers actually are.
+
+**When it is active.** The offset is held at zero unless `curve_update_intensity` is above 100. Between 101 and 199 its magnitude is bounded by the lesser of `curve_update_intensity` minus 100 in basis points and half of `max_spread`. At 200 or above the bound becomes the greater of half of `max_spread` and 100 bps, so at that setting 100 bps is a floor on the bound rather than a ceiling.
+
+**What it measures.** Three estimates of the market's premium over the oracle: the gap between the 5-minute mark TWAP and the 5-minute oracle TWAP, the same gap over the slower TWAP window, and the 24-hour average funding rate converted into a price premium. Each is clamped to the bound and the three are averaged, so one runaway window cannot carry the result alone.
+
+**When it applies.** The averaged premium is scaled by the AMM's inventory as a fraction of its average open liquidity, past a configurable deadband, and applied only when the premium and the inventory agree in sign. Market pricing leaning one way and the AMM's own book leaning the same way is the only condition under which shifting the midpoint both follows the market and flattens the position. When they disagree the offset is zero.
+
+**On a sign flip.** When the newly computed offset has the opposite sign to the previous one, the transition is spread over slots on a budget that accrues with elapsed wall-clock time rather than applied at once, so the quote midpoint does not jump across the oracle in a single update.
+
+### A worked example
+
+Illustrative, not live data. Take SOL-PERP with SOL at \$100.00, `curve_update_intensity` at 110 and `max_spread` at 200 bps. The bound is the lesser of 10 bps and 100 bps, so 10 bps, which is \$0.10 of price.
+
+The 5-minute mark TWAP is \$100.30 against a 5-minute oracle TWAP of \$100.00, the slower window shows \$0.20, and the 24-hour funding rate converts to \$0.10 of premium. None is beyond the bound, so the average is \$0.20, a premium of 20 bps. The AMM is net long and its position is 40% of its average open liquidity against a 10% deadband, so the inventory term is 30% and agrees in sign with the premium. The result exceeds the bound, so the offset sits at its bound: both quotes move up by \$0.10, and the gap between them does not change.
+
+Two boundaries follow from the same numbers. Had the AMM been net **short** while the mark traded above the oracle, the signs would disagree and the offset would be zero, because moving the quotes up would deepen the position rather than flatten it. And had `curve_update_intensity` been 100 or below, the offset would be zero regardless of any premium.
+
+<Callout type="info">
+The inventory scaling reaches the bound for all but the smallest inventory fractions, so the practical value of the offset is its bound, which is set by `curve_update_intensity` and `max_spread`. Read those two off the market account to see how far the midpoint can travel.
+</Callout>
+
+## Sizing its participation in a JIT auction
+
+The AMM can quote inside a [JIT auction](/developers/market-makers/jit-auctions) rather than only backstopping size no maker wanted, which means a maker bidding into an auction may be competing with it. `calculate_jit_base_asset_amount` sizes that participation as a sequence of caps:
+
+1. **Half the fill.** Never more than half of the matched amount, the smaller of the taker's and the maker's remaining size.
+2. **Wash-trade guard.** With no valid oracle price, participation is off for that fill. Otherwise a fill price on the wrong side of the oracle by more than 5 bps shrinks the cap further, scaled by how far past that band the price sits relative to the AMM's own opposite-side spread.
+3. **Imbalance sizing.** If the AMM's maximum open bids and asks differ by 1.5x or more, the book counts as imbalanced and it will take up to the full fill size. Otherwise it caps itself at a quarter of the fill.
+4. **Intensity scaling.** The result of step 3 is scaled by `amm_jit_intensity / 100`.
+5. **Inventory-flip guard.** Capped at the AMM's current absolute net position, so participation cannot flip its inventory.
+6. The final size is the smaller of the caps from steps 1 and 2 and the amount from steps 3 to 5, standardized to the market's order step size.
+
+<Callout type="warn">
+Step 4 is the one that decides whether any of this runs. AMM JIT participation requires `amm_jit_intensity` above zero: at zero the scaling takes the size to nothing and the AMM does not join the auction at all. The field is admin-settable per market, so read the live `PerpMarket` account rather than assuming it is either on or off.
+</Callout>
+
+## The AMM's own rebate
+
+When the AMM fills as maker it can receive a rebate: `FeeStructure.feeTiers[0]`, scaled by the market's `feeAdjustment`, carved out of the taker-fee remainder before that remainder is split, clamped to whatever is left if the remainder is too small, and tracked in `feeLedger.ammProtocolFeesReceived`. The AMM's share of fees generally is `FeeStructure.amm_fee_numerator`.
+
+The rebate is computed from the base tier, `feeTiers[0]`, rather than from the taker's tier, because a rebate belongs to the maker and the AMM has no volume tier of its own. It is carved off the remainder before the three-way split, exactly like a user maker's rebate, then added back into `amm_fee`. The taker's fee does not change either way. Only the distribution of the remainder shifts.
+
+This rebate is gated on `FeatureBitFlags::VammMakerRebate` in `State.featureBitFlags`. While the bit is set the carveout runs as described above; while it is clear it does not happen at all, the AMM receives no rebate, and the remainder splits as though the feature did not exist. Read the bit off `State` rather than assuming either state.

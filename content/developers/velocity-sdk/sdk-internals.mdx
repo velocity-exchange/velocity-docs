@@ -1,119 +1,64 @@
-# SDK Internals
+---
+title: "SDK Internals"
+---
 
-The Velocity SDK handles onchain interactions, account subscriptions, and transaction construction. Understanding its internals helps you optimize performance, debug issues, and use advanced features.
+This page covers the machinery underneath the call-level pages: how the SDK keeps account state fresh, which subscribers and maps it ships, how it layers instruction building into transactions, and where the caches are that make reads free. It is the page for deciding how a long-running process should stay subscribed, and for working out why a value read back is not the expected one.
 
 <Callout type="info">
-The code examples below use the TypeScript SDK (`@velocity-exchange/sdk`). There is no Python SDK. A Rust client (`velocity-rs`) also exists in the [monorepo](https://github.com/velocity-exchange/velocity-v1), under `rust/velocity-rs`.
+The examples below use the TypeScript SDK (`@velocity-exchange/sdk`). There is no Python SDK. A Rust client, `velocity-rs`, ships from the same private monorepo but is not published; it is not something an outside integrator can clone or install.
 </Callout>
 
 ## Core architecture
 
-The SDK has three main components:
+Three pieces carry almost everything the SDK does, and knowing which one owns a given responsibility is usually enough to find the right method.
 
-**VelocityClient** - Main interface for protocol interactions
-- Constructs transactions
-- Manages account subscriptions
-- Provides helper methods for orders, deposits, etc.
-- Caches market and state data
+**VelocityClient**: the write path and the protocol-wide cache. It builds and sends every instruction, owns the market, oracle, and state accounts, and exposes the precision helpers. Nearly every call that changes onchain state starts here.
 
-**User** - Represents a single user account
-- Subscribes to user account updates
-- Calculates positions, PnL, health
-- Provides convenience methods for account queries
+**User**: one subaccount, wrapped. It holds that account's positions, orders, and balances, and computes the derived values on top of them: margin requirement, free collateral, health, unrealized PnL. See [PnL & Risk](/developers/velocity-sdk/pnl-risk).
 
-**AccountSubscriber** - Handles real-time account updates
-- Polls or streams account data from RPC
-- Notifies clients when data changes
-- Caches account data for fast access
+**AccountSubscriber**: the update transport underneath both. It polls or streams account data from RPC, notifies its owner when the data changes, and holds the cached copy that every read above returns.
 
-## Account subscription patterns
+## Account subscription strategies
 
-The SDK supports multiple subscription strategies, each with different performance characteristics:
+`accountSubscription` on `VelocityClientConfig` selects how the client keeps market, oracle, and user accounts current. All three modes present the same cached-read API to the caller; they differ in how updates arrive, and therefore in latency, RPC cost, and what can go wrong.
 
-### Polling subscription
+| Mode | How updates arrive | Latency | Cost and failure modes | Suits |
+|---|---|---|---|---|
+| `polling` | A `BulkAccountLoader` batches the accounts the client needs into periodic `getMultipleAccounts` calls | One poll interval, so a 1,000 ms loader means up to 1,000 ms of staleness | Predictable request volume against any RPC endpoint, and nothing to reconnect | Development, low-frequency strategies, backfills and scripts |
+| `websocket` | Solana's `onAccountChange` notifications, per subscribed account | Push, so roughly one network hop behind the cluster | Fewer requests, but a websocket can drop and needs resubscribe handling, and many endpoints cap concurrent subscriptions | Production trading, market makers, anything reacting to fills |
+| `grpc` | A Yellowstone gRPC (Geyser) stream from a provider running the plugin | The lowest of the three, and the most bandwidth-efficient per update | Needs a gRPC-enabled provider such as Jito or Triton, an auth token, and usually a paid plan | Latency-sensitive fillers, JIT market makers |
 
-**How it works**: Periodically calls `connection.getAccountInfo()` for each account
+Websocket is the default. Polling takes a `BulkAccountLoader`, whose constructor is `(connection, commitment, pollingFrequencyMs)`. Accounts rarely need registering on the loader directly: hand it to the client and it adds the market, oracle, and user accounts it needs, batching them into as few `getMultipleAccounts` calls as it can.
 
 <SDKDoc>
-  <TypeScript name="Polling subscription" type="example">
+  <TypeScript name="Account subscription modes" type="example">
 ```js
-import { VelocityClient, BulkAccountLoader } from "@velocity-exchange/sdk";
+import { BulkAccountLoader, VelocityClient } from "@velocity-exchange/sdk";
 
+// Websocket, the default: omit accountSubscription entirely, or name it.
+const wsClient = new VelocityClient({
+  connection,
+  wallet,
+  accountSubscription: { type: "websocket" },
+});
+
+// Polling, driven by a shared BulkAccountLoader at 1,000 ms.
 const accountLoader = new BulkAccountLoader(connection, "confirmed", 1000);
-
-const velocityClient = new VelocityClient({
+const pollingClient = new VelocityClient({
   connection,
   wallet,
-  accountSubscription: {
-    type: "polling",
-    accountLoader,
-  },
+  accountSubscription: { type: "polling", accountLoader },
 });
-```
-  </TypeScript>
-</SDKDoc>
 
-**Pros**:
-- Simple and reliable
-- Works with any RPC endpoint
-- Predictable resource usage
-
-**Cons**:
-- Higher latency (poll interval delay)
-- More RPC calls
-- Not real-time
-
-**Best for**: Development, low-frequency trading, simple bots
-
-### WebSocket subscription
-
-**How it works**: Uses Solana's `onAccountChange` WebSocket notifications
-
-<SDKDoc>
-  <TypeScript name="WebSocket subscription" type="example">
-```js
-import { VelocityClient } from "@velocity-exchange/sdk";
-
-const velocityClient = new VelocityClient({
-  connection,
-  wallet,
-  accountSubscription: {
-    type: "websocket",
-  },
-});
-```
-  </TypeScript>
-</SDKDoc>
-
-**Pros**:
-- Lower latency than polling
-- Fewer RPC calls
-- Real-time updates
-
-**Cons**:
-- WebSocket can disconnect (needs reconnection handling)
-- Some RPC endpoints have connection limits
-- Slightly more complex error handling
-
-**Best for**: Market makers, latency-sensitive bots, production trading
-
-### gRPC subscription (fastest)
-
-**How it works**: Uses Yellowstone gRPC plugin for Solana validators
-
-<SDKDoc>
-  <TypeScript name="gRPC subscription" type="example">
-```js
-import { VelocityClient } from "@velocity-exchange/sdk";
-
-const velocityClient = new VelocityClient({
+// gRPC, against a Geyser-enabled provider.
+const grpcClient = new VelocityClient({
   connection,
   wallet,
   accountSubscription: {
     type: "grpc",
     grpcConfigs: {
-      endpoint: "https://grpc.mainnet.jito.wtf",
-      token: "YOUR_GRPC_TOKEN",
+      endpoint: "<GRPC_ENDPOINT>",
+      token: "<GRPC_TOKEN>",
     },
   },
 });
@@ -121,46 +66,11 @@ const velocityClient = new VelocityClient({
   </TypeScript>
 </SDKDoc>
 
-**Pros**:
-- Lowest latency (sub-second updates)
-- Most efficient bandwidth usage
-- Best for high-frequency trading
-
-**Cons**:
-- Requires gRPC-enabled RPC (e.g., Jito, Triton)
-- More complex setup
-- May require authentication/payment
-
-**Best for**: HFT bots, JIT market makers, competitive filling
-
-## BulkAccountLoader
-
-For loading many accounts efficiently, the SDK provides `BulkAccountLoader`:
-
-<SDKDoc>
-  <TypeScript name="BulkAccountLoader" type="example">
-```js
-import { VelocityClient, BulkAccountLoader } from "@velocity-exchange/sdk";
-
-// Constructor: (connection, commitment, pollingFrequencyMs)
-const bulkAccountLoader = new BulkAccountLoader(connection, "confirmed", 1000);
-
-// Typically you don't call addAccount directly. Instead, pass the loader
-// to VelocityClient and it registers the accounts it needs automatically.
-const velocityClient = new VelocityClient({
-  connection,
-  wallet,
-  accountSubscription: { type: "polling", accountLoader: bulkAccountLoader },
-});
-```
-  </TypeScript>
-</SDKDoc>
-
-The loader batches multiple accounts into single `getMultipleAccounts` RPC calls for efficiency.
+One `BulkAccountLoader` can back several clients and maps at once, which is usually the right arrangement: it deduplicates the accounts and keeps the batch count down instead of each consumer polling on its own schedule.
 
 ## Transaction construction
 
-The SDK builds transactions in several layers:
+A write goes through three layers, and the high-level methods collapse all three into one call. Drop down a layer to batch several instructions into one transaction, attach a custom compute budget, or hand the signed bytes somewhere the SDK does not know about.
 
 <SDKDoc>
   <TypeScript name="Transaction construction layers" type="example">
@@ -186,20 +96,18 @@ const { txSig } = await velocityClient.txSender.sendVersionedTransaction(
   </TypeScript>
 </SDKDoc>
 
-Higher-level methods like `placePerpOrder()` do all three steps automatically.
+Both the builder and the sender are injectable. `TxHandler` builds and signs (blockhash resolution, compute-budget instructions, lookup tables), and a `TxSender` broadcasts and confirms. `VelocityClient` defaults to a `RetryTxSender` wrapping its own `TxHandler`. See [Transactions](/developers/velocity-sdk/transactions) for the four sender implementations, their retry and timeout defaults, and the compute-unit and priority-fee parameters.
 
-Both layers are injectable. `TxHandler` builds and signs (blockhash resolution, compute-budget instructions, lookup tables), and a `TxSender` broadcasts and confirms. `VelocityClient` defaults to a `RetryTxSender` wrapping its own `TxHandler`. See [Transactions](/developers/velocity-sdk/transactions) for the four sender implementations, their retry and timeout defaults, and the compute-unit and priority-fee parameters.
+## Remaining accounts
 
-## Remaining accounts pattern
-
-Many Velocity instructions need dynamic account lists (oracles, markets, positions). The SDK's `getRemainingAccounts()` method builds this list:
+Most Velocity instructions need an account list that depends on the caller's state: the oracles and markets touched by the position set, plus any cross-position accounts the margin check has to read. `getRemainingAccounts()` assembles that list in the order the onchain handler expects, so the caller does not have to reproduce the program's ordering rules.
 
 <SDKDoc>
   <TypeScript name="Remaining accounts" type="example">
 ```js
 const remainingAccounts = velocityClient.getRemainingAccounts({
   userAccounts: [user.getUserAccount()],
-  writableSpotMarketIndexes: [0],  // USDT market
+  writableSpotMarketIndexes: [0], // quote-asset spot market
 });
 
 // These accounts get passed to the instruction
@@ -215,16 +123,14 @@ const ix = await velocityClient.program.methods
   </TypeScript>
 </SDKDoc>
 
-This handles oracle accounts, market accounts, and cross-position accounts automatically.
-
 ## Event subscriptions
 
-The SDK can subscribe to onchain program events. See [Events](/developers/velocity-sdk/events) for the full event catalog (including the fee-sweep/revenue-share/LP-borrow-lend records) and query helpers:
+The SDK deserializes program events out of transaction logs and emits them to the caller. See [Events](/developers/velocity-sdk/events) for the full catalog, including the fee-sweep, revenue-share, and LP borrow-lend records, and for the query helpers over the in-memory buffer.
 
 <SDKDoc>
   <TypeScript name="Event subscriptions" type="example">
 ```ts
-import { EventSubscriber, isVariant, WrappedEvent } from "@velocity-exchange/sdk";
+import { EventSubscriber, WrappedEvent, isVariant } from "@velocity-exchange/sdk";
 
 const eventSubscriber = new EventSubscriber(connection, velocityClient.program, {
   commitment: "confirmed",
@@ -236,7 +142,7 @@ await eventSubscriber.subscribe();
 eventSubscriber.eventEmitter.on("newEvent", (event) => {
   // `event.eventType === "OrderActionRecord"` alone doesn't narrow `event`'s type
   // (WrappedEvent is generic over EventType, so TS can't correlate the check with
-  // the rest of the shape): cast explicitly once you've checked the discriminant.
+  // the rest of the shape): cast explicitly once the discriminant is checked.
   if (event.eventType === "OrderActionRecord") {
     const orderEvent = event as WrappedEvent<"OrderActionRecord">;
     if (isVariant(orderEvent.action, "fill")) {
@@ -249,40 +155,36 @@ eventSubscriber.eventEmitter.on("newEvent", (event) => {
   </TypeScript>
 </SDKDoc>
 
-Common event types:
-- `OrderActionRecord` (with action: `fill`, `place`, `cancel`, etc.) - Order lifecycle events
-- `DepositRecord` - Deposits and withdrawals
-- `FundingPaymentRecord` - Funding payments
-- `LiquidationRecord` - Liquidations
+The four reached for first:
 
-## Caching and performance
+- `OrderActionRecord`: order lifecycle, discriminated by `action` (`fill`, `place`, `cancel`, and so on)
+- `DepositRecord`: deposits and withdrawals
+- `FundingPaymentRecord`: funding payments
+- `LiquidationRecord`: liquidations
+
+## Caching
+
+Once a client is subscribed, every accessor named `get...` reads out of the subscription cache rather than the network. Market accounts, oracle data, state, and the subscribed subaccounts are all served from memory and refreshed by the subscriber in the background, so calling one in a tight quoting loop costs nothing and never adds RPC latency.
+
+The tradeoff is that a cached read is exactly as fresh as the subscription behind it. Under `polling` that is one poll interval; under `websocket` or `grpc` it is whatever the last push delivered. If the feed breaks, the reads keep returning the last good value rather than failing, which is why the `error` listener in [Error handling](#error-handling) matters.
 
 <SDKDoc>
-  <TypeScript name="Caching examples" type="example">
+  <TypeScript name="Cached reads" type="example">
 ```js
-// Market account caching:
-// First call after subscribe: data from subscription cache (no extra RPC)
+// All of these are served from the subscription cache. No RPC call.
 const market = velocityClient.getPerpMarketAccount(0);
-// Subsequent calls: same cached data, updates via subscription
-const market2 = velocityClient.getPerpMarketAccount(0);
-
-// Oracle price caching:
 const oracle = velocityClient.getOracleDataForPerpMarket(0);
-// Price is cached from account subscription
+const position = velocityClient.getUser().getPerpPosition(0);
 
-// User account caching:
-const user = velocityClient.getUser();
-const position = user.getPerpPosition(0);
-// No RPC call, data from subscription
+// Force a refresh from RPC when a value has to be certain.
+await velocityClient.getUser().fetchAccounts();
 ```
   </TypeScript>
 </SDKDoc>
 
-This makes queries fast (microseconds vs milliseconds for RPC).
-
 ## UserMap for multiple users
 
-To track many user accounts efficiently:
+`UserMap` keeps many `User` accounts subscribed and addressable by pubkey, which is what liquidation bots, fillers, and anything scanning the whole protocol build their state from. It owns the subscription lifecycle for every account in it, so the map is subscribed rather than each user.
 
 <SDKDoc>
   <TypeScript name="UserMap" type="example">
@@ -307,18 +209,16 @@ const position = user.getPerpPosition(0);
   </TypeScript>
 </SDKDoc>
 
-UserMap handles subscription lifecycle for all users automatically.
-
 ## Subscribers and maps reference
 
-Beyond the account-subscription strategies above, the SDK root exports a set of standalone subscribers (live feeds you start with `subscribe()`) and maps (in-memory caches of many accounts of one kind). Keepers, fillers, and market makers assemble most of their state from these.
+Beyond the account-subscription strategies above, the SDK root exports a set of standalone subscribers (live feeds started with `subscribe()`) and maps (in-memory caches of many accounts of one kind). Keepers, fillers, and market makers assemble most of their state from these.
 
 | Export | What it tracks | Notes |
 |---|---|---|
 | `SlotSubscriber` | The current slot, via `connection.onSlotChange` | Ignores updates that are not strictly greater than the tracked slot. Optional stall-detection resubscribe. |
 | `SlothashSubscriber` | The newest entry of the `SlotHashes` sysvar (slot plus base58 blockhash) | Fetches once via RPC, then subscribes. Commitment defaults to `processed`. Needed for signed-message and other slothash-dependent flows. |
-| `ClockSubscriber` | The on-chain unix timestamp from the `Clock` sysvar | Gives you "on-chain now" without an RPC round trip, for evaluating time-based order and auction conditions the way the program would. No initial fetch: `currentTs` and `latestSlot` stay `undefined` until the first account-change notification arrives. |
-| `BlockhashSubscriber` | A short history of recent blockhashes | Polls `getLatestBlockhashAndContext` every 1000ms by default, so transaction building needs no blockhash fetch per transaction. Block height is derived from the same response (`lastValidBlockHeight - 150`). Takes either a `connection` or an `rpcUrl`. |
+| `ClockSubscriber` | The onchain unix timestamp from the `Clock` sysvar | Gives "onchain now" without an RPC round trip, for evaluating time-based order and auction conditions the way the program would. No initial fetch: `currentTs` and `latestSlot` stay `undefined` until the first account-change notification arrives. |
+| `BlockhashSubscriber` | A short history of recent blockhashes | Polls `getLatestBlockhashAndContext` every 1,000 ms by default, so transaction building needs no blockhash fetch per transaction. Block height is derived from the same response (`lastValidBlockHeight - 150`). Takes either a `connection` or an `rpcUrl`. |
 | `ChainClock` | Latest known block height, slot, and timestamp per commitment level | Used by transaction senders to decide whether a blockhash has expired, without an RPC call. |
 | `AuctionSubscriber` | `User` accounts that currently have an order inside its auction window | A filtered websocket program-account subscription, so fillers react to auction-eligible orders without scanning every user. |
 | `OrderSubscriber` | Every `User` account on the program, and therefore every open order | Polling, websocket, or gRPC depending on `subscriptionConfig.type`. Backs `DLOBSubscriber`. Emits `orderCreated`, `userUpdated`, and `updateReceived`. |
@@ -329,18 +229,20 @@ Beyond the account-subscription strategies above, the SDK root exports a set of 
 | `RevenueShareEscrowMap` | `RevenueShareEscrow` accounts, keyed by authority | The builder and referral fee-accrual escrow. Fillers read it to attach a taker's escrow to a fill. |
 | `ConstituentMap` | LP-pool `Constituent` accounts | Look up by pubkey, spot market index, or constituent index. |
 | `PythLazerSubscriber` | Pyth Lazer price feeds over websocket | Takes endpoints, an auth token, and feed groups; filters out non-stable feeds and handles resubscribe. Feed properties must include `price` and `exponent` for `getPriceFromMarketIndex` to work. Relevant because deployed markets use Pyth Lazer. |
-| `PriorityFeeSubscriber` / `PriorityFeeSubscriberMap` | Recent priority fees for the accounts or markets you care about | Feeds the compute-unit price you attach to transactions. See [Transactions](/developers/velocity-sdk/transactions). |
+| `PriorityFeeSubscriber` / `PriorityFeeSubscriberMap` | Recent priority fees for selected accounts or markets | Feeds the compute-unit price attached to transactions. See [Transactions](/developers/velocity-sdk/transactions). |
 | `EventSubscriber` | Program events (see above) | Websocket or polling log provider. |
 
 Each subscriber owns its own connection lifecycle. Call `subscribe()` before reading, and `unsubscribe()` on shutdown so intervals and websocket handles are released.
 
 ## Common patterns
 
+The shape most integrations end up with: construct and subscribe once at startup, build instructions rather than sending one at a time where a compute budget or a batch is needed, and switch subaccounts on the client rather than holding several clients.
+
 <SDKDoc>
   <TypeScript name="Common patterns" type="example">
 ```js
-import { VelocityClient } from "@velocity-exchange/sdk";
 import { ComputeBudgetProgram } from "@solana/web3.js";
+import { VelocityClient } from "@velocity-exchange/sdk";
 
 // Initialize and subscribe
 const velocityClient = new VelocityClient({
@@ -353,21 +255,23 @@ await velocityClient.subscribe();
 const user = velocityClient.getUser();
 await user.subscribe();
 
-// Transaction with priority fee
+// Transaction with an explicit priority fee
 const ix = await velocityClient.getPlacePerpOrderIx(orderParams);
-const tx = await velocityClient.txSender.getVersionedTransaction([
-  ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
-  ix,
-], []); // lookup tables
+const tx = await velocityClient.txSender.getVersionedTransaction(
+  [ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }), ix],
+  [] // lookup tables
+);
 const { txSig } = await velocityClient.txSender.sendVersionedTransaction(
-  tx, [], velocityClient.opts
+  tx,
+  [],
+  velocityClient.opts
 );
 
-// Switch subaccounts
-await velocityClient.switchActiveUser(1);  // Switch to subaccount 1
-const user1 = velocityClient.getUser();  // Now returns subaccount 1
+// Switch subaccounts on the client rather than holding several clients
+await velocityClient.switchActiveUser(1);
+const user1 = velocityClient.getUser(); // now subaccount 1
 
-// Batch operations: place multiple orders in one transaction
+// Batch: several orders in one transaction
 await velocityClient.placeOrders([order1, order2, order3]);
 ```
   </TypeScript>
@@ -375,45 +279,73 @@ await velocityClient.placeOrders([order1, order2, order3]);
 
 ## Error handling
 
-Common error scenarios:
+A failed SDK call is one of three things, and they want different responses.
+
+**A program error.** The instruction reached the program and the program rejected it. These are Anchor errors numbered from `6000` up, and the program logs carry both the name and the number, for example `AnchorError occurred. Error Code: InsufficientCollateral. Error Number: 6003.` Match on the number, not on the message text: the `msg` strings change between releases, the numbers do not. The full list lives in the IDL the SDK ships, so a code maps back to a name without a hardcoded table.
+
+**A send or confirmation failure.** The transaction never reached the program, or the SDK never saw its outcome. These surface as `TxSendError` with a numeric `code`. The important one is `NOT_CONFIRMED_ERROR_CODE` (`-1001`), which means the sender timed out without seeing either a confirmation or a definite failure. It is an unknown outcome, not a failure: re-check the signature before resubmitting anything, or the same order can be placed twice. See [Transactions](/developers/velocity-sdk/transactions).
+
+**A subscription error.** The account feed broke while the process kept running. The client emits these on its own event emitter rather than throwing at a call site, so a process that does not listen for them goes on trading against a stale cache.
 
 <SDKDoc>
   <TypeScript name="Error handling" type="example">
 ```js
-// Insufficient collateral
+import { NOT_CONFIRMED_ERROR_CODE, TxSendError } from "@velocity-exchange/sdk";
+
+// The client's Anchor program carries the IDL, and the IDL carries every
+// error code the program can return. No hardcoded table to keep in sync.
+const errorsByCode = new Map(
+  velocityClient.program.idl.errors.map((e) => [e.code, e.name])
+);
+
+function programErrorName(e) {
+  const match = /Error Number: (\d+)/.exec((e.logs ?? []).join("\n"));
+  return match ? errorsByCode.get(Number(match[1])) : undefined;
+}
+
 try {
-  await velocityClient.placePerpOrder(params);
+  await velocityClient.placePerpOrder(orderParams);
 } catch (e) {
-  if (e.message.includes("InsufficientCollateral")) {
-    console.log("Need to deposit more collateral");
+  if (e instanceof TxSendError && e.code === NOT_CONFIRMED_ERROR_CODE) {
+    // Unknown outcome. Check the signature before retrying.
+    return;
+  }
+  switch (programErrorName(e)) {
+    case "InsufficientCollateral":
+      console.log("deposit more collateral before retrying");
+      break;
+    case "SpotDlobTradingDisabled":
+      console.log("this market cannot take order-book orders");
+      break;
+    default:
+      throw e;
   }
 }
 
-// Account subscription errors
+// Subscription failures do not throw at a call site.
 velocityClient.eventEmitter.on("error", (e) => {
-  console.error("Subscription error:", e);
-  // Reconnect logic here
+  console.error("subscription error:", e);
+  // Resubscribe, and treat cached reads as stale until it recovers.
 });
 ```
   </TypeScript>
 </SDKDoc>
 
-## Performance tips
+## Performance notes
 
-**Use appropriate commitment**:
-- `processed` - Fastest, some risk of reorgs
-- `confirmed` - Balanced (recommended)
-- `finalized` - Slowest, most secure
+Commitment is the first knob. `processed` is the fastest and can be rolled back, `confirmed` is the default and the right choice for almost everything, `finalized` is the slowest and only worth it where a reorg cannot be tolerated at all.
+
+Beyond that, two habits cost nothing and save real time. Convert once and reuse the `BN`: `convertToPerpPrecision` and `convertToPricePrecision` are pure, so hoisting them out of a quoting loop removes allocation from the hot path. And attach address lookup tables when batching instructions, because a versioned transaction that resolves accounts through an ALT fits more instructions inside the 1,232-byte limit.
 
 <SDKDoc>
-  <TypeScript name="Performance tips" type="example">
+  <TypeScript name="Performance notes" type="example">
 ```js
-// Precompute values: convert once, reuse
+// Convert once, reuse across the loop.
 const size = velocityClient.convertToPerpPrecision(1);
 const price = velocityClient.convertToPricePrecision(100);
 
-// Use lookup tables (ALTs) to reduce transaction size
-const lookupTables = [/* your AddressLookupTableAccount objects */];
+// Lookup tables let a batched transaction reference more accounts.
+const lookupTables = await velocityClient.fetchAllLookupTableAccounts();
 const tx = await velocityClient.txSender.getVersionedTransaction(
   instructions,
   lookupTables
@@ -424,7 +356,7 @@ const tx = await velocityClient.txSender.getVersionedTransaction(
 
 ## Related
 
-- [SDK Setup](/developers/velocity-sdk/setup) - Getting started with the SDK
-- [Transactions](/developers/velocity-sdk/transactions) - Tx senders, compute units, priority fees
-- [Bot Architecture](/developers/market-makers/bot-architecture) - Production bot patterns
-- [Program Structure](../concepts/program-structure) - onchain accounts the SDK interacts with
+- [Setup](/developers/velocity-sdk/setup): constructing and subscribing the client
+- [Transactions](/developers/velocity-sdk/transactions): tx senders, compute units, priority fees
+- [Bot Architecture](/developers/market-makers/bot-architecture): production bot patterns
+- [Program Structure](/developers/concepts/program-structure): the onchain accounts the SDK wraps

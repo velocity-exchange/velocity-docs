@@ -1,39 +1,96 @@
 ---
-asIndexPage: true
+title: "Collateral and margin requirements"
+description: "What a deposit is worth as margin, and what a position consumes against it."
 ---
 
-# Margin Requirements
+Every asset deposited into a subaccount backs every position in that subaccount. That is what cross margin means, and it is why a SOL deposit can support a BTC-PERP position without being sold first. Two numbers decide whether an action is allowed: what the deposits are worth as margin, and how much margin the positions consume. The comparison between them is on [Account health](/protocol/trading/margin/account-health).
 
-Below is a table for initial and maintenance margin requirements for each market. Pulled directly from the protocol’s on-chain state.
+A dollar of deposit is not a dollar of margin. A liquidation is neither instant nor free, so deposits are haircut before they count: for the price moving while a liquidator works, for a holding too large to sell at the quoted price, and for a market too crowded to exit.
 
-These values include:
-- **Initial Margin Ratio** (`marginRatioInitial`)
-- **Maintenance Margin Ratio** (`marginRatioMaintenance`)
-- **IMF Factor**, (`imfFactor`) affects leverage at higher notional sizes
+## Two weights, not one
 
-Data below is updated every hour from `PerpMarketAccount`.
+An **asset weight** is a multiplier below 1 applied to the oracle value of a deposit before it counts as collateral. The quote asset carries 1.00; every other asset carries less. Every asset carries two, because the haircut that justifies new risk is not the haircut that decides an account is out of cushion.
 
+| Margin type | Weight used | What it gates |
+| --- | --- | --- |
+| Initial | Initial asset weight, after deposit-size scaling | Opening positions, withdrawals, any risk-increasing order. |
+| Fill | Midpoint of the scaled initial weight and the maintenance weight | The check run after a perp fill, on the side increasing risk. |
+| Maintenance | Maintenance asset weight | Liquidation, and nothing else. |
 
----
+The maintenance weight is always the more generous. Between "cannot open more" and "liquidatable" sits a band where an account can hold what it has but cannot add to it, which is what stops a position being opened directly into its own liquidation.
 
-### Perpetual Markets
-<br/>
+### Live asset weights
+
+<AssetWeightsTable poolId={0} />
+
+That table is the authoritative source, and every value in it is admin-settable. Examples below use an illustrative configuration: an 80% initial asset weight, a 90% maintenance asset weight, and an IMF factor of 0.00125.
+
+## The initial asset weight, and how it shrinks
+
+This is the haircut applied when the protocol asks how much new risk an account may take on. 100 SOL at an illustrative \$100, weighted at 80%, is \$8,000 of collateral for opening positions, and at a 5% initial margin ratio that supports up to \$160,000 of notional.
+
+The weight also decays once a spot market's total deposits pass its `scaleInitialAssetWeightStart` threshold:
+
+`scaled initial asset weight = initial asset weight * scale start / total deposit value`
+
+It scales on the **market's** total deposits rather than any one account's, so an account can lose buying power without doing anything, and it has no floor. At a scale start of \$1,800,000, a market holding \$3,600,000 of deposits puts everyone at 40%, and that same 100 SOL is worth \$4,000 of buying power rather than \$8,000.
+
+## The maintenance asset weight
+
+The maintenance asset weight is used in the liquidation check and nowhere else. It ignores deposit-size scaling, so it holds steady while the initial weight moves underneath it. The same 100 SOL is **\$9,000** of maintenance collateral.
+
+## The IMF factor, for concentration
+
+The initial margin fraction factor addresses the concentrated holder rather than the crowded market. It caps the weight, and the cap tightens as the account's own balance grows:
+
+`weight = min(base weight, 1.1 / (1 + sqrt(size) * imf factor))`
+
+<Callout type="info">
+**`size` is a token count, not a dollar value**, so 1,000 SOL discounts identically at \$50 and at \$500. **It measures the account's own balance, not the market's**, the opposite of the deposit-size scaling above.
+</Callout>
+
+| Account SOL balance | Discount ceiling | Effective initial weight (base 80%) | Effective maintenance weight (base 90%) |
+| --- | --- | --- | --- |
+| 100 (the \$10,000 account at \$100) | 1.0864 | 80% | 90% |
+| ~31,600 | 0.9000 | 80% | 90%, at the knee |
+| 50,000 (the \$5,000,000 desk at \$100) | 0.8597 | 80% | **85.97%** |
+| 90,000 | 0.8000 | 80%, at the knee | **80%** |
+| 200,000 | 0.7056 | **70.56%** | **70.56%** |
+
+**The factor bites maintenance before it bites initial.** The maintenance weight starts shrinking at roughly 31,600 SOL while the initial weight is untouched until 90,000, so a large holder's liquidation buffer erodes first. For the \$5,000,000 desk in 50,000 SOL that is \$4,298,500 of maintenance collateral rather than \$4,500,000, all \$201,500 of it out of the cushion. The factor is per market on the account's own balance, so splitting the holding across spot markets removes most of it.
+
+### The mirror image for borrows
+
+A borrow carries a **liability weight** above 1, and the same IMF factor raises it as the borrow grows, so a \$1,000 debt can count as \$1,196 against the account. Liability weights come in the same three margin types, and convert to a loan-to-value ratio as `ltv = 1 / liability weight`.
+
+<LTVTable poolId={0} />
+
+## The perp side: margin ratios
+
+Perpetual markets have no asset weight, because a perp position is not collateral. Each has **margin ratios** instead: the fraction of a position's notional it consumes as a requirement, at an initial ratio, a maintenance ratio, and their midpoint for Fill.
 
 <PerpMarginTable />
 
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate later.
----
+Ratios are per-market and admin-set, and the table above reads them live. Maximum leverage is the reciprocal of the initial ratio, and the program bounds that ratio between 1.25% (80x) and 100% (1x). Each market also carries an IMF factor, which raises the required ratio as the position grows and cuts maximum leverage with it.
 
-## Isolated Positions
+### Unsettled P&L is the exception
 
-Alongside cross-margin (the default, every position and deposit in a subaccount shares one collateral pool), Velocity supports **isolated perp positions**: a perp position that is capitalized and liquidated independently of the rest of the subaccount.
+Unsettled perp P&L is the one part of a perp position that carries asset weights. Negative unsettled P&L always counts in full, at every margin type. Positive unsettled P&L is weighted.
 
-- **Funding an isolated position.** Collateral is deposited directly into a specific perp position (`depositIntoIsolatedPerpPosition`), which creates the position if it doesn't already exist and tracks its balance in a segregated `isolatedPositionScaledBalance`, separate from the subaccount's cross-margin spot balances. Collateral moves between an isolated position and the rest of the subaccount via `transferIsolatedPerpPositionDeposit`, or out entirely via `withdrawFromIsolatedPerpPosition`.
-- **Independent margin health.** An isolated position's initial/maintenance margin is calculated on its own (`IsolatedMarginCalculation`), using only that position's deposited collateral and PnL: it cannot draw on, or be drawn on by, the subaccount's cross-margin collateral or other isolated positions. A loss on one isolated position never touches unrelated positions.
-- **Orders.** Orders that risk-increase an isolated position carry the `IsIsolatedPosition` bit flag (see [Order Types](/protocol/trading/order-types)).
-- **Liquidation.** Isolated positions are liquidated independently of the rest of the account and, unlike cross-margin liquidations (which unwind gradually over a throttled window), close in a single shot at 100%. See [Liquidations](/protocol/trading/liquidations) for the full mechanics.
-*/}
+<Callout type="important">
+Both weights on positive unsettled P&L are admin-set per market, initialized at 0 for initial margin and 100% for maintenance. While the initial weight is zero, positive unsettled P&L counts for nothing against new risk and in full when the protocol decides whether to liquidate. Read the live market account, and settle P&L before planning to spend it.
+</Callout>
 
-## Unrealized PnL Cap on Initial Margin
+A hard ceiling of **\$100 per position** also limits how much positive unsettled P&L can count toward initial margin. It does not touch maintenance margin.
 
-For **initial margin** calculations only (not maintenance), a single position's weighted unrealized PnL is capped at **$100** (`MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN`) before it can count toward collateral for opening new risk. This is a safety guard against a mispriced or thinly-traded market inflating a user's paper profit into borrowing power for other positions. It does not affect maintenance margin, and so does not by itself trigger or prevent a liquidation.
+## Worked example, end to end
+
+The \$10,000 account holds 100 SOL at \$100 and opens a long of 400 SOL-PERP at \$100, \$40,000 of notional, on the illustrative configuration above. Initial collateral is \$8,000 against an initial requirement of \$2,000.
+
+**SOL falls 10%, to \$90.** Maintenance collateral is 100 SOL at \$90 weighted 0.90, \$8,100, less \$4,000 of unrealized loss that counts in full: **\$4,100**. The maintenance requirement is 3% of \$36,000, or **\$1,080**. That is safe, a health of 74, but the fall cost \$4,900, of which \$900 is the collateral shrinking underneath the position. Both terms move the same way, which is what makes the next 10% far more dangerous than the first.
+
+**The boundary sits at \$83.68.** At \$83 the numbers are \$670 of maintenance collateral against a \$996 requirement, and the account is liquidatable. **The same trade on USDT collateral liquidates at \$77.32**, because collateral weighted at 1.00 stops moving with the price.
+
+## What this means in practice
+
+At retail size, the two numbers that matter are the maintenance asset weight of the deposit and the maintenance margin ratio of the position. Collateral correlated with the position means the liquidation price has to be worked out with both effects in it rather than off the position alone. At size, the IMF factor is the term to model first, and splitting the holding across assets, not across subaccounts, is what moves it.

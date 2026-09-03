@@ -1,106 +1,64 @@
-# Oracles
+---
+title: "Oracles"
+description: "Why a perpetual exchange has to import a price it does not set, the grades the protocol assigns to an incoming price, and what a trader sees while a feed is degraded."
+---
 
-Velocity Protocol has a number of resiliency checks around new oracle data as well as updates an oracle twap for its margin risk engine. Each market tracks the last seen oracle values and updates an EMA of TWAP for over both 1hr (funding period) and 5min intervals.
+A perpetual has no expiry and no delivery, so nothing about the contract itself forces its price to track the asset it names. The two things that do are funding, sized off the gap between the market's mark price and an outside reference, and margin, which values every position against that reference. Both need a price the exchange does not produce.
 
-Velocity utilises Pyth (push) and Pyth Lazer as its oracle sources. The protocol has the flexibility to update and customize as necessary on a per-market basis.
+## Why not just use the exchange's own price
 
-### Validity Checks
+The exchange's own last traded price is the one number a trader can move. An account that pushes the mark price up by trading against itself marks its own long into profit, borrows against that profit, and liquidates the shorts on the other side, without the underlying asset having moved a cent.
 
-For robustness, Velocity's program checks oracle validity. The validity is evaluated on a per-check and action basis to determine whether to block actions. See [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails) for more details.
+So every market carries an oracle: an account, written by somebody other than the trader, holding a price, a confidence interval, and a timestamp. The source is set per market.
 
-<Steps>
-### Stale(ForAmm/ForMargin)
-Last update too far behind the current time -- default wall-clock windows of ~4s / ~48s (stored as 10/120 slots at a 400ms slot time, converted to actual slots at the live slot duration). `StaleForAMM` splits into an `immediate` and a `low_risk` sub-threshold, and `PythLazerStableCoin` markets get 3x the margin window.
+## What breaks when the oracle is wrong
 
-### NonPositive
-Non-positive price (any price field **&lt;= 0**)
+Margin, liquidation, funding, and the AMM's quote are all measured against the oracle, so a bad print liquidates solvent accounts and pays out on positions that were never in profit. An oracle fails in four ways: a wrong price, a stale price, a confidence band so wide that treating its midpoint as exact understates the error in every margin number, and a data fault such as a zero or a price five times the running average.
 
-### TooVolatile
-TWAP / price ratio out of bounds -- **5x or 1/5x**
+The protocol does not decide which is happening. It grades each incoming sample, and each action decides which grades it will accept.
 
-### TooUncertain
-Confidence interval is too large relative to price. The base threshold is **2%** of price, scaled by the market's contract tier (1x&ndash;50x, i.e. ~2% up to ~100%) &mdash; lower-tier (riskier) markets tolerate a wider confidence band before being flagged invalid.
+## The six grades
 
-</Steps>
+Every read is classified into one of six failure grades, or Valid. The default thresholds:
 
-<Callout type="warning">
-When the oracle for a Perpetuals Market is deemed invalid, the market can block some order fills, withdraws, liquidations, and funding rate updates (if they increase protocol risk).
-</Callout>
+| Grade | What it means | Default threshold |
+| --- | --- | --- |
+| Non-positive | Any price field at or below zero | Fixed, not configurable |
+| Too volatile | The price and the running oracle TWAP differ by a large factor | 5x up, or down to one fifth |
+| Too uncertain | The reported confidence is too wide relative to price | 2% of price, times the market's tier multiplier |
+| Stale for margin | The sample is too old to value a position against | 48 seconds |
+| Insufficient data points | Too few publishers were quoting | Pyth push only |
+| Stale for AMM | The sample is too old for the AMM to quote against | 4 seconds |
 
-<Callout type="info">
-For the duration of the invalid period, on-chain oracle TWAP calculation aims to shrink toward mark TWAP to avoid erroneous funding payment magnitudes.
-</Callout>
+Stablecoin feeds get three times the margin staleness window, 144 seconds rather than 48. The 2% confidence threshold is scaled by the market's [contract tier](/protocol/risk-and-safety/contract-tiers), from 1x on tier A up to 50x on Highly Speculative and Isolated, so the tail tiers tolerate a band up to 100% of price before a sample is too uncertain.
 
-### InsufficientDataPoints
+## Grades do not block everything equally
 
-Raised when the incoming `OraclePriceData` reports `has_sufficient_number_of_data_points = false`. On a Pyth push oracle this happens when the number of quoting publishers (`num_qt`) is below `min(num, 3)`; the check only applies on mainnet builds. Pyth Lazer and the MM oracle path always report sufficient data points, so in practice this state is a push-oracle-only guard, ordered less severe than `StaleForMargin` but more severe than the `StaleForAMM` states. Only the AMM-fill actions (`FillOrderAmmImmediate`, `FillOrderAmmLowRisk`) reject it outright. `MarginCalc`, `FillOrderMatch`, `Liquidate`, `TriggerOrder`, `UpdateTwap`, and the LP/AMM-cache actions all tolerate it, alongside `UpdateFunding`, `OracleOrderPrice`, and `SettlePnl`.
+Each action asks separately whether the current grade is good enough for what it is about to do, and one that can lose money on a stale price is stricter than one that cannot.
 
-## MM (Market Maker) Oracle
+| Action | Accepts |
+| --- | --- |
+| Auction-skipping AMM fill | Valid only |
+| Low-risk AMM fill | Valid, or stale for the AMM within the low-risk threshold |
+| Margin calculation, orderbook fill | Anything except non-positive, too volatile, too uncertain, stale for margin |
+| Liquidation, trigger order | Anything except non-positive and too volatile |
+| TWAP update, AMM curve update | Anything except non-positive |
+| Funding update, P&L settlement | Valid, stale for the AMM, insufficient data points, stale for margin |
 
-Alongside the primary market oracle, each perp market tracks an independently-cranked **MM oracle** price ( `market_stats.mm_oracle_price` / `mm_oracle_slot` / `mm_oracle_sequence_id` ) intended to reflect faster off-chain price discovery from designated market makers. It is written by a native (pre-Anchor) instruction handler, `handle_update_mm_oracle_native`, gated by:
+So a feed that goes 10 seconds without an update stops the AMM quoting while orderbook matching, margin, and liquidation carry on. At 50 seconds margin calculations and orderbook fills stop too, but liquidation and trigger orders still run: a position that is genuinely underwater should not become unliquidatable because the price is old.
 
-<Steps>
-### Feature flag
-The instruction is a no-op unless `FeatureBitFlags::MmOracleUpdate` (bit `0b00000001`) is set on `State.feature_bit_flags`. Whether this bit is enabled is per-deployment admin state; check the on-chain State account to confirm.
+## What a trader actually sees
 
-### Authorized signer
-The signer must match the state account's `hot_mm_oracle_crank` key.
+**Fills get worse before they stop.** The AMM is the first thing to withdraw. On a market where it was supplying most of the depth, a degraded feed shows up as an order filling only against resting orders, or not filling at all. Nothing errors; the order waits.
 
-### Monotonic sequence id
-An update is dropped if its `sequence_id` is not strictly greater than the market's last-accepted sequence id.
+**Margin numbers can freeze.** Once a feed is stale for margin, anything requiring a margin check, including opening a position and withdrawing collateral, reverts rather than proceeding on a price the protocol will not stand behind. This is why a withdrawal can fail during an outage on a market the account is not even trading.
 
-### Write-gap rate limit
-The update is dropped unless at least `MM_ORACLE_MIN_WRITE_GAP` (800ms, i.e. 2 slots at a 400ms slot time) has passed since the last accepted write. A second bound, `MM_ORACLE_MAX_SOURCE_AGE` (also 800ms), caps how old the observed source slot may be when the write lands.
+**Liquidation still runs.** A stale feed does not protect an underwater account. The reverse is less obvious: during a genuine oracle dislocation, wide bands can leave a position that neither its owner can close nor anyone else can liquidate until the price comes back. See [Guard rails](/protocol/risk-and-safety/guard-rails) for the two divergence bands that produce that state.
 
-### Step cap
-Once a price has been bootstrapped, an incoming price is dropped if it deviates from the last accepted price by more than `MM_ORACLE_MAX_STEP_PCT_PRECISION` (1%).
-</Steps>
+**Funding is damped, not skipped.** While a feed is invalid its TWAP stops updating while the mark TWAP keeps moving. On recovery the price is interpolated toward the mark TWAP, weighted by how long the outage lasted, so a market does not settle a large funding payment because its oracle was absent.
 
-### How the MM oracle is consumed
+## Sources
 
-`PerpMarket::get_mm_oracle_price_data` builds an `MMOraclePriceData` from the raw MM oracle fields plus the market's primary `OraclePriceData`. `MMOraclePriceData::new` then decides which price is actually "safe" to use:
+Two sources are supported: Pyth Lazer and Pyth push. The Switchboard and Pyth pull variants are deprecated and rejected onchain. The source is set per market, so read the market account for the one a given market decodes. A Pyth Lazer price is not written by Pyth's own crank: a keeper relays a signed message onchain and the program verifies the publisher's signature before it is used.
 
-- It computes `mm_exchange_diff_bps`, the absolute price difference between the MM oracle and the primary (exchange) oracle, as a fraction of the primary oracle price.
-- It falls back to the primary oracle's `OraclePriceData`, instead of the MM oracle, whenever **any** of the following hold:
-  - the primary oracle's own sequence id (or delay, if sequence ids aren't comparable) is more recent than the MM oracle's;
-  - the MM oracle price is `0`;
-  - the MM oracle's `OracleValidity` fails `VelocityAction::UseMMOraclePrice` (i.e. `NonPositive` or `TooVolatile`);
-  - `mm_exchange_diff_bps` exceeds `MM_EXCHANGE_FALLBACK_THRESHOLD`, **1%** of the primary oracle price.
-- Otherwise it uses the MM oracle price, but widens the reported confidence by adding the raw MM/exchange price difference on top of the primary oracle's confidence, so a price that is close to the exchange oracle but not identical to it doesn't understate uncertainty downstream.
-
-<Callout type="info">
-The ~1% divergence check is a fallback safety net, not a validity check: it never raises `OracleValidity::TooUncertain` on its own. If the MM oracle diverges from the primary oracle by more than 1%, the protocol simply ignores the MM oracle price for that read and uses the primary oracle instead.
-</Callout>
-
-The resulting "safe" oracle price data also feeds AMM-fill risk gating: if the MM oracle is enabled, at least as fresh as the primary oracle, and its diff-vs-exchange is high, `PerpMarket::amm_fill_gates_ok` blocks AMM fills as an early-volatility protection, independent of the standard validity checks.
-
-## Pyth Lazer
-
-Pyth Lazer is the oracle source for all live markets at the time of writing (`PythLazer` for perp markets, `PythLazerStableCoin` / `PythLazer` for spot collateral). Unlike the Pyth push oracle, a Lazer price is not written by Pyth's own crank, it is relayed on-chain by a keeper through `handle_update_pyth_lazer_oracle`:
-
-<Steps>
-### Signature verification
-The instruction requires an accompanying Ed25519 signature-verify instruction earlier in the same transaction. It reads the current instruction index from the instructions sysvar, requires it to be `> 0`, then calls `pyth_lazer::signature::verify_message` against the on-chain Lazer `Storage` account (a fixed, hardcoded `PYTH_LAZER_STORAGE_ID`) to verify the payload was signed by an authorized Lazer publisher.
-
-### Payload decode
-The verified message is deserialized into Lazer's `PayloadData`, which carries one or more feed updates. The number of remaining accounts passed to the instruction must exactly match the number of feeds in the payload.
-
-### Per-feed PDA check and write
-For each feed, the target `PythLazerOracle` account is derived as a PDA from seeds `[PYTH_LAZER_ORACLE_SEED, feed_id]` and must match the account passed in remaining_accounts. The handler then extracts price, best bid/ask, exponent, and the feed's update timestamp from the payload properties.
-
-### Monotonic timestamp + wall-clock bounds
-An update is skipped (not errored) if the payload has no `FeedUpdateTimestamp`, or if that timestamp is not strictly greater than the oracle account's currently stored `publish_time` (an equal timestamp is rejected too, so a keeper cannot re-post the same message to hold the feed slot-fresh). The feed timestamp is also bounded against `Clock::unix_timestamp` in both directions: it is skipped if it lags the wall clock by more than `PYTH_LAZER_MAX_STALENESS_SECONDS` (15s), or leads it by more than `PYTH_LAZER_MAX_FUTURE_SECONDS` (60s). A zero price is rejected outright with `InvalidPythLazerMessage` rather than skipped.
-
-### Confidence fallback
-Confidence is the widest of three signals: a 20 bps floor on price (`price / 500`), the absolute distance between the best bid and best ask (a crossed book counts as its magnitude, not a negative), and the message's own signed `Confidence` property, if present.
-</Steps>
-
-The account written by this handler, `PythLazerOracle`, stores `price`, `publish_time`, `posted_slot` (the slot the update landed in), `exponent`, and `conf`. It is this account, read through `get_pyth_price` alongside the Pyth push branch, since Lazer shares the same scaling/precision path, that ultimately produces the `OraclePriceData` used everywhere else in this page, including the `sequence_id` (set from `publish_time`) used by the MM oracle's recency comparison above.
-
-<Callout type="info">
-`oracle_delay` (slots since `posted_slot`) still drives on-chain staleness the same way it does for the Pyth push oracle, but the wall-clock bounds above (15s lag, 60s lead) also gate whether a Lazer message is accepted onto the feed in the first place. Freshness is no longer purely a function of keeper crank cadence.
-</Callout>
-
-## Prelaunch Oracle
-
-Markets that haven't yet listed on Pyth/Pyth Lazer can instead use a self-referential `Prelaunch` oracle source (`OracleSource::Prelaunch`). `PrelaunchOracle::update` derives its price from the market's own mark TWAP, capped by an admin-configured `max_price`: it uses `last_mark_price_twap` unless that TWAP has reached or exceeded `max_price`, in which case it clamps to `max_price`. Confidence is set from the wider of the bid/ask TWAP spread and `mark_std`.
+A market that has not listed on either feed can use a prelaunch oracle, which is self-referential: the price is the market's own mark TWAP, clamped to an admin-configured maximum. Such a market has no outside anchor, which is why prelaunch markets sit in the tiers with no insurance coverage and the widest confidence tolerance.

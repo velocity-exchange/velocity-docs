@@ -1,118 +1,76 @@
-# Bug Bounty
+---
+title: "Bug bounty"
+description: "What is in scope, what each severity tier pays, and how to report."
+---
 
-## Bug Bounty Overview
-
-Velocity offers bug bounties for Velocity's [on-chain program code](https://github.com/velocity-exchange/velocity-v1) and its web application; web application bugs are capped at the High bounty tier.
+Velocity pays bounties for vulnerabilities in its onchain program code and in its web application. Program bugs are paid across all four severity tiers; web application bugs are classified on the same scale but capped at the High tier. The tiers and example impacts follow [Immunefi's Vulnerability Severity Classification System v2.3](https://immunefi.com/severity-updated/), and they are guidelines rather than a schedule: every submission is assessed on its own facts.
 
 <Callout type="warning">
 **DO NOT CREATE A GITHUB ISSUE** to report a security problem. Email security\@velocity.exchange instead.
 </Callout>
 
-| **Severity** | **Description**                                                                                                   | **Bug Bounty**                                                         |
-| ------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Critical** | Bugs that freeze user funds or drain the contract's holdings or involve theft of funds without user signatures     | 10% of the value of the hack, min \$10,000, max \$100,000              |
-| **High**     | Bugs that could temporarily freeze user funds or incorrectly assign value to user funds                            | \$2,000 to \$10,000 per bug, assessed on a case by case basis          |
-| **Medium**   | Denial of service, griefing, or theft of small amounts of funds requiring significant preconditions                | \$500 to \$2,000 per bug, assessed on a case by case basis             |
-| **Low**      | Other issues that don't qualify for the above tiers                                                                | \$100 to \$500 per bug, assessed on a case by case basis               |
+| Severity | Description | Bug bounty |
+| --- | --- | --- |
+| **Critical** | Bugs that freeze user funds or drain the contract's holdings or involve theft of funds without user signatures | 10% of the value of the hack, min \$10,000, max \$100,000 |
+| **High** | Bugs that could temporarily freeze user funds or incorrectly assign value to user funds | \$2,000 to \$10,000 per bug, assessed on a case by case basis |
+| **Medium** | Denial of service, griefing, or theft of small amounts of funds requiring significant preconditions | \$500 to \$2,000 per bug, assessed on a case by case basis |
+| **Low** | Other issues that don't qualify for the above tiers | \$100 to \$500 per bug, assessed on a case by case basis |
 
-The severity guidelines are based on [Immunefi's Vulnerability Severity Classification System v2.3](https://immunefi.com/severity-updated/). Note that these are simply guidelines for the severity of the bugs. Each bug bounty submission will be evaluated on a case-by-case basis.
-
-## Severity Tiers
+## Severity tiers
 
 ### Critical
 
-**Payout:** 10% of the value of the hack, with a minimum of \$10,000 and a maximum of \$100,000
-
-Example impacts:
-
-*   Direct theft of a significant amount of user funds without preconditions
-
-*   Permanent freezing, even after a program upgrade, of a significant amount of user or protocol funds
-
-*   Direct theft of a significant amount of protocol funds or protocol insolvency
+- Direct theft of a significant amount of user funds without preconditions
+- Permanent freezing, even after a program upgrade, of a significant amount of user or protocol funds
+- Direct theft of a significant amount of protocol funds, or protocol insolvency
 
 ### High
 
-**Payout:** \$2,000 to \$10,000 per bug
-
-Example impacts:
-
-*   Theft of user funds with preconditions
-
-*   Theft of protocol-held assets with preconditions
-
-*   Temporary freezing of funds
-
-*   Theft or permanent freezing of unclaimed yield (e.g., funding payments, fee accruals, or rebates)
-
-*   User or protocol funds remain frozen after a program upgrade when specific preconditions are met
+- Theft of user funds with preconditions
+- Theft of protocol-held assets with preconditions
+- Temporary freezing of funds
+- Theft or permanent freezing of unclaimed yield, such as funding payments, fee accruals or rebates
+- User or protocol funds that remain frozen after a program upgrade when specific preconditions are met
 
 ### Medium
 
-**Payout:** \$500 to \$2,000 per bug
-
-Example impacts:
-
-*   Denial of service issues that can be resolved with an upgrade
-
-*   Griefing (damage to users or the protocol with no profit motive for the attacker)
-
-*   Program unable to operate due to insufficient token funds
-
-*   Theft of a small amount of funds, or theft requiring significant preconditions
+- Denial of service issues that can be resolved with an upgrade
+- Griefing, meaning damage to users or the protocol with no profit motive for the attacker
+- Program unable to operate due to insufficient token funds
+- Theft of a small amount of funds, or theft requiring significant preconditions
 
 ### Low
 
-**Payout:** \$100 to \$500 per bug
+Other issues that do not qualify for one of the tiers above.
 
-Other issues that may not qualify for one of the above tiers.
+### Web application
 
-### Web Application
+Web application bugs are classified using [Immunefi's Websites and Apps impact list](https://immunefi.com/severity-updated/), but payouts are capped at the High tier regardless of classification. A finding that would classify as Critical against the web application is paid at the High cap, not the Critical rate.
 
-Web application bugs are classified using [Immunefi's Websites & Apps impact list](https://immunefi.com/severity-updated/), but payouts are capped at the High bounty tier regardless of classification.
+- **Critical, paid at the High tier cap:** malicious interactions with an already-connected wallet, such as modifying transaction arguments or recipients; direct theft of user funds; retrieval of sensitive data such as passwords or private keys; execution of arbitrary system commands; or taking state-modifying authenticated actions on behalf of users without interaction
+- **High:** injecting or modifying static content on the application without JavaScript, persistently; improperly disclosing confidential user information; changing sensitive user details without wallet interaction; or subdomain takeover
+- **Medium:** reflected content injection, open redirects, or changing non-sensitive user details without wallet interaction
+- **Low:** taking over broken or expired outgoing links, temporarily disabling user access to the site, or changing user details that require significant user interaction
 
-Example impacts:
+## Submitting a report
 
-*   **Critical (paid at the High tier cap):** malicious interactions with an already-connected wallet (e.g., modifying transaction arguments or recipients), direct theft of user funds, retrieval of sensitive data such as passwords or private keys, execution of arbitrary system commands, or taking state-modifying authenticated actions on behalf of users without interaction
+Email security\@velocity.exchange with a detailed description of the attack vector. For Critical and High severity bugs we require a proof of concept carried out against a privately deployed mainnet program, not against the live deployment.
 
-*   **High:** injecting or modifying static content on the application without JavaScript (persistent), improperly disclosing confidential user information, changing sensitive user details without wallet interaction, or subdomain takeover
+Bounties are paid in USDC or USDT. Alternative payment methods can be arranged case by case.
 
-*   **Medium:** reflected content injection, open redirects, or changing non-sensitive user details without wallet interaction
+## Out of scope
 
-*   **Low:** taking over broken or expired outgoing links, temporarily disabling user access to the site, or changing user details requiring significant user interaction
+The following are not eligible for a bounty:
 
-## Submission
-
-Please email security\@velocity.exchange with a detailed description of the attack vector. For critical and high severity bugs, we require a proof of concept done on a privately deployed mainnet program. We will reach out with additional questions or the next steps on the bug bounty.
-
-## Bug Bounty Payment
-
-Bug bounties will be paid in USDC or USDT. Alternative payment methods can be used on a case-by-case basis.
-
-## Invalid Bug Bounties
-
-The following are out of scope for the bug bounty:
-
-1.  Attacks that the reporter has already exploited themselves, leading to damage.
-
-2.  Attacks requiring access to leaked keys/credentials.
-
-3.  Attacks requiring access to privileged addresses (governance, admin).
-
-4.  Incorrect data supplied by third party oracles (this does not exclude oracle manipulation/flash loan attacks).
-
-5.  Lack of liquidity.
-
-6.  Third party, off-chain bot errors (for instance bugs with an arbitrage bot running on the smart contracts).
-
-7.  Best practice critiques.
-
-8.  Sybil attacks.
-
-9.  Attempted phishing or other social engineering attacks involving Velocity contributors or users.
-
-10. Actively performing denial-of-service attacks against live services, or automated testing that generates significant traffic. (Reporting a denial-of-service vulnerability with a proof of concept in an isolated environment remains in scope under the Medium tier.)
-
-11. Findings that duplicate the results of an independent security audit. Velocity periodically engages external auditors; while an audit is in progress, submissions that overlap with issues identified by the auditors (or with findings from a completed audit) are considered known issues and are not eligible for rewards.
-
+1. Attacks that the reporter has already exploited themselves, leading to damage.
+2. Attacks requiring access to leaked keys or credentials.
+3. Attacks requiring access to privileged addresses, such as governance or admin.
+4. Incorrect data supplied by third party oracles. This does not exclude oracle manipulation or flash loan attacks.
+5. Lack of liquidity.
+6. Third party, offchain bot errors, for instance bugs in an arbitrage bot running against the program.
+7. Best practice critiques.
+8. Sybil attacks.
+9. Attempted phishing or other social engineering attacks involving Velocity contributors or users.
+10. Actively performing denial-of-service attacks against live services, or automated testing that generates significant traffic. Reporting one with a proof of concept in an isolated environment remains in scope under the Medium tier.
+11. Findings that duplicate the results of an independent security audit. Velocity periodically engages external auditors; submissions overlapping with an in-progress or completed audit's findings are known issues and are not eligible.
 12. Any submission violating [Immunefi's rules](https://immunefi.com/rules/).

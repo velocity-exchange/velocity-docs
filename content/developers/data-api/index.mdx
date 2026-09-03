@@ -1,14 +1,86 @@
-import SwaggerUI from "swagger-ui-react"
-import "swagger-ui-react/swagger-ui.css"
+---
+title: "Data API"
+---
 
-# Data API Playground
+import { SwaggerPlayground } from "@/components/SwaggerPlayground"
 
-At a high level, the Velocity Data API is the backbone for reading historical and real-time protocol data so that apps, analytics, and integrations don't need to index the chain themselves. It follows the OpenAPI spec.
+The Data API serves indexed Velocity history over HTTP so an app does not have to run its own indexer. Everything the protocol emits as an event, fills, funding payments, liquidations, deposits, settlements, insurance-fund movements, is written to a store and exposed as REST. Use it for dashboards, portfolio views, tax exports, charting, and backtests. Live trading state (current orders, positions, margin, the orderbook) belongs to the [SDK](/developers/velocity-sdk/setup), which reads it from the chain directly.
 
-<Callout type="info">
-The Data API is live at `https://data.velocity.exchange`. Try requests directly in the interactive playground at [data.velocity.exchange/playground](https://data.velocity.exchange/playground).
+The service is live at `https://data.velocity.exchange` and every path below is relative to that host. The machine-readable contract is [`/openapi.json`](https://data.velocity.exchange/openapi.json), which is what the playground at the bottom of this page and at [data.velocity.exchange/playground](https://data.velocity.exchange/playground) both render.
+
+## What it covers
+
+The spec groups its operations under these tags. `/openapi.json` is the authority on the exact set of paths.
+
+| Tag | What it holds |
+| --- | --- |
+| Market | Per-market history by symbol: trades, funding rates, OHLC candles, swaps, deposits, rewards, insurance-fund flows. |
+| User | Per-subaccount history by `accountId`: trades, orders and their action records, positions closed, funding payments, liquidations, settled P&L, swaps, deposits, and account snapshots. |
+| Authority | Per-wallet views that span an authority's subaccounts: insurance-fund stake, account list, overview and trading, earn, vaults and referral snapshots, plus CSV statement export jobs, which are enqueued asynchronously and polled for a presigned download URL. |
+| Stats | Exchange-wide aggregates: market summaries and volume, prices, funding rates (Velocity's own and external references), liquidations, bankruptcies, vault stats, insurance fund, and the current-month maker and taker volume leaderboards. |
+| AMM | Historical AMM series: position, bid and ask price, oracle price, spreads, open interest. |
+| Notifications | A user's notification feed, delivery preferences, and registered devices. The only authenticated group. |
+| WebSocket | A single `/ws` upgrade endpoint carrying the real-time channels. |
+
+Two public reads sit outside the tag groups: `GET /params` returns the dashboard parameter blob and `GET /vaults` the vault config array. Both are what the trading interface itself reads, and both sit behind a one-minute CloudFront cache.
+
+<Callout type="warning">
+The `POST /tx/*` endpoints build unsigned transactions server-side (deposit, withdraw, place and cancel orders, settle P&L, builder-code setup, and a submit path). Every one of them is marked BETA in the spec and is for test use. Build transactions with the [SDK](/developers/velocity-sdk/transactions) instead.
 </Callout>
 
-All endpoints are relative to `https://data.velocity.exchange`.
+## Authentication
 
-<SwaggerUI url="https://data.velocity.exchange/openapi.json" />
+The spec declares no security scheme, and no API key exists. Every Market, User, Authority, Stats, AMM and Public read is open, and so is the WebSocket.
+
+The Notifications endpoints are the exception. They read and write one wallet's own data and carry three headers instead of a token:
+
+| Header | Value |
+| --- | --- |
+| `x-wallet-address` | The Solana wallet address the request is for. |
+| `x-signature` | The signature over `x-signed-message`, produced by that wallet. |
+| `x-signed-message` | A JSON string: `{"action": string, "ts": unix seconds, "walletAddress": string, "isDelegate"?: boolean, "velocityUserAccount"?: string}`. |
+
+The timestamp in the signed message is what bounds a signature's reuse, so sign per request rather than caching one signature.
+
+## Rate limits
+
+The OpenAPI spec declares no rate limit, no quota header, and no `429` response on any operation. Treat that as undocumented rather than unlimited: budget the polling, back off on any non-`2xx`, and prefer the WebSocket over a tight polling loop. What the spec does bound is the size of a single response, and those bounds are per endpoint:
+
+- `limit` maxima of 50, 100, 750, or 1,000 records depending on the endpoint, with the default well below the maximum.
+- `samples` on the AMM endpoints defaults to and caps at 11,000 data points. The step size between points is derived from that count and floors at 20 seconds, so the longest window that still resolves at 20 seconds is roughly 220,000 seconds, about 2.5 days.
+- `days` on the endpoints that take it runs from 1 to 100, default 7.
+
+## Request conventions
+
+**Rolling endpoints cover the last 31 days.** `GET /market/{symbol}/trades` and the other rolling paths return the most recent records first and stop at 31 days. They return JSON only.
+
+**Dated endpoints serve the archive.** The same resources take a date in the path, `/market/{symbol}/trades/{year}/{month}/{day}` for daily data and `/user/{accountId}/trades/{year}/{month}` for monthly, with `year` starting at 2022. These accept `format=csv` alongside the default `format=json`, which is the path to use for a bulk pull.
+
+**Pagination is a `page` cursor.** Every operation that takes `page` expects the token the previous response returns in `meta.nextPage` rather than a computed offset.
+
+**Symbols and account ids.** `symbol` is a market name such as `SOL-PERP`. `accountId` is a subaccount public key, not a wallet; `authorityId` is the wallet. `GET /authority/{authorityId}/accounts` maps one to the other.
+
+## Real-time channels
+
+`GET /ws` upgrades to a WebSocket. Send a `subscribe` message naming a `channelType`, and the server replies with an acknowledgement, an `init` snapshot where one applies, then a stream of `update` and `create` messages.
+
+| Channel | Subscribe payload | Notes |
+| --- | --- | --- |
+| `candle` | `channelType`, `symbol`, `resolution` | Its `create` and `update` messages omit the `channelType` and `channel` envelope every other channel carries, kept that way for backward compatibility. |
+| `markets` | `channelType` | |
+| `pricing` | `channelType` | |
+| `notifications` | `channelType`, `authority` | |
+| `orderbook` | `channelType`, `symbol` | The server has no handler for it: subscribing returns an `error` response reading "Unknown channel type". |
+| `user` | `channelType`, `accountId` | The server has no handler for it either, and returns the same error. |
+
+For a live orderbook, use the DLOB websocket described in [Orderbook and websocket](/developers/ecosystem-builders/orderbook-and-ws), not this one.
+
+## Column reference
+
+Field names, units, and precisions for the record types these endpoints return are in the [Data API glossary](/developers/data-api/glossary). Amounts come back in protocol precision, base at 1e9 and quote at 1e6, so divide before displaying.
+
+## Playground
+
+The embed below is generated from the live spec, so it always matches what the service is serving. Requests sent from it go to the production host.
+
+<SwaggerPlayground url="https://data.velocity.exchange/openapi.json" />

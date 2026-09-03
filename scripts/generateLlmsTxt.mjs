@@ -21,6 +21,7 @@ import {
   isHidden,
   sectionFor,
   findMdxFiles,
+  frontmatterTitle,
   stripFrontmatter,
   toRoute,
   loadSiteUrl,
@@ -54,17 +55,19 @@ function extractTitleAndDescription(raw) {
   const text = stripFrontmatter(raw);
   const lines = text.split(/\r?\n/);
 
-  let title = null;
+  // Titles live in frontmatter since the Fumadocs migration; fall back to a
+  // leading H1 for any page that still carries one.
+  let title = frontmatterTitle(raw);
   let titleIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^#\s+(.+?)\s*$/);
-    if (m) {
-      title = toPlainText(m[1]);
-      titleIdx = i;
-      break;
+  if (title) {
+    title = toPlainText(title);
+  } else {
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^#\s+(.+?)\s*$/);
+      if (m) { title = toPlainText(m[1]); titleIdx = i; break; }
     }
   }
-  if (title === null) return null;
+  if (!title) return null;
 
   let description = "";
   for (let i = titleIdx + 1; i < lines.length; i++) {

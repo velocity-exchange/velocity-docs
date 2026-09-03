@@ -1,0 +1,14 @@
+{
+  "title": "Trading",
+  "pages": [
+    "margin",
+    "order-types",
+    "auction-parameters",
+    "how-fills-work",
+    "trading-fees",
+    "funding-rates",
+    "profit-loss",
+    "liquidations",
+    "market-specs"
+  ]
+}

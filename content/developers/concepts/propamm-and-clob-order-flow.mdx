@@ -8,13 +8,12 @@ This design is not live. Implementation is in progress. The interfaces, the
 limits, and the account layouts on this page can change before release.
 </Callout>
 
-# PropAMMs and Velocity
 
-Velocity seeks to have the best on-chain market structure in order to give users the tightest possible spreads.
+Velocity seeks to have the best onchain market structure in order to give users the tightest possible spreads.
 
 In spot markets, we have seen that PropAMMs give makers superior optionality and therefore
 lead to tighter spreads. PropAMMs also have the advantage of being able to react intraslot to price changes
-without waiting for the round-trip latency from an off-chain entity writing quotes. When price
+without waiting for the round-trip latency from an offchain entity writing quotes. When price
 discovery happens fully on chain, a PropAMM acts like a colocated computer at the exchange.
 
 Equally, CLOBs have their use cases, especially for takers. Users need to be able to place resting orders.
@@ -27,10 +26,26 @@ with a CLOB which quotes side-by-side with PropAMMs.
 Because a CLOB is slower and more expensive to write to, orders on the CLOB receive priority over quotes
 from a PropAMM.
 
-# PropAMM and CLOB Order Flow
+## Avoiding Toxic Flow
+
+In the interest of achieving the tightest possible spreads, Velocity implements maker priority via taker speed bumps.
+There are two paths where takers can undergo a speed bump. Makers can choose to ignore or quote wider for
+taker flows that did not undergo a speed bump.
+
+First, an order placed directly on chain can have an `activation_delay_slots` such that the order is
+only allowed to execute `activation_delay_slots` slots after it is placed. Markets can have a `default_activation_delay_slots`
+greater than 0; which enables a guaranteed taker speed bump.
+
+Second, orders placed via Swift will be held for a configurable period of time. When those orders reach the chain,
+they will have an attestation that they underwent a speed bump. This allows for what feels like
+synchronous placement to a user, while avoiding toxic flow.
+
+In both cases makers are able to see the orders before they execute. For more information see [The taker speed bump](#the-taker-speed-bump)
+
+# Velocity PropAMMs
 
 Similar to spot PropAMMs, Velocity fills a perp order using a router pass.
-The on-chain router does three things:
+The onchain router does three things:
 
 1. It asks each quoter for its price ladder.
 2. It divides the taker size across the quoters.
@@ -53,17 +68,17 @@ This page gives three things:
 <FillTopologyFlow />
 
 Solana has strict transaction size limits that mean often every quoter can not fit into a single transaction.
-An off-chain router's job is to check every quoter on the market and pick the ones to carry to the blockchain.
-The on-chain router pass inside Velocity checks the quoters that arrived, divides the taker size across them, and holds
+An offchain router's job is to check every quoter on the market and pick the ones to carry to the blockchain.
+The onchain router pass inside Velocity checks the quoters that arrived, divides the taker size across them, and holds
 each one to its own answer. Only the second router moves collateral. The first
 one decides what the second one can reach, because a transaction can carry only
 part of a market. A filler or the taker signs the transaction between the two,
-which [Off-chain routers and fillers](#off-chain-routers-and-fillers) covers.
+which [Offchain routers and fillers](#offchain-routers-and-fillers) covers.
 
 Note that this model is slightly different than spot PropAMMs. Because spot PropAMMs do not
-expose their underlying curve or pricing ladder, on-chain is mostly bound to the percent-wise division
-decided by the external router. With Velocity's quoter interface, this is no longer the case. The on-chain
-router may find a more optimum split than off-chain due to price changes between when the transaction was created
+expose their underlying curve or pricing ladder, onchain is mostly bound to the percent-wise division
+decided by the external router. With Velocity's quoter interface, this is no longer the case. The onchain
+router may find a more optimum split than offchain due to price changes between when the transaction was created
 and when it lands.
 
 The router pass reads four kinds of quoter.
@@ -155,7 +170,7 @@ No response of any type may name the taker, and none may name the protocol
 account. Velocity applies both rules to each balance change, before the type of
 the entry decides anything else.
 
-## Off-chain routers and fillers
+## Offchain routers and fillers
 
 <RoutingLanesFlow />
 
@@ -165,7 +180,7 @@ each maker as an authority and a sub-account rather than as an account key. A
 caller therefore cannot derive the account list from the market address. It must
 read the book.
 
-A router does that read. A router is an off-chain service. It simulates the whole
+A router does that read. A router is an offchain service. It simulates the whole
 fill at a recent slot, and it answers with three things:
 
 - the split across the quoters, and the value that binds each part
@@ -174,7 +189,7 @@ fill at a recent slot, and it answers with three things:
 - the registry entries to carry, and the accounts of each entry
 
 A router will pass extra Quoters if possible in price priority. This allows changes
-between route-time and on-chain execution to be handled appropriately by the on-chain router.
+between route-time and onchain execution to be handled appropriately by the onchain router.
 For example, at route time the split may be 50% to maker A, 50% to maker B. At execution time,
 the optimum split may be 40% A, 40% B, 20% C.
 
@@ -194,8 +209,8 @@ edge cases to be aware of.
 
 A transaction locks at most
 64 accounts, and one maker costs two of them, so no transaction reaches a whole
-market. The off-chain router reads the whole market and chooses the part to
-carry. The router pass on chain then quotes and fills within that section of the market. The off-chain router should do its best to include the best possible makers,
+market. The offchain router reads the whole market and chooses the part to
+carry. The router pass on chain then quotes and fills within that section of the market. The offchain router should do its best to include the best possible makers,
 the fill will give the best price amongst the limited set.
 
 Velocity operates a router. Any person can operate one. A router holds no key and
@@ -223,13 +238,26 @@ a filler to the intent of the taker:
 A signed message user does not have to trust the filler, only the router that they used
 to fill out the route digest.
 
+A signed order is also the attested path. SWIFT holds the message through a
+hold window and releases a detached attestation for the fill, so the fill can
+take synchronously on a market with an activation delay. [Attested
+flow](#attested-flow) gives the rule.
+
 ### A transaction that the taker builds
 
 The taker builds and signs the transaction. There is no message and no filler.
 The order holds no route digest, and neither rule above applies. The account
 list is the choice of the taker, and the fill is the responsibility of the
 taker. A client on this path calls a router, or it calls `splitAcrossQuoters` in
-the SDK, to decide what to carry.
+the SDK, to decide what to carry. The router view takes the flow as an
+argument (`taker_served_window`), so a client that prices unprotected flow
+sees no depth from a bumped book or a protected quoter — the books it would
+actually reach.
+
+This path is unattested. On a market with an activation delay, it cannot take
+in the same transaction: the order rests through its delay window and matches
+at its activation slot. [The taker speed bump](#the-taker-speed-bump) gives
+the rule.
 
 ## Sequence
 
@@ -306,7 +334,8 @@ cannot lose size that is smaller than one step.
 </Steps>
 
 Size that no quoter has depth for stays unfilled. A limit order rests with that
-size. An immediate-or-cancel order cancels it.
+size, and the [remainder auction](#the-remainder-auction) prices its next fill.
+An immediate-or-cancel order cancels it.
 
 ### An order whose owner the transaction omits
 
@@ -314,7 +343,8 @@ Velocity settles a fill only for a `User` account in the transaction. A book can
 hold an order for a user that the transaction omits. The size and the age of that
 order decide what the book does. Two market settings set the limits:
 `blocking_min_size` and `unknown_user_grace_slots`. The book measures the age
-from the slot at which the order became matchable.
+from the slot at which the order became matchable, which is its
+[activation slot](#the-activation-delay).
 
 | The order | What the book does | Result for the taker |
 | --- | --- | --- |
@@ -329,7 +359,7 @@ sends the transaction.
 The size floor exists because stopping a walk is a right, and a right has a
 price. Without the floor that price is `min_order_size`. A transaction carries at
 most 48 users, so one more order than that, each on a fresh sub-account at the
-top of the book, makes the depth behind them unreachable for every caller — for
+top of the book, makes the depth behind them unreachable for every caller, for
 the cost of rent. The floor prices the right in inventory instead: holding one
 means resting real size at the top of the book, exposed to being filled, which
 is market making.
@@ -375,14 +405,144 @@ for passes the second test, so only this one catches it. It applies only to an
 order that named a route: a taker that named no entries has said nothing about
 which entries are uninvited. Signing a route is how a taker earns this test.
 
+## The activation delay
+
+Each order on the book carries an `activation_slot`: the placement slot plus a
+delay in slots. Before that slot the order is visible and is not matchable. A
+quote passes over it. An execute cannot fill it. A cross cannot fire against
+it. A cancel of a maker's quote is not delayed. A rested remainder is the one
+exception: its owner cannot cancel it before the activation slot, because
+[the remainder auction](#the-remainder-auction) needs an order that makers can
+line up against.
+
+| Value | Meaning |
+| --- | --- |
+| `default_activation_delay_slots` | The delay for an order that names none |
+| `max_activation_delay_slots` | The largest delay that an order can name |
+
+An order can name a longer delay than the default. Only an attested
+transaction can name a shorter one, down to zero. An unattested transaction
+that asks for a shorter one fails with `UnattestedFastActivation`.
+
+### The taker speed bump
+
+On a market whose default delay is more than
+zero, an unattested order cannot take in the same transaction that places it. The
+order rests on the book through its delay window, and it matches at its
+activation slot. Attested flow is the only path to a synchronous take.
+
+A taker on such a market therefore has two choices. Serve the delay on the
+book, in front of every maker. Or send the order through
+[SWIFT](/developers/market-makers/swift-api) and serve the hold there, in front
+of every maker. Both choices show the order to the makers before it can match.
+A market with a default delay of zero drops the speed bump and permits a
+synchronous unattested take.
+
+A keeper fill of an order that already rests — `fill_perp_order`, and
+`fill_legacy_dlob_order` for orders in `User.orders` — still runs unattested.
+The book quotes it no depth, so the fill reaches the vAMM and the passed DLOB
+makers only, and a restable remainder migrates to the book and joins the
+auction.
+
+### Price decides the match
+
+Inside the delay window, transaction landing ordering/speed buys nothing.
+
+A maker that must react to a new order has the whole window to act.
+At the activation slot, Velocity's cranks fire the match, and the best-priced 
+order on the book wins it. With price-time priority on the CLOB and pro rata elsewhere,
+there is no priority fee race to land a transaction first.
+
+### The remainder auction
+
+An order that comes to trade and does not fill rests on the book: a
+signed-message order's remainder, a limit order's remainder after a take, and a
+fired trigger order. The rested order keeps the taker's limit price, and its
+delay window is an auction.
+
+Makers place counter-orders inside the window. At the activation slot, the
+best-priced counter-order fills the rested order. The fill settles at the
+counter-order's own price, not at the rested limit. The taker keeps the whole
+improvement. For
+example, a taker's bid rests at 101. Makers rest asks at 99 and at 100 inside
+the window. At activation the 99 ask matches, and the taker pays 99. The maker
+that quoted 100 lost on price, not on latency.
+
+While a counter-order crosses it, a rested remainder cannot be taken. The book
+skips it in `quote_v0` and in `execute_v0`, exactly as it skips an order before
+its activation slot.
+
+The window binds the taker as well. The owner cannot cancel a rested remainder
+before its activation slot. An order that its
+owner can pull the moment a maker lines up offers the makers nothing to line
+up against. Two limits stand: `max_ts` still expires the order, and a
+liquidation force-cancel is exempt, so a distressed account is never blocked.
+
+## Attested flow
+
+An attestation is a flow-authority signature. Velocity names one
+flow-authority key on its `State` account, and the
+[SWIFT](/developers/market-makers/swift-api) service holds that key. It
+attests through two transports, and it never signs a transaction it did not
+build.
+
+On a transaction that SWIFT builds itself — a placement, a direct take — the
+key signs as a named `flow_authority` account, and presence of that signer is
+the attestation.
+
+For a signed-message fill, the transaction is keeper-built, so the key signs
+a detached attestation instead: a signature over the order's own signature
+plus an expiry. SWIFT receives the order message, broadcasts it to the maker
+WebSocket feed, holds it, and releases the attestation when the hold ends.
+The default hold is 300 milliseconds. The keeper passes the blob as the
+fill's `flow_attestation` argument, and Velocity verifies it in-program next
+to the taker signature it binds to. The attestation authorizes exactly one
+order's flow, costs no signature fee, and the same blob serves every keeper —
+the order still fills once.
+
+Velocity verifies the attestation once, at its own boundary, and forwards the
+verdict to every quoter on the wire as `taker_served_window`. This field can indicate multiple cases,
+all ensure a taker was delayed. Either (a) attested
+transaction served the SWIFT hold or (b) a crank that fills a rested order earns
+the flag by measured rest; the orders it settles must have rested at least
+two slots, above the SWIFT hold.
+
+On a market whose default delay is more than zero:
+
+| Flow | Delay served | The take |
+| --- | --- | --- |
+| Unattested | The market default on the book (a maker's own placement may name a longer one) | At the activation slot |
+| Attested | The SWIFT hold, off chain | Synchronous, in one transaction |
+
+When no flow authority is configured, the fast path is closed for everyone.
+
+Both rows end at the same guarantee. An unattested order was visible on the
+book through its delay window. An attested order was visible on the SWIFT feed
+through its hold window. Every order that can match against a maker was
+therefore visible to that maker first.
+
+### What a maker does with the flag
+
+A quoter can read `taker_served_window` and answer differently for protected
+flow. The midpoint program has the check built in: the maker sets
+`require_attested_flow` on an instance, and the instance quotes and fills
+protected flow only. Every taker that the instance faces then served a window
+— the SWIFT hold, or the delay window on the book. The maker can quote a
+tighter spread for that flow, because the flow cannot race the maker's own mid
+update inside the window it served. A custom quoter program applies the same
+check by reading the same field.
+
+The second window matters. An unattested order rests through its delay and is
+filled by Velocity's cranks, and the crank carries the flag, so a protected
+instance still fills that order. A taker that waited is not locked out of the
+liquidity that demanded the wait.
+
 ## The quoter interface
 
 <QuoterCallFlow />
 
-A quoter answers two calls. Both calls carry the same request shape, and both
-answer in the same framing. The `quoter-spec` crate declares every type on this
-wire. Velocity, the CLOB, and the midpoint program all use those declarations,
-so no program mirrors them by hand.
+A quoter answers two calls. The `quoter-spec` crate declares every type on this
+wire. Velocity, the CLOB, and the midpoint program all use those declarations.
 
 | Call | The question | The answer |
 | --- | --- | --- |
@@ -518,7 +678,7 @@ range holds the values whose change means that the quoter can quote differently
 now. A midpoint instance names its mid price. A program with its own model names
 its parameter block.
 
-The declaration is a notice to off-chain services. A change inside the range is
+The declaration is a notice to offchain services. A change inside the range is
 the signal to look for a cross against the new quote. A `watch_len` of zero
 declares no range, and a service then finds a cross by a poll. So a range that
 misses a reprice costs the maker latency on a cross. It cannot make a fill
@@ -566,6 +726,12 @@ Three rules limit the damage from a failed price feed.
 - Each rung holds a filled amount. A consumed rung stays consumed until the
   maker writes that side again. A taker cannot consume one rung twice while the
   maker changes the mid price.
+
+An instance can also refuse unprotected flow. The maker sets
+`require_attested_flow`, and the instance quotes and fills only takers whose
+flow served a window — the SWIFT hold or the book's delay, as
+`taker_served_window` on the quoter wire reports. [Attested
+flow](#attested-flow) gives what the maker gains from that.
 
 Velocity treats an instance as it treats any other quoter program. An
 administrator approves the registry entry. The maker can make the entry
@@ -673,10 +839,12 @@ this step calculates the wrong fill.
 
 ## Related pages
 
-- [Program structure](/developers/concepts/program-structure) — the location of
+- [Program structure](/developers/concepts/program-structure): the location of
   each program
-- [Account model](/developers/concepts/account-model) — the accounts that a fill
+- [Account model](/developers/concepts/account-model): the accounts that a fill
   loads
-- [Orderbook & matching](/developers/market-makers/orderbook-and-matching) — the
+- [Orderbook & matching](/developers/market-makers/orderbook-and-matching): the
   DLOB, which is one of the four kinds of quoter on this page and is to be
   removed
+- [SWIFT API](/developers/market-makers/swift-api) — the signed-order intake
+  whose hold window backs [attested flow](#attested-flow)

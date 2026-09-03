@@ -8,7 +8,7 @@ export function RevenuePoolSankey() {
   return (
     <Diagram
       title="Where protocol fees go: revenue pool versus protocol fee pool"
-      caption="Shows the two destinations for protocol fees and what each one funds downstream. Source: the prose on this page. The page names the three fee sources and both destinations but does not publish a split percentage between the Insurance Fund's cut and the protocol's cut, or between vault settlement and AMM draws, so every split is drawn with equal widths; the figure shows the routes, not the proportions."
+      caption="Shows where protocol fees go and what the insurance fund funds downstream. Source: programs/velocity/src, not the prose. The split numerators between the insurance fund's cut and the protocol's cut are admin-set per market and are 0 at launch, so every leg is drawn at equal width: this figure shows the routes, not the proportions. The draw into a perp market comes from the insurance fund vault, not the revenue pool, and covers a P&L deficit rather than funding."
     >
       {({ captionId }) => (
         <Sankey

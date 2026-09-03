@@ -1,106 +1,94 @@
-# Auction Parameters
+---
+title: "Auctions"
+description: "Why a market order walks its price instead of taking the book, and what the program does to the parameters an order carries."
+---
 
-Velocity allows orders to set custom auction parameters. You can access these settings by clicking the gear icon followed by "More Settings" in the top right of any page in the app.
+Every market order on Velocity, and every crossing limit order that is not post-only, carries a short Dutch auction: the price starts somewhere favorable to the taker and walks toward the order's limit over a fixed window, and anyone can fill it at whatever the price is when they get there.
+
+## Why an order is not filled instantly
+
+Taking whatever rests on a book works when the book is deep, continuous, and updated faster than anyone can react. On a chain with block times in the hundreds of milliseconds, none of those hold: whoever lands a transaction first takes the order at the worst price its slippage tolerance allows, and a maker who would have quoted tighter never gets the chance.
+
+## The mechanism
+
+The auction reverses the incentive. The price starts good for the taker and bad for a filler, and walks toward the limit price over the auction's duration. A maker who wants the flow has to take it early, while it is still favorable to the taker, or wait and risk losing it. Waiting only pays if nobody wants the order at all.
+
+<AuctionPriceRamp />
+
+An order might start 0.05% better than the estimated fill price and end at the worst acceptable fill plus a 0.05% buffer. Anyone can fill it anywhere along that line, and afterwards the remainder can still fill at the end price until the order expires. Prices can also be set as offsets from the oracle, so the ramp tracks it instead of stranding at a stale level.
+
+<Callout type="important">
+The requested duration is a floor, not a fixed value. The program can lengthen it, and it can move the start and end prices. What it will not do is let the auction fill worse than the order's own limit price. See [How the program sanitizes an auction](#how-the-program-sanitizes-an-auction).
+</Callout>
+
+### Auctions on limit orders
+
+A crossing limit order without the post-only flag carries its own auction as part of the same order, not a separate one. Its end price defaults to the order's own limit price rather than to a slippage setting.
+
+### Filling against resting liquidity atomically
+
+With "fill against resting liquidity first" enabled, makers passed in alongside the order match immediately where the auction price crosses their limits, at the auction's **end price** by default. Whatever is left runs the ordinary auction, or is cancelled if immediate-or-cancel is set.
+
+## Setting one up
+
+From the gear icon and "More Settings" in the top right of any page, then "Custom" on the Trade tab.
 
 <img src="/assets/auction-parameters-1.png" alt="" width="800" height="auto"></img>
-
-On the "Trade" tab click "Custom". These settings allow users to customize how orders are executed on Velocity by setting specific auction parameters.
 
 <img src="/assets/auction-parameters-2.png" alt="" width="800" height="auto"></img>
 
 <Callout type="warning">
-Customising auction parameters is recommended for advanced traders only.
+Customizing auction parameters is for traders who have read the sanitization rules below. The defaults are derived from live market conditions and are usually better than a hand-set value.
 </Callout>
 
-## How auctions work
-
-With Velocity, users can determine the duration of their auction in 'slots', and set starting and ending prices based on the keeper network's view of the DLOB.
-
-<Callout type="important">
-The duration you request is a floor, not a fixed value. The program can lengthen it, and can move your start and end prices. See [How the program sanitizes your auction](#how-the-program-sanitizes-your-auction) below.
-</Callout>
-
-<AuctionPriceRamp />
-
-As an example, consider an order configured this way:
-
--   the user wants the auction to start at a price 0.05% better than the estimated fill price.
-
--   The auction will end at a price that's the worst fill, but with a safety buffer of 0.05% slippage.
-
--   This entire process will take place over 20 slots, roughly 8 seconds at today's 400ms slot time. Do not treat that conversion as fixed: Solana's slot time is shrinking, and the program tracks the live value in `State.slotDurationMs`. See [Slot duration and wall-clock time](/developers/concepts/slot-duration).
-
--   If the order isn't fully executed within this time, any remaining amount can be filled at a price 0.5% worse than the estimated entry price up to the order's expiry. By default, market orders remain valid for at least 30 seconds; if the auction runs longer, the expiry extends to roughly half the auction's duration plus 10 seconds.
-
-Additionally, user's can specify their auctions as offsets from oracle price. This means during the auction (and at runtime) the auction is dynamically moving with the oracle prices as they update (increasing the chance of fair value fills).
-
-### Auctions for Limit Orders
-
-A submitted limit order that crosses the local DLOB and/or AMM (and doesn't have the post-only flag) carries its own auction, computed and stored as part of the same order, not placed separately or "first." The auction's start price follows the user-defined start-price rule, the same as a market order's auction. **The end price, however, defaults to the order's own limit price rather than the UI's slippage-tolerance setting, and the program clamps both start and end prices so the auction can never fill worse than that limit price.**
-
-
-### Atomic Fills against Resting Liquidity
-
-When 'Fill against resting liquidity first' is enabled, placed orders will go through the `place_and_take_perp_order` instruction. In Place And Take, a list of makers can be passed in with the user's order and if the auction price at that point in the ramp crosses the makers' limit price(s), the order will match. By default this atomic leg prices at the auction's *end price* (100% of the way through the ramp), but the instruction accepts an optional auction-duration percentage that can price it earlier along the ramp instead, which is more aggressive for the taker. Any remaining amount of the order after this step will go through a typical auction (from start to end), unless IOC is enabled (in which case the order will cancel after attempting to fill vs makers). Note that Velocity's AMM can also participate atomically in this first step alongside the makers, provided the AMM is currently available to fill (e.g. not paused); if the AMM is unavailable at that moment, it is excluded and only the maker orders fill atomically.
-
-Now that you understand how an auction runs, here's how to set one up and the fields you'll see when doing so.
-
-## Start Price Fields
-
-| Field | Description
-| ----- | ------
-| Oracle Price | Current oracle price of the market
-| Mark Price | Current mark price, reflecting the protocol’s fair price based on oracle and market conditions
-| Best Bid/Ask | Use best bid/ask price
-| Est. Entry Price | Price includes estimated price impact on DLOB/AMM
-| Best Overall Price | Select best price of all of the above
-| Market Based | Dynamically derive the start price using live market conditions, prioritizing liquidity and execution quality
+| Start price field | What it uses |
+| ----- | ------ |
+| Oracle Price | The market's current oracle price. |
+| Mark Price | The current mark price, from the AMM's curve and its spread. |
+| Best Bid/Ask | The best bid or ask on the orderbook. |
+| Est. Entry Price | Includes the estimated price impact of the order's size on the orderbook and the AMM. |
+| Best Overall Price | The best of the above. |
+| Market Based | Derived from live market conditions, weighting liquidity and execution quality. |
 
 <Callout type="warning">
-**For Large Size:** It's recommended to set a longer duration, "Use Oracle Offset", and wider start, end buffers.
+**For large size:** set a longer duration, use oracle offsets rather than fixed prices, and widen both the start and end buffers. A wide auction on a long duration is what gives makers time to source the other side.
 </Callout>
 
 <Callout type="info">
-Building your own client? The DLOB server exposes the same derivation over HTTP at `/auctionParams`, including the `marketBased` start price. See [Auction params](/developers/ecosystem-builders/orderbook-and-ws) for its full query surface.
+The orderbook server exposes the same derivation over HTTP at `/auctionParams`, including the `marketBased` start price, so a client can request the derivation rather than reimplement it. See [Auction params](/developers/ecosystem-builders/orderbook-and-ws) for its full query surface.
 </Callout>
 
-## How the program sanitizes your auction
+## How the program sanitizes an auction
 
-The auction params you submit are a request. On every perp order placement the program rewrites them in place before the order is stored, so the auction that actually runs can differ from the one you sent. Nothing is rejected for this reason; the params are simply adjusted.
+The submitted parameters are a request. The program rewrites them before storing the order, so the auction that runs can differ from the one that was sent.
 
 <AuctionSanitizationFlow />
 
 ### Start and end prices
 
-- **Missing prices are filled in.** If you omit a start or end price, the program derives one from the market's live conditions (oracle price, or your limit price for the end of a crossing limit order).
-- **Neither price may be worse than your own limit price.** For a long order, both start and end are capped at the limit price; for a short, both are floored at it. Your limit price remains the worst price you can be filled at.
-- **A better start price wins.** If the market-derived start price is better for you than the one you asked for, the program uses the better one. Signed-message orders get a 0.1% deadband here: the derived price has to beat your requested start by more than 0.1% before it replaces it.
+- **Missing prices are filled in** from live conditions: the oracle price, or the order's own limit price for the end of a crossing limit order.
+- **Neither price may be worse than the order's own limit price**, which remains the worst price it can fill at.
+- **A better start price wins.** If the market-derived start is better for the taker than the one requested, the program uses it.
 
 ### The duration floor
 
-The duration you request is treated as a floor, not a fixed value. The program computes its own minimum from two inputs, the auction's price spread and the market's [contract tier](/protocol/risk-and-safety/contract-tiers), then stores `max(your duration, that minimum)`.
+The program computes its own minimum from the auction's price spread and the market's [contract tier](/protocol/risk-and-safety/contract-tiers), and stores the larger of that and the requested duration. A wide ramp crossed in one slot is just a market order at the end price, so wider auctions get more time. The floor is denominated in **400ms units**, and per 1% of spread the tier decides how many are granted:
 
-The minimum is built in 400ms **steps**:
-
-| Market contract tier | Steps granted per 1% of auction price spread | Wall clock per 1% of spread |
+| Market contract tier | Units granted per 1% of auction price spread | Wall clock per 1% of spread |
 | --- | --- | --- |
 | A or B | 100 | 40s |
 | C, Speculative, Highly Speculative, Isolated | 60 | 24s |
 
-The step count is then clamped to the range 1 to 180, so the floor is never shorter than 400ms and never longer than 72 seconds, however wide the spread. Finally it is converted into an actual slot count using the live slot duration from `State`, rounding **up** so the auction never comes out shorter than the intended wall-clock time. Because `Order.auctionDuration` is a `u8`, the result is also capped at 255 slots.
+The count is clamped to 1 to 180, so the floor is never shorter than 400ms and never longer than 72 seconds. On top of it sits an exchange-wide minimum of 10 units, 4 seconds.
 
-The spread that feeds this is measured as a percentage of the oracle price, and it is the narrower of the range you requested and the range after price sanitization. Sanitizing your start price toward the market therefore cannot inflate your duration floor.
-
-<Callout type="info">
-Worked example. You place a market order on a tier B market with an auction spanning 0.5% of the oracle price, and you request a 10 slot duration. The floor is 0.5 × 100 = 50 steps, which is 20 seconds, which is 50 slots at a 400ms slot time. Your order is stored with `auctionDuration = 50`. On a Speculative-tier market the same order would get 0.5 × 60 = 30 steps, 12 seconds, 30 slots.
+<Callout type="important">
+**An auction's stored duration is wall-clock time, in units of 400ms. It is not a slot count and it is never converted into one.** Solana's slot time is falling from 400ms toward 200ms through a series of feature gates, and none of that changes an auction: a 50 unit auction is 20 seconds of wall clock at every slot duration. What changes is how many slots fit inside those 20 seconds, which the program handles by converting elapsed slots to elapsed milliseconds at fill time.
 </Callout>
 
-### Signed-message orders keep a tolerance
+## How long the order stays alive
 
-For signed-message (swift) orders only, the program leaves your requested duration alone when it is already within roughly 4 seconds' worth of slots of the computed floor. Outside that tolerance, and for every non-signed order, the `max(requested, floor)` rule applies.
+The auction ending does not cancel the order; its maximum timestamp does. Without one set, market and oracle orders get a default of at least 30 seconds, longer when the auction itself is long. Trigger orders and plain limit orders get no default expiry.
 
-### What this means in practice
+## What this means in practice
 
-- A short requested duration on a wide-spread auction will be lengthened, sometimes by a lot. Size your expectations off the floor, not off the number you sent.
-- The floor is tier-dependent, so the same order behaves differently across markets. For the same spread a tier A or B market grants the longer floor; tail-tier markets grant less per 1% but usually have wider spreads to begin with. Read a market's tier programmatically rather than assuming it.
-- The floor is expressed in wall-clock time internally and only converted to slots at the end. As Solana's slot time shrinks, the same order yields a larger slot count for the same number of seconds. See [Slot duration and wall-clock time](/developers/concepts/slot-duration).
+A short requested duration on a wide auction will be lengthened, sometimes substantially, so the floor rather than the requested number is what governs. Tail-tier markets grant fewer units per 1% of spread but usually run wider spreads, so their floors are often the longer ones. Spread and duration are not independent: a fast fill wants a narrow spread, and a good fill on size wants a wide one and a wait.

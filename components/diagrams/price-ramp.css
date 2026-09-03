@@ -42,7 +42,7 @@
 }
 /* The one signal leg. Full brand strength: at 1.5px a tinted green reads as gray. */
 .dg-pr-line[data-tone="signal"] {
-  stroke: var(--vlc-brand);
+  stroke: var(--color-fd-primary);
   stroke-width: 1.75;
 }
 .dg-pr-line[data-dashed] {
@@ -60,7 +60,7 @@
 }
 .dg-pr-marker[data-tone="signal"] .dg-pr-dot {
   fill: var(--dg-node-signal);
-  stroke: var(--vlc-brand);
+  stroke: var(--color-fd-primary);
 }
 
 /* Motion: the frame is always drawn, and only the price line and its markers

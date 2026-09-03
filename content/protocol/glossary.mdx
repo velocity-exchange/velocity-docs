@@ -1,83 +1,63 @@
-# Glossary
+---
+title: "Glossary"
+description: "Every term the rest of the documentation assumes, defined once, with a link to the page that owns the mechanism."
+---
 
-**General**
+Each term gets one definition and, where a mechanism sits behind it, a link to the page that owns it. Where two words look interchangeable and are not, the entry says so.
 
-{/* HIDDEN: isolated positions, temporarily hidden, reinstate this row into the General table below:
-| Isolated Position      | a perp position that is capitalized and liquidated independently of the rest of the subaccount, instead of sharing the subaccount's default cross-margin collateral pool. Collateral is deposited directly into the position and its initial/maintenance margin is calculated on its own; if it falls under-margined it is liquidated 100% in a single shot rather than the throttled, gradual unwind used for cross-margin positions. See [Margin](/protocol/trading/margin) and [Liquidations](/protocol/trading/liquidations). |
-*/}
+## General
 
-| **Term**               | **Definition**                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clearing House         | margin/accounting engine of the protocol                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| AMM                    | means an Automated Market Maker is Velocity's source of constant liquidity that is based on the constant product formula `x*y=k` balancing the reserves.                                                                                                                                                                                                                                                                                                                     |
-| Keeper Network         | refers to the network of Keeper Bots on Velocity that facilitates the exchange of liquidity. For more information, read [Keeper Bots](/protocol/how-it-works/keepers)                                                                                                                                                                                                                                                                                                                     |
-| JIT                    | means to Just-In-Time.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| JIT Auction            | a "Just-in-Time" Auction refers to the dutch auction mechanism that lets Market Makers provide liquidity to Takers.|
-| DLOB                    | means the Decentralised Limit Order Book: the off-chain orderbook of resting on-chain limit orders, maintained and matched by the [Keeper Network](/protocol/how-it-works/keepers). Orders that are not filled during the JIT Auction rest on and are matched against the DLOB. The DLOB is to be removed: a resting order will live in one CLOB market account instead of in the account of its owner.|
-| Market Makers / Makers | refers to parties on the platform that provides liquidity to the exchange. Liquidity 'provided' by Market Makers can be 'taken' by Takers. Market Makers includes parties that place orders on Velocity with the 'Post-Only' function. This means the order will be placed on the decentralised orderbook and will only add to the liquidity available. Market Makers also include parties that provide liquidity via the JIT mechanism.                                     |
-| Takers                 | refer to users on the platform that 'take' liquidity from the exchange. Takers take liquidity made available by Market Makers or Velocity's AMM.                                                                                                                                                                                                                                                                                                                             |
-| Per-Market Leverage    | market-specific leverage caps: each perpetual market defines its own size-adjusted margin ratio (`margin_ratio_initial` on the market), and `max_margin_ratio` is a per-account or per-position cap the user (or a signed order) can set on top of it. The effective margin ratio applied is the highest (strictest) of the three: `effective_margin_ratio = max(market.margin_ratio_initial, account.max_margin_ratio, position.max_margin_ratio)`, since a higher margin ratio means lower leverage. Lets high-risk markets be capped without restricting more stable ones. See [Per-Market Leverage](/protocol/trading/margin/per-market-leverage). |
-| Amplify                | a leveraging solution that increases exposure to yield-generating assets (e.g. dSOL, JLP, JitoSOL) through recursive borrowing: a user deposits a yield-bearing Collateral Asset via Velocity Earn's Borrow/Lend program, the system automatically borrows a Borrowing Asset against it up to the chosen leverage ratio, then converts the borrowed asset back into the Collateral Asset to increase notional exposure and amplify yield. See [Amplify](/protocol/borrow-lend/amplify). |
-| Builder Code           | Velocity's per-order monetization system for third-party frontends: a builder registers a `RevenueShareAccount`, users approve the builder and a max fee (denominated in tenths of a basis point, e.g. `feeTenthBps`) via `changeApprovedBuilder`, and on order fill the builder fee accrues to the user's `RevenueShareEscrow` before being swept to the builder's account on `settlePnl`. See [Builder Codes](/developers/builder-codes). |
-| Longing                | means you are speculating on the price of the asset going up.                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Shorting               | means you are speculating on the price of the asset going down.                                                                                                                                                                                                                                                                                                                                                                                                           |
-| TWAP                   | means Time Weighted Average Price which is the average price of the Oracle over a specified period of time. This approximation is calculated on-chain during program interactions with the account.                                                                                                                                                                                                                                                                       |
+| Term | Definition |
+| --- | --- |
+| AMM | Velocity's own liquidity. It quotes continuously off its own curve and competes with market makers on every fill rather than sitting behind them as a fallback. See [The AMM](/protocol/how-it-works/velocity-amm). |
+| vAMM | The AMM's virtual construction: its reserves are accounting quantities, not tokens anybody deposited, which is what lets a perpetual market quote a price without holding the underlying. |
+| Keeper | A process somebody runs that watches onchain accounts and submits transactions against them. It is a job description, not a permission: there is no keeper registry or onchain role. See [Orderbook and keepers](/protocol/how-it-works/orderbook-and-keepers). |
+| Filler | The keeper that submits the transaction matching a taker order against a maker or the AMM, and is paid the filler reward. See [Keeper incentives](/protocol/how-it-works/keepers/keeper-incentives). |
+| Liquidator | The keeper that takes over part of an under-margined account's position and is paid the liquidation fee for it. Every liquidator is a keeper; most keepers never liquidate anything. See [Liquidations](/protocol/trading/liquidations). |
+| DLOB (decentralized orderbook) | The sorted view of onchain resting orders, assembled offchain. Each keeper builds its own from the order accounts, so no copy is authoritative. The orders and the fills are onchain; the book itself is not. |
+| JIT | Just-in-time. |
+| JIT auction | The Dutch auction a taker order runs while its acceptable price walks from the auction start price toward the auction end price. Market makers and the AMM compete to fill it. See [Auctions](/protocol/trading/auction-parameters). |
+| Maker | A party that provides liquidity, either by resting a post-only order on the DLOB or by filling a taker's auction with just-in-time liquidity. Makers earn the maker rebate rather than paying the taker fee. See [Fees](/protocol/trading/trading-fees). |
+| Taker | A party that takes liquidity already on offer, whether from a maker or from the AMM. Takers cross the spread and pay the taker fee. |
+| Per-market leverage | Each perpetual market sets its own initial margin ratio, and an account or an individual position can set a stricter cap on top. The strictest applies, so an override can only make the effective limit more conservative. See [Account health](/protocol/trading/margin/account-health). |
+| Builder code | Per-order monetization for third-party frontends: an account approves a builder and a maximum fee, and that fee is charged on the account's fills and paid to the builder. See [Builder codes](/developers/builder-codes). |
+| Long | A position that gains when the price of the underlying rises. |
+| Short | A position that gains when the price of the underlying falls. |
+| TWAP | Time-weighted average price: the average of a price series over a window rather than its latest print. |
 
-**Market Info**
+## Market information
 
-| **Term**             | **Description**                                                                                                                 | **Example** |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Index / Oracle Price | is the price of the underlying asset (currently: as reported by Pyth).                                                          | $201.01     |
-| Mark Price           | is the price of the relevant market.                                                                                            | $201.05     |
-| Funding Rate         | refers to 1/24 the average premium every hour;if positive, longs pay shorts. if negative, shorts pay longs; see [Funding Rates](/protocol/trading/funding-rates) for more details | .0012%      |
-| Open Interest        | refers to the total size of all positions (long and short) in the relevant market.                                              | 181 SOL     |
-| 24h Volume           | refers to the total volume traded in the past day in the relevant market.                                                       | $1.04M      |
+| Term | Description | Example |
+| --- | --- | --- |
+| Index price, oracle price | The price of the underlying asset as reported by the oracle configured on that market. Both names appear in the UI and mean the same thing. See [Oracles](/protocol/how-it-works/oracles). | \$201.01 |
+| Mark price | The price of the contract itself, taken as the midpoint of the AMM's bid and ask. It is what unrealized P&L is measured against, and it is not the oracle price. | \$201.05 |
+| Funding rate | The hourly payment between longs and shorts that pulls the contract back toward the oracle. Positive means longs pay shorts, negative means shorts pay longs. See [Funding rates](/protocol/trading/funding-rates). | 0.0012% per hour |
+| Open interest | The total size of all positions, long and short, in the market. | 181 SOL |
+| 24h volume | The total notional traded in the market over the past day. | \$1.04M |
 
-**Position Table**
+## Position table
 
-| **Term**             | **Description**                                                                                       | **Example**   |
-| -------------------- | ----------------------------------------------------------------------------------------------------- | ------------- |
-| Market               | means a base / quote asset pair.                                                                      | SOL/USD       |
-| Direction            | means the position's bet on price change.                                                             | LONG,SHORT    |
-| Size                 | means the position's base asset value.                                                                | 2.3555 SOL    |
-| Notional             | means the position's quote asset value.                                                               | \$1,000       |
-| Entry Price          | means the average price paid (cost basis) for acquiring position.                                     | \$200         |
-| Exit Price           | means the average price realised if closing entire position.                                          | \$200         |
-| Liquidation Price    | means the soft estimate of price where liquidation of the account will occur.                         | None          |
-| P\&L (Profit & Loss) | means the Profit and/or Loss of position;Calculated on difference between EXIT PRICE and ENTRY PRICE. | $0            |
-| Action               | Opens modal for reducing/closing position.                                                            | ClosePosition |
+| Term | Description | Example |
+| --- | --- | --- |
+| Market | A base and quote asset pair. | SOL/USD |
+| Direction | Which way the position is betting. | LONG, SHORT |
+| Size | The position's base asset amount. | 2.3555 SOL |
+| Notional | The position's quote asset value, size times price. | \$1,000 |
+| Entry price | The average price paid to acquire the position, its cost basis. | \$200 |
+| Exit price | The average price that closing the whole position now would realize. | \$200 |
+| Liquidation price | An estimate of the price at which the account becomes liquidatable, which moves with every other position and balance in the same subaccount. | None |
+| P&L | Profit and loss on the position: the exit price minus the entry price, times the size. See [Profit and loss](/protocol/trading/profit-loss). | \$0 |
+| Action | Opens the modal for reducing or closing the position. | ClosePosition |
 
-| **Term**                | **Description**                                                                                                         | **Example** |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Total Collateral        | means the total available USD value of weighted collateral and P\&L for margin trading                                  | 101.01      |
-| Unrealised P\&L         | means the sum of P\&L available in all open positions that have not been realised (settled) by the user yet.            | 1           |
-| Unrealised Funding P\&L | means the unrealised amount collected/paid for funding payments. (will be automatically realised upon next user action) | .01         |
-| Free Collateral         | means the value of collateral that can be used to open new risk-increasing positions.                                   | 0.5         |
-| Leverage                | means Total Notional Position Size / Total Collateral.                                                                  | 5x          |
-| Margin Ratio            | means Total Collateral / Total Notional Position Size.                                                                  | 20%         |
-| Maintenance Margin Req. | is the margin ratio at which users will liquidate back up to the liquidation buffer.                                    | 5%          |
-| `maintenanceRatio`      | means the minimum margin-to-notional ratio a position can fall to before it is liquidated.                              | 3% (SOL-PERP) |
+## Account values
 
-**AMM Specific**
-
-| **Term**            | **Definition**                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| K                   | is the curve invariant, currently for constant product;`k = base_asset_reserve * quote_asset_reserve`                                                                                                                                                                                                                                                                                                   |
-| Base Asset Reserve  | means the virtual base reserves for a market (SOL reserves).                                                                                                                                                                                                                                                                                                                                            |
-| Quote Asset Reserve | means the virtual quote reserves for a market (e.g. USDT reserves in a SOL/USDT virtual pool).                                                                                                                                                                                                                                                                                                          |
-| Peg Multiplier      | means the magnitude of the quote asset reserve. For instance, one virtual quote asset reserve is a peg multiplier amount of the quote asset. A peg multiplier ensures that the base asset reserve and the quote asset reserve are balanced at the initialisation of the curve while ensuring that the starting price of the pool is equivalent to the oracle price of the base asset at initialisation. |
-| Reserve Price       | in the AMM, is defined as `(quote_asset_reserve * peg_multiplier)  / base_asset_reserve`. It is the true reserves price prior to any spread logic.                                                                                                                                                                                                                                                      |
-| Bid Price           | is the Price available to sell from the AMM, before slippage.                                                                                                                                                                                                                                                                                                                                           |
-| Ask Price           | is the Price available to buy from the AMM, before slippage.                                                                                                                                                                                                                                                                                                                                            |
-| Mark Price          | means the Market Price. Average of current Bid and Ask Price.                                                                                                                                                                                                                                                                                                                                           |
-| Oracle Price        | means the latest composite price from oracles. Oracle price is interchangeable with index price.                                                                                                                                                                                                                                                                                                        |
-| Repeg               | means modifying the peg multiplier which means re-pegging the curve such that the mark price is closer to the oracle price.                                                                                                                                                                                                                                                                             |
-| Adjusting K         | means modifying the curve's invariant `k` by scaling the base/quote asset reserves. For instance, this modifies the default slippage of a swap.                                                                                                                                                                                                                                                         |
-| Terminal Price      | means the mark price if all users atomically closed their positions and no repegs/k adjustments occurred (should be equal to the peg multiplier if all k adjustments were done during a balanced market).                                                                                                                                                                                               |
-
-**Users**
-
-| **Term**          | **Definition**                                                     |
-| ----------------- | ------------------------------------------------------------------ |
-| base asset amount | The amount of base currency (e.g. SOL-PERP) held by a single user. |
-| net user position | Current longs - shorts in a given market.                          |
+| Term | Description | Example |
+| --- | --- | --- |
+| Total collateral | The USD value of the account's weighted collateral plus P&L, which is what margin is measured against. Weighted, because a volatile asset counts for less than its market value. See [Collateral and margin](/protocol/trading/margin). | 101.01 |
+| Unrealized P&L | The sum of P&L across open positions that has not yet been settled into a balance. | 1 |
+| Unrealized funding P&L | Funding collected or paid that has accrued but not yet realized. It realizes on the account's next action in the market. | 0.01 |
+| Free collateral | The collateral not committed to margin, and therefore what is available to open new risk-increasing positions or to withdraw. | 0.5 |
+| Leverage | Total notional position size divided by total collateral. | 5x |
+| Margin ratio | Total collateral divided by total notional position size, the reciprocal of leverage. | 20% |
+| Initial margin | The margin ratio an account must be above to open a position or withdraw collateral, set per market. | 5% (illustrative) |
+| Maintenance margin | The margin ratio a position can fall to before it becomes liquidatable, set per market. It is always looser than the initial requirement, and the gap between the two is the room a position has to move after opening. | 3% (illustrative) |

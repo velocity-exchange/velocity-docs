@@ -1,0 +1,9 @@
+{
+  "title": "Ecosystem Builders",
+  "pages": [
+    "index",
+    "reading-data",
+    "orderbook-and-ws",
+    "sending-actions"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "title": "Developers",
+  "root": true,
+  "icon": "Code",
+  "pages": [
+    "index",
+    "concepts",
+    "---SDK---",
+    "velocity-sdk",
+    "velocity-rs",
+    "data-api",
+    "---Guides---",
+    "migrate-from-drift",
+    "market-makers",
+    "vault-managers",
+    "vault-depositors",
+    "trading-automation",
+    "ecosystem-builders",
+    "builder-codes",
+    "contributing-to-velocity"
+  ]
+}

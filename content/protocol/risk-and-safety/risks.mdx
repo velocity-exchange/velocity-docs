@@ -1,56 +1,79 @@
-# Risks
+---
+title: "Risks"
+---
 
-All DeFi protocols, including Velocity, come with risks, which you should understand before depositing significant amounts of crypto. Some of the main risks you take on using Velocity are outlined here.
+Every mechanism on Velocity that protects an account also has a point past which it stops protecting it. This page is the list of those points. Every parameter named here is admin-settable unless stated otherwise, so read the live value from the market before relying on it.
 
-You can find further risk parameters in [Protocol Guard Rails](/protocol/risk-and-safety/protocol-guard-rails) and [Risk Parameters](/protocol/risk-and-safety/risk-parameters).
+## Program risk
 
-**Smart Contract and UI Risk**
+Velocity is a fork of Drift Protocol v2 with a substantial amount added since. A bug in the deployed program can lose funds outright, and no other guard rail on this page helps if the code implementing it is the thing that is wrong.
 
-The smart contract or UI could have a bug or exploit that causes unexpected behaviour and a loss of your funds. This risk is inherent to all smart contracts and relies on the discipline of the development community, core contributors, and auditors.
+Trail of Bits and Neodyme audited the pre-fork Drift codebase, not Velocity's deployment. OtterSec reviewed the post-fork program: a large set of High and Medium findings, all fixed in the deployed code, final report pending publication. So the post-fork surface, meaning the AMM rewrite, the fee ledger, the bankruptcy waterfall, the isolated pools and the revenue-share paths, is newer than any published report, and the program is not open source yet. See [Audits](/protocol/risk-and-safety/audits) and [Bug bounty](/protocol/risk-and-safety/bug-bounty).
 
-Velocity is a fork of Drift Protocol v2. The existing [audit reports](/protocol/risk-and-safety/audits) were performed on the pre-fork codebase, not on Velocity's own deployment or the functionality added since the fork. OtterSec's post-fork review of Velocity's own program has delivered a large set of High and Medium findings, and fixes for them are already in the codebase, but the final report has not been published yet. See the [migration guide](/developers/migrate-from-drift) for what changed since the fork.
+## Oracle risk
 
-**Blockchain Risk**
+Liquidations, margin, funding and settlement all price off a Pyth feed delivered through Pyth Lazer. A wrong price liquidates a solvent account, and a price that is right but arrives late does the same thing a moment later. Every sample is graded before it is used:
 
-The Solana blockchain remains under development, which creates technological, uncertainty and security risks that Velocity has no control over. The cost of transacting on Solana is variable and can increase or decrease at any time, which can affect any activity you take on Solana and may result in losses, price fluctuations, or increased costs.
+- **Confidence.** 2% of price for tiers A and B, 4% for C, 20% for Speculative, 100% for Highly Speculative and Isolated.
+- **Staleness.** About 4 seconds before a sample is too stale for the AMM, about 48 seconds before it is too stale for margin.
+- **Volatility.** A print more than 5 times the running TWAP, or more than 80% below it, is graded too volatile.
+- **TWAP damping.** One data point cannot drag the TWAP more than the tier's sanitization band: 10% for A, 20% for B, 50% for C, roughly 33% for the tail tiers.
+- **Divergence.** The live oracle against the 5-minute oracle TWAP at 50%, and whichever of mark and live oracle sits further from that TWAP at 10%.
 
-**Oracle Risk**
+Everything inside those bands is exposure: the liquidation engine acts on any price within 50% of the 5-minute TWAP. The bands cut the other way too, because a feed that stays outside the 50% band blocks all four liquidation paths, so a position can be neither liquidated nor defended. See [Guard rails](/protocol/risk-and-safety/guard-rails) and [Oracles](/protocol/how-it-works/oracles).
 
-Velocity relies on Pyth (via Pyth Lazer) for the price feeds that power liquidations. These oracles could report incorrect prices, which can result in you being wrongfully liquidated and losing all your funds.
+## Liquidation risk
 
-**Levered/Social Loss Risk**
+An account is liquidated when its weighted collateral falls below its maintenance margin requirement. The unwind is partial and throttled: enough to restore maintenance margin plus a 2% buffer, ramping toward full liquidation rather than closing everything on the first crossing. Liquidators are compensated out of the position, so a liquidation is never free.
 
-If you hold a levered position during sharp price movements, you can lose more than your collateral value. If the Insurance Fund is not sufficiently capitalised, these losses are socialised across market participants.
+Throttled is not the same as slow. A desk holding \$5,000,000 of notional against \$1,000,000 of margin on a 3% maintenance market becomes liquidatable once equity falls to \$150,000, a 17% adverse move on the underlying. Because the target is maintenance margin plus the buffer, the unwind does not stop at the threshold that triggered it. See [Liquidation](/protocol/trading/liquidations).
 
-**Liquidation Risk**
+## Bankruptcy and socialized loss
 
-Velocity offers both leveraged perpetual swaps and borrow/lend. For perpetual swaps, you risk liquidation when your margin ratio poses a stability risk to the exchange: your collateral can get liquidated when its value drops below your maintenance margin fraction.
+If liquidation empties an account and a debt remains, someone else pays it. The debt runs through a fixed sequence of tranches, and only what survives every tranche reaches other traders.
 
-**Long/Short Imbalance Risk**
+The estate pays first. On a perp bankruptcy exactly one tranche then stands ahead of the shared Insurance Fund: the market's own unswept insurance fee, floored at a percentage of open-interest notional set on the market; read the market account for the live setting. The shared vault is capped by tier at \$100,000,000 for A, \$1,000,000 for B, \$100,000 for C and **\$0** for Speculative, Highly Speculative and Isolated alike, so a market on those three tiers draws nothing from it, ever. The AMM fee provision is clawed back after the vault, so it protects traders rather than stakers.
 
-Velocity's AMM is the counterparty to all trades taken against it. This means the AMM itself has delta risk, and this risk is magnified when market conditions skew on either side and the imbalance between longs and shorts increases.
+Anything still outstanding is socialized. On a perp market that is a funding-rate bump sized as the residual over total open base, charged to longs and shorts alike: a market with 100,000 SOL long against 100,000 SOL short and a \$2,000,000 residual charges \$10 per SOL. On a spot market it is a pro-rata haircut to every lender's deposit balance. See [Liquidation and bankruptcy](/protocol/risk-and-safety/liquidation-and-bankruptcy).
 
-The AMM has protections in place to prevent the long/short imbalance from skewing too heavily to either side. You can read more on that at [Velocity AMM](/protocol/how-it-works/velocity-amm). Despite these protections, the AMM can still be exposed to delta risk in periods of significant volatility.
+## Profit that cannot be spent
 
-**No Off-Setting Loss Risk**
+Unrealized profit on a perpetual is a claim on the protocol, not money. The pool that pays it only fills up when someone else loses or pays fees.
 
-The unrealised P&L you can lock in from entering and exiting a trade against the AMM is technically unbounded (for example, if BTC goes toward infinity).
+Two rules follow, and they are stricter than most traders expect. An account can settle positive P&L only up to what it has realized by reducing or closing the position, plus whatever excess the market's P&L pool holds above aggregate net user P&L. And positive unrealized P&L's initial-margin asset weight is what determines how much new exposure it can buy before it is settled, read the live market account for that weight; its maintenance weight is full value, so it counts fully toward keeping a position out of liquidation and for nothing toward opening more.
 
-While you can achieve this unrealised gain, you need an offsetting loss (or sufficient fees collected) before you can settle it in full and withdraw it as collateral.
+A market where most participants are deeply profitable and the pool cannot pay becomes a candidate for [delisting](/protocol/risk-and-safety/delisting-process), which settles everyone at a solvency-adjusted price rather than at their marks. See [Profit and loss](/protocol/trading/profit-loss).
 
-Additionally, if the unrealised P&L imbalance exceeds its per-market threshold, the margining system may discount those unrealised gains (initial margin, not maintenance) to prevent large borrows against them. This discounting only affects new positions you open; it does not affect your liquidation threshold.
+## The AMM can stop quoting
 
-These rules are systemised, and you can read more on them in [P&L](/protocol/trading/profit-loss) and [Margin](/protocol/trading/margin).
+The AMM is the counterparty to every trade that does not match against another user, so it carries the market's residual delta. It is allowed to withdraw: it stops accepting fills when net revenue since the last funding update falls to -\$10,000 for tiers A and B or -\$5,000 for every other tier, **and** that drawdown reaches 2% of retained fee capital for tier A, roughly 3% for B, 4% for C, 5% for the tail tiers.
 
-**Untimely Liquidation Risk**
+The residual falls on the position, not the AMM. When both gates trip the AMM is out for the rest of the funding period, and the only liquidity left is resting orders from other users. It happens exactly when a trader least wants it, because the trigger is a sharp move that has already gone against the AMM. See [The AMM](/protocol/how-it-works/velocity-amm).
 
-During large-scale liquidations or market turmoil, your positions and balances might not be liquidated in time to cover the losses taken out by a liquidated user. The shortfall (or negative balance) is treated as levered losses.
+## Borrow and lend utilization
 
-In the past, levered losses in the main pool have been filled via top-ups from the Insurance Fund. If the Insurance Fund is depleted, the resulting loss is socialized across the system.
+Deposits earn yield because they are lent out. A deposit that has been lent out is not in the vault, and at 100% utilization there are no tokens left to withdraw or to borrow.
 
-**100% Utilization Risk**
+Each spot market runs rolling limits against its own 24-hour trailing averages. The withdraw circuit breaker caps how much of the 24-hour deposit TWAP may leave per window, an admin-configured percentage on the market; read the live setting before relying on it. Borrows stop at a utilization ceiling of about 92.9% in the main pool; an isolated pool, a [capability the program supports](/protocol/borrow-lend/isolated-pools) rather than a live arrangement, carries a ceiling of 95%.
 
-When an asset is fully utilized (100% of the supply is lent out), there are no tokens left in the pool, so withdrawals and borrows fail. You have to wait until the utilization rate goes down, either through other users repaying their loans or depositing new funds, before you can withdraw or borrow.
+These cap flow; they do not guarantee liquidity for any account. A breach fails with a daily withdraw or deposit limit error and can be retried as the averages roll forward, which is not the same as getting the money out. A desk that is a large share of a market's deposits will hit the window cap on its own withdrawal and need several windows to exit. See [Withdrawal and borrow limits](/protocol/borrow-lend/withdrawal-limits).
 
-You're more likely to be affected by this if your deposit represents a large share of the pool, or if the asset has extremely high borrow demand.
+## Parameters and pauses can change mid-position
 
+Margin ratios, fee splits, oracle sources, contract tiers, market status and pause bitmasks are all admin-settable. A market entered under one set of limits can be operating under another before the position exits, and a re-tier changes the insurance cap, confidence tolerance, TWAP band and auction band at once.
+
+Routine changes are timelocked, the most dangerous ones need the cold key, and a dedicated pause key acts instantly but can only ever add pauses, never clear them. Funds can therefore be frozen faster than they can be unfrozen, a pause is indistinguishable from an outage while it is happening, and a cold-tier change carries no notice period. See [Admin keys and upgrade authority](/protocol/risk-and-safety/admin-keys).
+
+## Solana
+
+Velocity is only as available as the chain it runs on. Congestion, a validator-level incident, or a period where transactions do not land means liquidations do not land either, keepers cannot crank funding or the AMM, and a position cannot be closed or have margin added.
+
+There is no protocol-side guard rail for this, and transaction costs rise during exactly the congestion that makes acting urgent. Every number on this page assumes the transaction lands. Size positions on the assumption that there will be windows during which they cannot be adjusted.
+
+## What this means in practice
+
+**Read the tier before reading the market.** Insurance coverage, oracle tolerance, TWAP damping, auction bands and the AMM cutoff all derive from the [contract tier](/protocol/risk-and-safety/contract-tiers). Speculative and below have a \$0 insurance cap.
+
+**Socialized loss is a market-level exposure.** The only way to not pay it is to not hold the market when it is charged.
+
+**Size for the exit, not the entry.** The AMM cutoff, the withdraw circuit breaker and the oracle bands all withdraw liquidity during stress. A position opened easily is not always one closed easily.

@@ -1,68 +1,49 @@
-# Understanding Velocity's Onchain Model
-These pages explain how Velocity's Solana program works at the account level. Understanding these concepts helps you build better integrations, debug issues, and optimize performance.
+---
+title: "Concepts"
+asIndexPage: true
+---
 
-### Program Structure
-**Deep dive into positions, orders, and calculations**
+These pages describe the onchain half of Velocity: the accounts the Solana program owns, what each field means, how an order moves from placement to fill, and the units the program stores its numbers in. They are written for an integrator with a decoder open, not for a trader. For an integration that only calls the SDK, [Velocity SDK](/developers/velocity-sdk) is the faster route; these pages are the place to come when a decoded value does not mean what it appeared to.
 
-Understand the mechanics of trading:
-- How positions are tracked and updated
-- Order lifecycle and execution
-- Collateral and margin calculations
-- Cross-margin accounting
+## Where to start
 
-<Cards.Card
-title="Understand how trading actually works onchain ↗"
-href="/developers/concepts/program-structure"
-/>
+Read [Program Structure](/developers/concepts/program-structure) first for how positions, orders, and margin fit together, then [Account Model](/developers/concepts/account-model) for the account layouts those mechanics live in. The remaining pages are reference: read each one when the thing it covers comes up.
 
-### Account Model
-**High-level overview of Velocity's account architecture**
+Two of them correct assumptions that cost integrators real time. [Slot duration](/developers/concepts/slot-duration) explains why a slot count is no longer a fixed amount of time and which fields are exempt from that. [Program and vault addresses](/developers/concepts/program-vault-addresses) is short but load-bearing: every PDA on Velocity is derived against a program ID that no other deployment shares.
 
-Learn about the different account types that make up the protocol:
-- State account (global config, cold/warm/hot admin keys)
-- Market accounts (perp & spot)
-- User accounts & stats
-- PDAs and account relationships
+## In this section
 
-<Cards.Card
-title="Understand what accounts exist and their purpose ↗"
-href="/developers/concepts/account-model"
-/>
+<Cards>
+  <Card
+    title="Program Structure"
+    href="/developers/concepts/program-structure"
+    description="Position accounting, order types, collateral and margin math, and the fixed 8 perp / 8 spot / 32 order limits."
+  />
+  <Card
+    title="Account Model"
+    href="/developers/concepts/account-model"
+    description="The State, market, user, and stats accounts field by field, plus PDA seeds and how accounts grow."
+  />
+  <Card
+    title="PropAMM and CLOB Order Flow"
+    href="/developers/concepts/propamm-and-clob-order-flow"
+    description="How a perp order is filled across the vAMM, resting user orders, and third-party quoter programs."
+  />
+  <Card
+    title="Slot Duration and Wall-Clock Time"
+    href="/developers/concepts/slot-duration"
+    description="Solana's slot length is shrinking from 400ms to 200ms. Read the live value off State instead of hardcoding it."
+  />
+  <Card
+    title="AMM Liquidity and Settlement"
+    href="/developers/concepts/optimizations"
+    description="How the AMM sizes its depth, when it competes for fills, and how the P&L it takes on is settled."
+  />
+  <Card
+    title="Program and Vault Addresses"
+    href="/developers/concepts/program-vault-addresses"
+    description="The deployed program IDs, and why to read them from the SDK config rather than pasting them."
+  />
+</Cards>
 
-### Slot Duration
-**Why a slot count is not a fixed amount of time**
-
-Solana's slot time is shrinking from 400ms to 200ms. Learn how to convert correctly:
-- The `State` fields that hold the live slot length
-- Reading and converting with the SDK's `math/time` helpers
-- Which protocol timings move with it
-
-<Cards.Card
-title="Convert slots to wall-clock time correctly ↗"
-href="/developers/concepts/slot-duration"
-/>
-
-### Optimizations
-**How the AMM manages liquidity depth and risk**
-
-Learn how the AMM adapts to market conditions:
-- Concentration factor and formulaic K liquidity adjustments
-- Participating in the JIT auction
-- P&L settlement and terminal state handling
-
-<Cards.Card
-title="See how the AMM adjusts its own liquidity ↗"
-href="/developers/concepts/optimizations"
-/>
-
-### Program & Vault Addresses
-**Mainnet program IDs for Velocity and Velocity Vaults**
-
-Find the deployed addresses you need to point an integration at:
-- Velocity program ID
-- Velocity Vaults program ID
-
-<Cards.Card
-title="Get the mainnet program and vault addresses ↗"
-href="/developers/concepts/program-vault-addresses"
-/>
+Porting an integration from another deployment? Start at the [migration guide](/developers/migrate-from-drift), which lists the renamed symbols, removed instructions, and the behavior changes a compiler cannot catch.

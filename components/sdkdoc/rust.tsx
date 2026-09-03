@@ -1,5 +1,5 @@
 import React from "react";
-import { Callout } from "nextra/components";
+import { Callout } from "fumadocs-ui/components/callout";
 import type { SDKTab } from "../SDKDocTabs";
 import type { SDKBlockProps } from "./types";
 import rustdoc from "../../types/sdks/velocity_rs.slim.json";
@@ -33,7 +33,10 @@ const rustMethodDocs = rustMethods as Record<
     is_async?: boolean;
   }
 >;
-const RUSTDOC_BASE_URL = "https://docs.rs/velocity-rs/latest";
+// velocity-rs is not published. docs.rs/velocity-rs/latest answers 404, so every
+// Rust reference link built from this base was dead. Set this to the real host
+// once the crate publishes and the links return unchanged.
+const RUSTDOC_BASE_URL: string | undefined = undefined;
 
 
 function normalizePath(name: string) {
@@ -95,8 +98,10 @@ function renderEnumVariants(variants?: Array<{ name?: string; docs?: string }>) 
         </tr>
       </thead>
       <tbody>
-        {variants.map((variant) => (
-          <tr key={variant.name ?? "variant"}>
+        {variants.map((variant, index) => (
+          // Fallback "variant" collided across every unnamed variant in one
+          // enum, all keyed identically. Index makes each one unique.
+          <tr key={`${variant.name ?? "variant"}-${index}`}>
             <td>
               <code className="nextra-code">{variant.name ?? "-"}</code>
             </td>
@@ -184,8 +189,12 @@ function renderSignatureTable(params: Array<{ name: string; type: string }>) {
         </tr>
       </thead>
       <tbody>
-        {params.map((param) => (
-          <tr key={param.name}>
+        {params.map((param, index) => (
+          // Unlike TypeScript's TypeField, this param has no fallback at all:
+          // an unnamed or destructured Rust argument reports param.name as
+          // undefined, so key={param.name} was literally key={undefined} on
+          // more than one row of the same signature.
+          <tr key={`${param.name ?? "param"}-${index}`}>
             <td>
               <code className="nextra-code">{param.name}</code>
             </td>
@@ -232,6 +241,11 @@ function getRustDocLink({
   methodName?: string;
   ownerPath?: string;
 }) {
+  // No base means no published rustdoc, so every URL this would build is dead.
+  // Returning undefined renders the block with no reference link at all, which
+  // is the honest result until the crate publishes.
+  if (!RUSTDOC_BASE_URL) return undefined;
+
   const parts = path.split("::");
   if (!parts.length || parts[0] !== "velocity_rs") return undefined;
 

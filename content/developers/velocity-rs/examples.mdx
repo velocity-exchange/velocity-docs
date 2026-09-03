@@ -1,0 +1,57 @@
+---
+title: "Examples"
+---
+
+The crate ships ten runnable example programs under `examples/`, each its own package depending on `velocity-rs` by relative path. They are the most direct answer to "what does a working bot look like", and several of them are close to what the protocol's own services do.
+
+Each one reads its configuration from the environment, with a `.env` file picked up by `dotenv`. The names are not fully consistent across examples: most use `RPC_URL`, `PRIVATE_KEY`, `GRPC_URL` and `GRPC_X_TOKEN`, and set `MAINNET` to any value to target mainnet rather than devnet, but `event-subscriber` reads `WS_RPC_ENDPOINT` and `GRPC_ENDPOINT` instead. Check the `env::var` calls at the top of each `main` before running it.
+
+<Callout type="warning">
+Only `examples/dlob-builder` is a member of the `rust/` Cargo workspace, so it is the only example CI compiles. The other nine are built on demand and some have drifted from the current API: `dlob-matching` and `simple-margin-calculation` call functions that no longer exist, and several pin `solana-*` crates at 2.x against an SDK built on 3.x. Read them for the shape of the flow, and expect to fix up the call sites.
+</Callout>
+
+## Getting oriented
+
+For a first bot, the shortest route through these is: `velocity-client-callbacks` to see a client subscribe and read, `market-maker` for a full quote loop, then whichever of `swift-maker`, `jitter` or `dlob-builder` matches the target design.
+
+## Client and state
+
+**`velocity-client-callbacks`** is the smallest complete program. It builds a read-only client, subscribes to every perp market with a callback, and prints AMM base asset amount per market as updates arrive. It is also the clearest demonstration of the zero-copy deserialization trap: it deserializes the `PerpMarket` from the raw update with `utils::try_deser_zero_copy` and explains in a comment why Anchor's `try_deserialize` panics on that same data. Ends with `client.unsubscribe()`.
+
+**`simple-margin-calculation`** shows `MarketState` populated with markets and oracle prices, then `calculate_simplified_margin_requirement` producing total collateral and margin requirement for a `User`. The flow is the one a liquidator uses; the imports have drifted, so treat the file as a sketch of the sequence and see [Reading state](/developers/velocity-rs/reading-state#offchain-margin-math) for the current paths.
+
+## Trading
+
+**`market-maker`** is the reference quote loop, and it ships twice against the same strategy: `ws_maker.rs` over WebSocket subscriptions and `grpc_marker.rs` over gRPC, selected with a `--grpc` flag. Both subscribe to blockhashes for fast transaction building, resolve a market by symbol with `market_lookup`, requote every 400 ms, and in the same transaction cancel every order in the market and place two new ones: a fixed-price limit and a floating limit priced as an offset from the oracle. Both also run an `EventSubscriber` on their own subaccount and print fills, cancels, creates and funding payments as they land. The gRPC variant additionally turns on `usermap_on()`.
+
+**`place-and-take`** covers taking rather than making. It fetches the current top makers from the DLOB server's `/topMakers` HTTP endpoint, decodes the base64 `User` accounts out of the response, and builds a `place_and_take` transaction against them. It carries the practical warning about maker count: past roughly four makers the transaction exceeds the size limit.
+
+## Swift
+
+**`swift-taker`** is the taker side of a signed-message order. It builds a `SignedMsgOrderParamsMessage` with auction parameters, wraps it in a `SignedOrderType`, borsh encodes and hex encodes it, signs the encoding with the wallet, and POSTs the message, authority, subaccount and signature to the Swift API. A `--deposit-trade` flag runs the other variant: it builds a transaction that creates the associated token account, deposits, and places the swift order, signs it, and posts it alongside the order to `/depositTrade`.
+
+**`swift-maker`** is the maker side. It subscribes to the Swift order stream for a set of markets, and for each order spawns a task that fetches the taker's account and stats, then builds a `place_and_make_swift_order` transaction taking the other side at the taker's auction start price with immediate-or-cancel set. Its comments mark the two places a real maker diverges: filtering orders by strategy, and keeping a gRPC map of user accounts instead of fetching the taker inline.
+
+**`jitter`** is the largest example and the one closest to a production bot. It runs an `AuctionSubscriber` and a Swift order stream at once, holds per-market `JitIxParams`, and fills through `JitProxyClient` with a "shotgun" strategy that retries every slot until the auction completes. It handles the details a first attempt misses: deduplicating ongoing auctions by order signature, skipping orders whose remainder is below the market's minimum order size, decoding the specific program error codes that mean "does not cross yet, retry" as distinct from "already filled, stop", and re-fetching the program-typed `User` because the auction subscriber yields the IDL-typed one.
+
+## Books and events
+
+**`dlob-builder`** is the workspace member and the most complete DLOB example. It syncs user accounts with the order filter, wires a `DLOBBuilder` into a gRPC subscription, and serves the resulting book from an axum HTTP server: `/l2` and `/l3` return JSON, and `/` serves a browser orderbook UI. It uses the `_safe` snapshot accessors throughout with a comment explaining that a missing book means a quiet market rather than an error, and it enumerates perp markets from chain state so a new listing is picked up on restart.
+
+**`dlob-matching`** walks the L3 accessors and, more usefully, explains why the oracle price is load-bearing when rendering a book: floating orders are stored as offsets, oracle orders reprice continuously, and trigger orders evaluate against it. The reasoning in the file header is correct and worth reading. The code below it is stale.
+
+**`event-subscriber`** is a minimal program event consumer: subscribe over WebSocket or, with `--grpc`, over gRPC, and print every `OrderFill` with both sides of the trade until a hundred have gone by. It is the fastest way to confirm a set of endpoint credentials works.
+
+## Running one
+
+From inside the monorepo, each example is an ordinary Cargo package.
+
+```bash
+cd rust/velocity-rs/examples/market-maker
+# write a .env with RPC_URL, PRIVATE_KEY, GRPC_URL and GRPC_X_TOKEN, plus MAINNET for mainnet
+cargo run -- --grpc
+```
+
+There are no checked-in `.env` templates, so the `env::var` calls at the top of `main` are the source of truth for what the file needs. All but `dlob-builder`, `place-and-take` and `simple-margin-calculation` carry a `README.md` of their own.
+
+`jitter` declares its own `[workspace]`, so it carries its own lockfile and resolves independently of the `rust/` workspace. The rest inherit whatever workspace they sit in.
