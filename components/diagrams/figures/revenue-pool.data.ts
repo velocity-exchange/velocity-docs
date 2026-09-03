@@ -11,9 +11,12 @@ import type { SankeySpec } from "../layout/sankey";
 //      lands in the market's pnl_pool.
 //
 // max_revenue_withdraw_per_period rate-limits that insurance draw, not a
-// revenue-pool allowance. Splits are drawn equal because the program's
-// numerators are admin-set per market and are 0 at launch; the figure shows the
-// routes, not the proportions.
+// revenue-pool allowance. Splits are drawn equal because the numerators that
+// set them are admin-configured and this figure is about the routes, not the
+// proportions. They are NOT 0, which an earlier version of this comment
+// claimed by reading the program's defaults: mainnet runs an insurance share
+// of 15% of the perp fee remainder. The live numbers are on the Trading fees
+// page, which reads them from the chain.
 export const revenuePoolSpec: SankeySpec = {
   nodes: [
     { id: "fees", label: "Protocol fees", note: "deposit interest, liquidations, trading fees", column: 0 },

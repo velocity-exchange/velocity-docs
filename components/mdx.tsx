@@ -6,6 +6,7 @@ import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import type { MDXComponents } from "mdx/types";
 
 import { PerpMarginTable } from "./data/MarginTables";
+import { PerpFeeSplitTable, PerpFeeTable } from "./data/FeeTables";
 import { AssetWeightsTable, LTVTable } from "./data/CrossCollateralTables";
 import { Api, Rust, SDKDoc, TypeScript } from "./SDKDoc";
 import CanvasText from "./CanvasText";
@@ -57,6 +58,8 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     caption: TableCaption,
     CanvasText,
     PerpMarginTable,
+    PerpFeeTable,
+    PerpFeeSplitTable,
     AssetWeightsTable,
     LTVTable,
     SDKDoc,

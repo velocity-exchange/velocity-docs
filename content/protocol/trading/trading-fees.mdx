@@ -31,23 +31,19 @@ The tier reads the sum of two rolling 30-day counters, taker volume and maker vo
 
 Each counter decays linearly to zero over 30 days. Promotion is instant: a fill's volume lands in the counter immediately, and the very next fill is priced at the better tier.
 
-## Three levers that move a fill off the published rate
+## Per-market rates
 
-Two are per-market and one is global. All three are admin-set and all three initialize to an inert value, so on a market nobody has touched the published tier fee is what is charged.
+The schedule above is the baseline. Individual markets can be priced off it, and a promo tier may also be running, which only ever prices an account better than its volume tier and never worse. Everything that moves a fill off the published rate is set onchain and readable, so a fee above the tier number can be attributed rather than guessed at.
 
-**Taker fee add-on (`takerFeeAddonTenthBps`), per-market and additive**: an absolute surcharge on the taker fee in tenths of a basis point, so `10` is 1 bp. It can only raise the taker fee, never cut it, and it is capped at 100 tenth-bps, that is 10 bps. A market carrying `15` adds 1.5 bps on top of the tier fee at every tier. The add-on never touches the maker rebate.
+These are the rates in force on every perp market, read live from the program. Any market-specific pricing is already folded in, so the number in the column is the number charged.
 
-**Fee adjustment (`feeAdjustment`), per-market and multiplicative**: a signed percentage between -100% and +100% that scales the whole configured fee. It is the only one of the three that also scales the maker rebate. Markets initialize at 0.
-
-**Promo fee tier, global**: a tier floor. While set, every account's effective tier is the better of its volume tier and the promo tier. Nobody is demoted by it.
-
-The taker fee on a fill is the tier fee plus the add-on, and then the whole thing scaled by the adjustment. All three values are readable onchain, so a fee above the published tier number can be attributed rather than guessed at.
+<PerpFeeTable />
 
 ## Worked example
 
-The **\$10,000 account** opens 20 SOL long at \$100, a notional of \$2,000, as a taker on a market with no add-on. At the Regular tier that is 4 bps, or **\$0.80**, charged against the position's cost basis. Closing the same size pays it again, so the round trip costs \$1.60. Posted with the post-only flag instead, the same order would have earned 0.25 bps of \$2,000, or **\$0.05**.
+The **\$10,000 account** opens 20 SOL long at \$100, a notional of \$2,000, as a taker on a market priced at the published rate. At the Regular tier that is 4 bps, or **\$0.80**, charged against the position's cost basis. Closing the same size pays it again, so the round trip costs \$1.60. Posted with the post-only flag instead, the same order would have earned 0.25 bps of \$2,000, or **\$0.05**.
 
-The **\$5,000,000 desk** sits in VIP 1. On a \$100,000 fill it pays 3 bps, or **\$30**, where the Regular tier would have charged \$40 and VIP 2 would charge \$20. On a market carrying a 15 tenth-bps add-on the same fill costs 4.5 bps, or **\$45**.
+The **\$5,000,000 desk** sits in VIP 1. On a \$100,000 fill it pays 3 bps, or **\$30**, where the Regular tier would have charged \$40 and VIP 2 would charge \$20. On a market priced 1.5 bps above the schedule the same fill costs 4.5 bps, or **\$45**.
 
 ## Where the fee goes
 
@@ -60,7 +56,9 @@ Four amounts come off the top in a fixed order, and only what survives that is d
 3. **The referrer reward**, 10% or 20% depending on the referrer's level. See [Referrals](/protocol/referrals).
 4. **The maker rebate**, 0.25 bps of notional, when a maker was on the other side.
 
-The remainder is split three ways: a share to the AMM, a share to the insurance fund, and the residual to the protocol's own withdrawable fee pool. The two shares are admin-configured per market and sum to at most 100%, and whatever they leave is the protocol's, so at a zero AMM share and a zero insurance share the protocol claims the whole remainder. The figure above draws an illustrative 15 / 15 / 70 split rather than a live one.
+The remainder is split three ways: a share to the AMM, a share to the insurance fund, and the residual to the protocol's own withdrawable fee pool. The first two shares are admin-configured and sum to at most 100%, and whatever they leave is the protocol's, so the protocol's cut is a residual rather than a set rate.
+
+<PerpFeeSplitTable />
 
 Protocol fees land in a per-market pool that only designated, admin-set recipients can withdraw from, and a withdrawal is capped to that pool's own balance, so it can never reach user deposits. See [Where the money sits](/protocol/how-it-works/where-the-money-sits).
 
