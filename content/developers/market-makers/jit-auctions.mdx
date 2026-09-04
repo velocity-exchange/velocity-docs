@@ -255,7 +255,14 @@ If any gate trips, `amm_can_fill_order` returns false and the fill plan contains
 
 ## JIT Proxy library
 
-**Not yet published to npm.** `@velocity-exchange/jit-proxy` isn't on the npm registry yet. Until it is, build it from `packages/jit-proxy` in the `velocity-v1` monorepo, which is not public yet. The client is vendored in-repo, ported to Anchor 1.0, and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream.
+`@velocity-exchange/jit-proxy` is on npm. It declares two peer dependencies and does not install them for you. Anchor is pinned to `@anchor-lang/core@1.0.1` under the `@coral-xyz/anchor` alias, the same form the SDK uses, so installing `@coral-xyz/anchor` unaliased pulls the wrong Anchor:
+
+```bash
+bun add @velocity-exchange/jit-proxy
+bun add @coral-xyz/anchor@npm:@anchor-lang/core@1.0.1 @solana/web3.js@1.98.0
+```
+
+The client is ported to Anchor 1.0 and built against `@velocity-exchange/sdk`; it exposes the same `JitProxyClient` / `JitterSniper` / `JitterShotgun` API as upstream. Source lives at `packages/jit-proxy` in the `velocity-v1` monorepo, which is not public yet, so npm is the only way to get it.
 
 The package provides higher-level abstractions for auction participation:
 
@@ -296,4 +303,4 @@ const jitter = new JitterShotgun({
 - [Matching Engine](/protocol/trading/how-fills-work): Full liquidity priority flow
 - [JIT-only MM](./jit-only): Building a JIT market maker bot
 - [SWIFT API](./swift-api): see taker orders 100 to 500 ms before they hit the auction
-- `@velocity-exchange/jit-proxy`: JIT proxy SDK. Unpublished, built from `packages/jit-proxy` in the `velocity-v1` monorepo, which is not public yet
+- `@velocity-exchange/jit-proxy`: JIT proxy SDK, on npm

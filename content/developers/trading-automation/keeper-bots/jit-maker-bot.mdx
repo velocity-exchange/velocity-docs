@@ -66,7 +66,7 @@ bun run dev --config-file=jit-maker-config.yaml
 
 ### Strategy overview
 
-This bot uses the `JitterShotgun` strategy and the `jit-proxy` program (vendored in-repo at `packages/jit-proxy` as `@velocity-exchange/jit-proxy`, not yet published to npm, build it from source) to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism. The bot runs the JIT makers lane below:
+This bot uses the `JitterShotgun` strategy and the `jit-proxy` program, through the `@velocity-exchange/jit-proxy` client on npm, to try to fill jit maker fills. See [JIT Auctions](/developers/market-makers/jit-auctions) and [JIT-only market making](/developers/market-makers/jit-only) for how the JitMaker strategy fits into the broader JIT auction mechanism. The bot runs the JIT makers lane below:
 
 <JitAuctionSequence />
 
