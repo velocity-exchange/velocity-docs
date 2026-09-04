@@ -298,7 +298,14 @@ const minSpread = Math.max(0.05, confidence * 2);
 
 ## Using JIT Proxy (JitterSniper / JitterShotgun)
 
-Instead of building fill logic from scratch, use the `@velocity-exchange/jit-proxy` library which handles auction timing, transaction building, and retry logic. **Not yet published to npm**. Build it from `packages/jit-proxy` in the monorepo until it is.
+Instead of building fill logic from scratch, use the `@velocity-exchange/jit-proxy` library which handles auction timing, transaction building, and retry logic. It is on npm, and its two peer dependencies have to be installed alongside it. Anchor goes in under the `@coral-xyz/anchor` alias, as it does for the SDK:
+
+```bash
+bun add @velocity-exchange/jit-proxy
+bun add @coral-xyz/anchor@npm:@anchor-lang/core@1.0.1 @solana/web3.js@1.98.0
+```
+
+See [JIT Auctions](./jit-auctions#jit-proxy-library) for why the alias matters.
 
 ```typescript
 import { JitterSniper, PriceType } from "@velocity-exchange/jit-proxy";
@@ -337,4 +344,4 @@ See the `JitMaker` bot for a complete production example using `JitterSniper`/`J
 - [SWIFT API](./swift-api): Receive orders 100 to 500 ms faster via offchain WebSocket
 - [Bot Architecture](./bot-architecture): Priority fees, health monitoring, graceful shutdown
 - [DLOB MM](./dlob-mm): Resting order approach (can be combined with JIT)
-- `@velocity-exchange/jit-proxy`: JIT proxy SDK with `JitterSniper` and `JitterShotgun`. Unpublished: build from `packages/jit-proxy` in the `velocity-v1` monorepo, which is not public yet
+- `@velocity-exchange/jit-proxy`: JIT proxy SDK with `JitterSniper` and `JitterShotgun`, on npm
