@@ -99,7 +99,7 @@ const userAccount = await VelocityCore.fetchUserAccount(connection, userAccountP
 // Or decode a buffer already in hand (e.g. from a websocket account notification)
 const decoded = VelocityCore.decodeUserAccount(rawAccountBuffer);
 
-// PDA helpers (state, user, perp/spot market, vaults) are re-exported statically
+// PDA helpers (state, user, perp/spot market) are re-exported statically
 const userPda = VelocityCore.pdas.getUserAccountPublicKeySync(programId, authority, 0);
 ```
 

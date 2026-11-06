@@ -1,16 +1,15 @@
 ---
 title: "Program and Vault Addresses"
-description: "The addresses of the two deployed programs and the other program IDs an integration points at, plus why every one of them should be read from the config rather than copied."
+description: "The address of the deployed program and the other program IDs an integration points at, plus why every one of them should be read from the config rather than copied."
 ---
 
-Velocity is two deployed Solana programs: the exchange program, which owns markets, user accounts, orders, and the insurance fund, and the vaults program, which owns delegated trading pools built on top of it. This page is the reference for their addresses and for the other program IDs an integration has to point at.
+Velocity is a deployed Solana program that owns markets, user accounts, orders, and the insurance fund. This page is the reference for their addresses and for the other program IDs an integration has to point at.
 
 ## Deployed programs
 
 | Program | Address | What it owns |
 |---|---|---|
 | Velocity | `vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P` | `State`, perp and spot markets, user accounts and stats, orders, spot market vaults, insurance fund vaults |
-| Velocity Vaults | `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR` | Vault and vault-depositor accounts, which trade through a Velocity user account as delegate |
 
 The Velocity program ID is the same string on devnet and on mainnet-beta. The SDK still keeps two named constants, `VELOCITY_PROGRAM_ID` and `VELOCITY_DEVNET_PROGRAM_ID`, so that they can diverge without a code change; do not collapse them in a client config. What differs between the two environments is state, not the program ID: separate `State` accounts, separate markets, and a different quote mint (USDT on mainnet-beta, dUSDT on devnet).
 

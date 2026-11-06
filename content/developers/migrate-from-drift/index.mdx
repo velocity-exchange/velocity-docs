@@ -89,7 +89,7 @@ These are semantic changes a compiler cannot catch: a port that builds cleanly c
 
 The Data API's Trades/Market Trades tables drop the `spotFulfillmentMethodFee` column (external spot fulfillment is removed), and the Funding Rates table drops `periodRevenue` and `baseAssetAmountWithUnsettledLp` (vAMM LP shares are removed). One entire table has no Velocity equivalent:
 
-**LP (BAL), Drift-only, no Velocity equivalent.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely on Velocity. There is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate [Velocity liquidity pool module](/developers/vault-managers) (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table.
+**LP (BAL), Drift-only, no Velocity equivalent.** Drift's vAMM LP shares (`PerpPosition.lpShares` and the `addLiquidity`/`settleLiquidity` actions below) were removed entirely on Velocity. There is no per-user LP-share mechanism to emit these events. Liquidity provision against a market now happens through the separate Velocity liquidity pool module (a hedge-pool architecture configured per-market via `PerpMarketAccount.hedgeConfig`), which has its own accounting and does not map onto this table.
 
 | Column | Unit | Description |
 |---|---|---|

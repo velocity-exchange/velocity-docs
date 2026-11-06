@@ -85,7 +85,7 @@ One per perp market, 1560 bytes onchain. It carries:
 - **AMM state** (`amm`): Base/quote reserves and liquidity parameters for the constant-product vAMM
 - **Oracle fields**: `oracle`, `oracleSource` live at the **top level** of `PerpMarketAccount` (moved off `amm.*` when the AMM was decoupled)
 - **Market stats** (`marketStats`): mark/oracle TWAPs, volume, and MM-oracle snapshot, shared across makers
-- **Hedge config** (`hedgeConfig`): this market's relationship to its hedging [Velocity liquidity pool](/developers/vault-managers) (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`), replacing the earlier flat `lp*` LP-share fields
+- **Hedge config** (`hedgeConfig`): this market's relationship to its hedging Velocity liquidity pool (`poolId`, `status`, `pausedOperations`, `exchangeFeeExclusionScalar`, `feeTransferScalar`), replacing the earlier flat `lp*` LP-share fields
 - **Fee ledger** (`feeLedger`): consolidated fee-split accounting (pending protocol/IF/AMM carveouts) from the fee redesign
 - **Risk parameters**: `marginRatioInitial` / `marginRatioMaintenance` (MARGIN_PRECISION, 1e4), `imfFactor`, `contractTier`
 - **Market status**: `status: MarketStatus` (see the discriminant note below)

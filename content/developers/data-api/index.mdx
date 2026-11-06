@@ -17,13 +17,13 @@ The spec groups its operations under these tags. `/openapi.json` is the authorit
 | --- | --- |
 | Market | Per-market history by symbol: trades, funding rates, OHLC candles, swaps, deposits, rewards, insurance-fund flows. |
 | User | Per-subaccount history by `accountId`: trades, orders and their action records, positions closed, funding payments, liquidations, settled P&L, swaps, deposits, and account snapshots. |
-| Authority | Per-wallet views that span an authority's subaccounts: insurance-fund stake, account list, overview and trading, earn, vaults and referral snapshots, plus CSV statement export jobs, which are enqueued asynchronously and polled for a presigned download URL. |
-| Stats | Exchange-wide aggregates: market summaries and volume, prices, funding rates (Velocity's own and external references), liquidations, bankruptcies, vault stats, insurance fund, and the current-month maker and taker volume leaderboards. |
+| Authority | Per-wallet views that span an authority's subaccounts: insurance-fund stake, account list, overview and trading, earn and referral snapshots, plus CSV statement export jobs, which are enqueued asynchronously and polled for a presigned download URL. |
+| Stats | Exchange-wide aggregates: market summaries and volume, prices, funding rates (Velocity's own and external references), liquidations, bankruptcies, insurance fund, and the current-month maker and taker volume leaderboards. |
 | AMM | Historical AMM series: position, bid and ask price, oracle price, spreads, open interest. |
 | Notifications | A user's notification feed, delivery preferences, and registered devices. The only authenticated group. |
 | WebSocket | A single `/ws` upgrade endpoint carrying the real-time channels. |
 
-Two public reads sit outside the tag groups: `GET /params` returns the dashboard parameter blob and `GET /vaults` the vault config array. Both are what the trading interface itself reads, and both sit behind a one-minute CloudFront cache.
+Two public reads sit outside the tag groups: `GET /params` returns the dashboard parameter blob, which the trading interface itself reads, and it sits behind a one-minute CloudFront cache.
 
 <Callout type="warning">
 The `POST /tx/*` endpoints build unsigned transactions server-side (deposit, withdraw, place and cancel orders, settle P&L, builder-code setup, and a submit path). Every one of them is marked BETA in the spec and is for test use. Build transactions with the [SDK](/developers/velocity-sdk/transactions) instead.

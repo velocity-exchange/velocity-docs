@@ -22,7 +22,7 @@ A perp position is a signed base-asset amount plus the quote it was opened again
 Two more fields on the position exist so that a margin check does not have to walk the order array. `openBids` and `openAsks` hold the base-asset size (`BASE_PRECISION`, 1e9) of non-reduce-only bids and asks that are resting or triggering against this position. They are sizes, not notionals: multiply by price to get notional. Reduce-only orders are excluded because they cannot increase risk.
 
 <Callout type="info">
-Velocity has no vAMM LP shares. `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp` and `perLpBase` fields do not exist. Liquidity provision against a market happens through the separate [Velocity liquidity pool module](/developers/vault-managers), a hedge-pool architecture configured per market through `PerpMarketAccount.hedgeConfig`, not through per-user LP shares on the position.
+Velocity has no vAMM LP shares. `PerpPosition.lpShares` and the related `lastQuoteAssetAmountPerLp` and `perLpBase` fields do not exist. Liquidity provision against a market happens through the separate Velocity liquidity pool module, a hedge-pool architecture configured per market through `PerpMarketAccount.hedgeConfig`, not through per-user LP shares on the position.
 </Callout>
 
 ### SpotPosition
