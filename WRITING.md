@@ -122,7 +122,7 @@ only when it carries weight.
 is what the SDK exports. Never invent an identifier to match prose, never bend prose to
 match an identifier.
 
-Terms held back until they ship: **VLP** (returns as Velocity Liquidity Pool when the vault
+Terms held back until they ship: **VLP** (returns as Velocity Liquidity Pool when it
 opens to outside capital), and anything else a reader cannot act on today.
 
 ## 6. Mechanics
