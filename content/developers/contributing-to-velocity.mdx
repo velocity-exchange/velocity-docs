@@ -17,11 +17,11 @@ Before writing anything longer than a line, read [`WRITING.md`](https://github.c
 
 ### The published SDKs, as a consumer
 
-`@velocity-exchange/sdk` is on npm at 0.20.0, and `@velocity-exchange/vaults-sdk` is there too, though its published version trails the monorepo. Both are available to build against. The source is not public, so bug reports against SDK behavior go through the docs repository until it is: include the package version, the call, and the program error or wrong value it returned.
+`@velocity-exchange/sdk` is on npm at 0.20.0 and is available to build against. The source is not public, so bug reports against SDK behavior go through the docs repository until it is: include the package version, the call, and the program error or wrong value it returned.
 
 ## What is not open yet
 
-The `velocity-v1` monorepo is **not public**. That covers the onchain program, the vaults program, the SDK source, the JIT proxy client, and the reference keeper bots.
+The `velocity-v1` monorepo is **not public**. That covers the onchain program, the SDK source, the JIT proxy client, and the reference keeper bots.
 
 It will be published once the post-fork audit report is final. Until then, code contributions to any of those components are not possible from outside the team, and every path these docs quote inside the monorepo (`programs/velocity`, `apps/keeper-bots-v2`, and the rest) names a location that cannot be browsed yet. There is no mirror, no partial release, and no source link to ask for.
 
@@ -34,11 +34,9 @@ Listed so the work is visible in advance, not as an invitation to start before p
 | Area | Location once published |
 | --- | --- |
 | TypeScript SDK | `packages/sdk` |
-| Vaults SDK and CLI | `packages/vaults-sdk` |
 | JIT proxy client | `packages/jit-proxy` |
 | Reference keeper bots | `apps/keeper-bots-v2` |
 | Onchain program and its test suite | `programs/velocity` |
-| Vaults program | `programs/vaults` |
 
 There is no Python SDK. The Rust client (`velocity-rs`, in a separate `rust/` workspace alongside `keep-rs` and `swift`) is source-only and not on crates.io, so it has to be built from source. `@velocity-exchange/jit-proxy` is published to npm, so the JIT client does not need monorepo access.
 
